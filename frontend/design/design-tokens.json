@@ -1,0 +1,990 @@
+{
+  "version": 1,
+  "description": "BizLens 공통 디자인 토큰. observed는 제공 시안에서 확인한 값, proposed는 공통 사용 기준으로 정리한 제안값. 이 파일이 토큰 값의 원본. 크기 단위는 기본 글자 크기 16px 기준의 rem.",
+  "tokens": {
+    "color.blue.50": {
+      "value": "#F4F7FE",
+      "source": "proposed"
+    },
+    "color.blue.100": {
+      "value": "#E7EFFD",
+      "source": "proposed"
+    },
+    "color.blue.300": {
+      "value": "#B5CBF4",
+      "source": "proposed"
+    },
+    "color.blue.400": {
+      "value": "#7CA4ED",
+      "source": "proposed"
+    },
+    "color.blue.600": {
+      "value": "#3B6FD8",
+      "source": "proposed"
+    },
+    "color.blue.700": {
+      "value": "#2D5FC4",
+      "source": "proposed"
+    },
+    "color.blue.800": {
+      "value": "#244FAD",
+      "source": "proposed"
+    },
+    "color.blue.900": {
+      "value": "#1F458F",
+      "source": "proposed"
+    },
+    "color.neutral.0": {
+      "value": "#FFFFFF",
+      "source": "observed"
+    },
+    "color.neutral.50": {
+      "value": "#F8F9FA",
+      "source": "proposed"
+    },
+    "color.neutral.100": {
+      "value": "#F3F4F6",
+      "source": "proposed"
+    },
+    "color.neutral.200": {
+      "value": "#E2E5E9",
+      "source": "proposed"
+    },
+    "color.neutral.400": {
+      "value": "#969DA6",
+      "source": "proposed"
+    },
+    "color.neutral.500": {
+      "value": "#656E7A",
+      "source": "proposed"
+    },
+    "color.neutral.600": {
+      "value": "#49515C",
+      "source": "proposed"
+    },
+    "color.neutral.900": {
+      "value": "#24282E",
+      "source": "proposed"
+    },
+    "color.green.50": {
+      "value": "#F5F7F5",
+      "source": "proposed"
+    },
+    "color.green.700": {
+      "value": "#526D5E",
+      "source": "proposed"
+    },
+    "color.amber.50": {
+      "value": "#F8F6F1",
+      "source": "proposed"
+    },
+    "color.amber.800": {
+      "value": "#75613D",
+      "source": "proposed"
+    },
+    "color.red.50": {
+      "value": "#FBF4F3",
+      "source": "proposed"
+    },
+    "color.red.700": {
+      "value": "#9E4A43",
+      "source": "proposed"
+    },
+    "color.decorative.mint": {
+      "value": "#E9FFF0",
+      "source": "observed",
+      "description": "배경 장식 전용. 성공 의미 없음"
+    },
+    "color.decorative.cyan": {
+      "value": "#00B6FF",
+      "source": "observed",
+      "description": "배경 선 장식 전용"
+    },
+    "color.decorative.purple": {
+      "value": "#7B00FF",
+      "source": "observed",
+      "description": "배경 선 장식 전용"
+    },
+    "color.brand.primary": {
+      "value": "{color.blue.600}"
+    },
+    "color.brand.strong": {
+      "value": "{color.blue.900}"
+    },
+    "color.surface.canvas": {
+      "value": "{color.neutral.50}"
+    },
+    "color.surface.default": {
+      "value": "{color.neutral.0}"
+    },
+    "color.surface.subtle": {
+      "value": "{color.neutral.50}"
+    },
+    "color.field.background": {
+      "value": "{color.surface.default}"
+    },
+    "color.field.foreground": {
+      "value": "{color.text.primary}"
+    },
+    "color.field.border": {
+      "value": "{color.border.control}"
+    },
+    "color.field.border-hover": {
+      "value": "{color.border.strong}"
+    },
+    "color.text.primary": {
+      "value": "{color.neutral.900}"
+    },
+    "color.text.secondary": {
+      "value": "{color.neutral.600}"
+    },
+    "color.text.muted": {
+      "value": "{color.neutral.600}"
+    },
+    "color.text.placeholder": {
+      "value": "{color.neutral.500}"
+    },
+    "color.text.brand": {
+      "value": "{color.blue.900}"
+    },
+    "color.text.link": {
+      "value": "{color.blue.700}"
+    },
+    "color.border.default": {
+      "value": "{color.neutral.200}",
+      "description": "영역 구분용. 입력창의 유일한 경계로 사용 금지"
+    },
+    "color.border.control": {
+      "value": "#818D9C",
+      "source": "proposed"
+    },
+    "color.border.strong": {
+      "value": "{color.neutral.600}"
+    },
+    "color.action.primary": {
+      "value": "{color.blue.600}"
+    },
+    "color.action.hover": {
+      "value": "{color.blue.700}"
+    },
+    "color.action.pressed": {
+      "value": "{color.blue.800}"
+    },
+    "color.action.foreground": {
+      "value": "{color.neutral.0}"
+    },
+    "color.action.disabled-background": {
+      "value": "{color.neutral.200}"
+    },
+    "color.action.disabled-foreground": {
+      "value": "{color.neutral.600}"
+    },
+    "color.selection.background": {
+      "value": "{color.blue.50}"
+    },
+    "color.selection.foreground": {
+      "value": "{color.blue.900}"
+    },
+    "color.selection.border": {
+      "value": "{color.blue.600}"
+    },
+    "color.focus.ring": {
+      "value": "{color.blue.700}",
+      "description": "2px 외곽선과 2px 간격 사용. 흰색 또는 중립 표면 위 배치"
+    },
+    "color.status.info-background": {
+      "value": "{color.neutral.50}"
+    },
+    "color.status.info-foreground": {
+      "value": "{color.neutral.600}"
+    },
+    "color.status.success-background": {
+      "value": "{color.green.50}"
+    },
+    "color.status.success-foreground": {
+      "value": "{color.green.700}"
+    },
+    "color.status.warning-background": {
+      "value": "{color.amber.50}"
+    },
+    "color.status.warning-foreground": {
+      "value": "{color.amber.800}"
+    },
+    "color.status.danger-background": {
+      "value": "{color.red.50}"
+    },
+    "color.status.danger-foreground": {
+      "value": "{color.red.700}"
+    },
+    "color.data.categorical.1": {
+      "value": "#7EA3E1",
+      "source": "proposed"
+    },
+    "color.data.categorical.2": {
+      "value": "#89B4AD",
+      "source": "proposed"
+    },
+    "color.data.categorical.3": {
+      "value": "#CCB38C",
+      "source": "proposed"
+    },
+    "color.data.categorical.4": {
+      "value": "#AEA2C5",
+      "source": "proposed"
+    },
+    "color.data.categorical.5": {
+      "value": "#C3A4B2",
+      "source": "proposed"
+    },
+    "color.data.categorical.6": {
+      "value": "#ADB6C3",
+      "source": "proposed"
+    },
+    "color.data.sequential.1": {
+      "value": "#EFF4FD",
+      "source": "proposed"
+    },
+    "color.data.sequential.2": {
+      "value": "#D9E5FA",
+      "source": "proposed"
+    },
+    "color.data.sequential.3": {
+      "value": "#B8CEF0",
+      "source": "proposed"
+    },
+    "color.data.sequential.4": {
+      "value": "#90AFE2",
+      "source": "proposed"
+    },
+    "color.data.sequential.5": {
+      "value": "#5B85C9",
+      "source": "proposed"
+    },
+    "color.data.diverging.negative-strong": {
+      "value": "#B59678",
+      "source": "proposed"
+    },
+    "color.data.diverging.negative": {
+      "value": "#D9C8B4",
+      "source": "proposed"
+    },
+    "color.data.diverging.neutral": {
+      "value": "{color.neutral.200}"
+    },
+    "color.data.diverging.positive": {
+      "value": "#C2CFDF",
+      "source": "proposed"
+    },
+    "color.data.diverging.positive-strong": {
+      "value": "#849DBB",
+      "source": "proposed"
+    },
+    "color.data.missing": {
+      "value": "{color.neutral.400}",
+      "description": "결측·무응답 전용. 보통 응답과 구분"
+    },
+    "color.data.grid": {
+      "value": "{color.neutral.200}"
+    },
+    "color.data.axis": {
+      "value": "{color.neutral.600}"
+    },
+    "size.control.xs.height": {
+      "value": "1.75rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.xs.padding-x": {
+      "value": "0.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.xs.font-size": {
+      "value": "0.75rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.xs.icon": {
+      "value": "0.75rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.xs.gap": {
+      "value": "0.25rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.s.height": {
+      "value": "2rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.s.padding-x": {
+      "value": "0.75rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.s.font-size": {
+      "value": "0.875rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.s.icon": {
+      "value": "1rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.s.gap": {
+      "value": "0.25rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.m.height": {
+      "value": "2.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.m.padding-x": {
+      "value": "1rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.m.font-size": {
+      "value": "0.875rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.m.icon": {
+      "value": "1rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.m.gap": {
+      "value": "0.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.l.height": {
+      "value": "3rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.l.padding-x": {
+      "value": "1.25rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.l.font-size": {
+      "value": "1rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.l.icon": {
+      "value": "1.25rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.control.l.gap": {
+      "value": "0.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "radius.xs": {
+      "value": "0.375rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "radius.s": {
+      "value": "0.625rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "radius.m": {
+      "value": "1rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "radius.l": {
+      "value": "1.25rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "space.4": {
+      "value": "0.25rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "space.8": {
+      "value": "0.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "space.12": {
+      "value": "0.75rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "space.16": {
+      "value": "1rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "space.24": {
+      "value": "1.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "space.32": {
+      "value": "2rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "space.48": {
+      "value": "3rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.border": {
+      "value": "0.0625rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.focus.width": {
+      "value": "0.125rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.focus.offset": {
+      "value": "0.125rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.touch-target": {
+      "value": "2.75rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.textarea.min-height": {
+      "value": "6rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.textarea.padding-y": {
+      "value": "0.75rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.check": {
+      "value": "1rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.badge.height": {
+      "value": "1.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "color.action.secondary-background": {
+      "value": "{color.neutral.100}",
+      "type": "color",
+      "source": "proposed"
+    },
+    "color.action.secondary-hover": {
+      "value": "{color.neutral.200}",
+      "type": "color",
+      "source": "proposed"
+    },
+    "color.action.secondary-pressed": {
+      "value": "{color.blue.100}",
+      "type": "color",
+      "source": "proposed"
+    },
+    "color.action.secondary-foreground": {
+      "value": "{color.neutral.900}",
+      "type": "color",
+      "source": "proposed"
+    },
+    "color.action.ghost-foreground": {
+      "value": "{color.neutral.600}",
+      "type": "color",
+      "source": "proposed"
+    },
+    "color.action.ghost-hover": {
+      "value": "{color.neutral.100}",
+      "type": "color",
+      "source": "proposed"
+    },
+    "color.action.ghost-pressed": {
+      "value": "{color.neutral.200}",
+      "type": "color",
+      "source": "proposed"
+    },
+    "color.action.danger": {
+      "value": "{color.red.700}",
+      "type": "color",
+      "source": "proposed"
+    },
+    "color.action.danger-hover": {
+      "value": "#873E38",
+      "type": "color",
+      "source": "proposed"
+    },
+    "color.action.danger-pressed": {
+      "value": "#73332E",
+      "type": "color",
+      "source": "proposed"
+    },
+    "color.surface.hover": {
+      "value": "{color.neutral.50}",
+      "type": "color",
+      "source": "proposed"
+    },
+    "font.family.primary": {
+      "value": "\"Pretendard\", system-ui, sans-serif",
+      "type": "fontFamily",
+      "source": "proposed"
+    },
+    "font.weight.regular": {
+      "value": "400",
+      "type": "number",
+      "source": "proposed"
+    },
+    "font.weight.medium": {
+      "value": "500",
+      "type": "number",
+      "source": "proposed"
+    },
+    "font.weight.semibold": {
+      "value": "600",
+      "type": "number",
+      "source": "proposed"
+    },
+    "font.weight.bold": {
+      "value": "700",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.title.size": {
+      "value": "1.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "type.title.weight": {
+      "value": "{font.weight.semibold}",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.title.line-height": {
+      "value": "1.4",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.section.size": {
+      "value": "1.25rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "type.section.weight": {
+      "value": "{font.weight.semibold}",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.section.line-height": {
+      "value": "1.4",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.subtitle.size": {
+      "value": "1rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "type.subtitle.weight": {
+      "value": "{font.weight.semibold}",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.subtitle.line-height": {
+      "value": "1.5",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.body.size": {
+      "value": "1rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "type.body.weight": {
+      "value": "{font.weight.regular}",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.body.line-height": {
+      "value": "1.6",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.label.size": {
+      "value": "0.875rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "type.label.weight": {
+      "value": "{font.weight.medium}",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.label.line-height": {
+      "value": "1.5",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.table.size": {
+      "value": "0.875rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "type.table.weight": {
+      "value": "{font.weight.regular}",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.table.line-height": {
+      "value": "1.5",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.caption.size": {
+      "value": "0.75rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "type.caption.weight": {
+      "value": "{font.weight.regular}",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.caption.line-height": {
+      "value": "1.5",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.value.size": {
+      "value": "1.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "type.value.weight": {
+      "value": "{font.weight.semibold}",
+      "type": "number",
+      "source": "proposed"
+    },
+    "type.value.line-height": {
+      "value": "1.3",
+      "type": "number",
+      "source": "proposed"
+    },
+    "size.table.row": {
+      "value": "3rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.table.row-compact": {
+      "value": "2.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.table.cell-padding-x": {
+      "value": "1rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.table.cell-padding-y": {
+      "value": "0.75rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.table.cell-padding-y-compact": {
+      "value": "0.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.page.padding": {
+      "value": "1.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.page.padding-narrow": {
+      "value": "1rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "shadow.popover": {
+      "value": "0 4px 16px rgba(15, 23, 42, 0.10)",
+      "type": "shadow",
+      "source": "proposed"
+    },
+    "shadow.dialog": {
+      "value": "0 12px 40px rgba(15, 23, 42, 0.16)",
+      "type": "shadow",
+      "source": "proposed"
+    },
+    "opacity.overlay": {
+      "value": "0.4",
+      "type": "number",
+      "source": "proposed"
+    },
+    "motion.duration.fast": {
+      "value": "150ms",
+      "type": "duration",
+      "source": "proposed"
+    },
+    "motion.duration.normal": {
+      "value": "200ms",
+      "type": "duration",
+      "source": "proposed"
+    },
+    "motion.easing.standard": {
+      "value": "cubic-bezier(0.2, 0, 0, 1)",
+      "type": "easing",
+      "source": "proposed"
+    },
+    "space.layout.page": {
+      "value": "{space.24}",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "space.layout.section": {
+      "value": "{space.32}",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "space.field.stack": {
+      "value": "{space.16}",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "space.control.group": {
+      "value": "{space.8}",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "space.message.turn": {
+      "value": "{space.32}",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.layout.content-max": {
+      "value": "80rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.layout.reading-max": {
+      "value": "47.5rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "size.layout.assistant": {
+      "value": "23rem",
+      "type": "dimension",
+      "source": "proposed"
+    },
+    "motion.duration.press": {
+      "type": "duration",
+      "value": "{motion.duration.fast}",
+      "source": "proposed"
+    },
+    "motion.duration.menu": {
+      "type": "duration",
+      "value": "{motion.duration.normal}",
+      "source": "proposed"
+    },
+    "motion.duration.enter": {
+      "type": "duration",
+      "value": "250ms",
+      "source": "proposed"
+    },
+    "motion.duration.exit": {
+      "type": "duration",
+      "value": "{motion.duration.fast}",
+      "source": "proposed"
+    },
+    "motion.duration.message": {
+      "type": "duration",
+      "value": "{motion.duration.fast}",
+      "source": "proposed"
+    },
+    "motion.easing.enter": {
+      "type": "easing",
+      "value": "cubic-bezier(0, 0, 0.15, 1)",
+      "source": "proposed"
+    },
+    "motion.easing.exit": {
+      "type": "easing",
+      "value": "cubic-bezier(0.35, 0, 1, 1)",
+      "source": "proposed"
+    },
+    "motion.scale.pressed": {
+      "type": "number",
+      "value": "0.98",
+      "source": "proposed"
+    },
+    "motion.distance.control": {
+      "type": "dimension",
+      "value": "{space.4}",
+      "source": "proposed"
+    },
+    "motion.distance.panel": {
+      "type": "dimension",
+      "value": "{space.8}",
+      "source": "proposed"
+    }
+  },
+  "contrastChecks": [
+    {
+      "foreground": "color.text.primary",
+      "background": "color.surface.default",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.text.secondary",
+      "background": "color.surface.default",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.text.muted",
+      "background": "color.surface.subtle",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.text.muted",
+      "background": "color.surface.canvas",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.text.placeholder",
+      "background": "color.surface.default",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.text.link",
+      "background": "color.surface.default",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.action.foreground",
+      "background": "color.action.primary",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.action.foreground",
+      "background": "color.action.hover",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.action.foreground",
+      "background": "color.action.pressed",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.action.disabled-foreground",
+      "background": "color.action.disabled-background",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.selection.foreground",
+      "background": "color.selection.background",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.status.info-foreground",
+      "background": "color.status.info-background",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.status.success-foreground",
+      "background": "color.status.success-background",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.status.warning-foreground",
+      "background": "color.status.warning-background",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.status.danger-foreground",
+      "background": "color.status.danger-background",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.border.control",
+      "background": "color.surface.default",
+      "minimum": 3
+    },
+    {
+      "foreground": "color.border.control",
+      "background": "color.surface.canvas",
+      "minimum": 3
+    },
+    {
+      "foreground": "color.focus.ring",
+      "background": "color.surface.default",
+      "minimum": 3
+    },
+    {
+      "foreground": "color.focus.ring",
+      "background": "color.surface.canvas",
+      "minimum": 3
+    },
+    {
+      "foreground": "color.action.secondary-foreground",
+      "background": "color.action.secondary-background",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.action.secondary-foreground",
+      "background": "color.action.secondary-hover",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.action.secondary-foreground",
+      "background": "color.action.secondary-pressed",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.action.ghost-foreground",
+      "background": "color.surface.default",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.action.ghost-foreground",
+      "background": "color.action.ghost-hover",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.action.ghost-foreground",
+      "background": "color.action.ghost-pressed",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.action.foreground",
+      "background": "color.action.danger",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.action.foreground",
+      "background": "color.action.danger-hover",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.action.foreground",
+      "background": "color.action.danger-pressed",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.text.primary",
+      "background": "color.selection.background",
+      "minimum": 4.5
+    }
+  ]
+}
