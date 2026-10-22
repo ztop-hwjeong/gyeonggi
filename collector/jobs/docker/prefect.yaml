@@ -1,0 +1,21 @@
+name: docker-collector
+prefect-version: 3.9.0
+build: []
+push: []
+pull:
+  - prefect.deployments.steps.set_working_directory:
+      directory: /app
+deployments:
+  - name: docker-check
+    entrypoint: src/flows/runtime.py:docker_runtime_check
+    tags: [docker]
+    schedules: null
+    work_pool:
+      name: docker-collector
+      job_variables:
+        image: gyeonggi-collector:local
+        image_pull_policy: Never
+        networks: [gyeonggi-collector]
+        auto_remove: true
+        env:
+          PREFECT_API_URL: http://prefect-server:4200/api

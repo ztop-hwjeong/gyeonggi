@@ -1,0 +1,31 @@
+[project]
+name = "gyeonggi-docker-collector"
+version = "0.1.0"
+description = "브라우저 없는 자료 수집 실행 환경"
+requires-python = ">=3.13,<3.14"
+dependencies = ["prefect>=3.9.0"]
+
+[dependency-groups]
+dev = ["pyright>=1.1.414", "pytest>=9.1.1", "ruff>=0.17.1"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = ["error"]
+
+[tool.pyright]
+include = ["src", "tests"]
+extraPaths = ["src"]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+reportDeprecated = "error"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]

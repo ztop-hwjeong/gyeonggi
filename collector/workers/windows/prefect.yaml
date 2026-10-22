@@ -1,0 +1,18 @@
+name: windows-collector
+prefect-version: 3.9.0
+build: []
+push: []
+pull:
+  - prefect.deployments.steps.set_working_directory:
+      directory: "{{ $COLLECTOR_DIRECTORY }}"
+deployments:
+  - name: windows-check
+    entrypoint: src/flows/runtime.py:windows_browser_check
+    tags: [windows, browser]
+    schedules: null
+    work_pool:
+      name: windows-collector
+      job_variables:
+        env:
+          PYTHONPATH: "{{ $COLLECTOR_DIRECTORY }}/src"
+          BROWSER_CDP_URL: "{{ $BROWSER_CDP_URL }}"

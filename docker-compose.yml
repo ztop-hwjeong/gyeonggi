@@ -16,3 +16,77 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  prefect-server:
+    profiles: [collector]
+    image: prefecthq/prefect:3.9.0-python3.13
+    restart: unless-stopped
+    command: [prefect, server, start, --host, 0.0.0.0, --port, "4200"]
+    environment:
+      PREFECT_HOME: /var/lib/prefect
+      PREFECT_SERVER_DATABASE_CONNECTION_URL: sqlite+aiosqlite:////var/lib/prefect/prefect.db
+      PREFECT_SERVER_UI_API_URL: http://127.0.0.1:4200/api
+      PREFECT_SERVER_ANALYTICS_ENABLED: "false"
+    ports:
+      - "127.0.0.1:4200:4200"
+    volumes:
+      - ./.docker/prefect/server:/var/lib/prefect
+    networks: [collector]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4200/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  prefect-init:
+    profiles: [collector]
+    image: gyeonggi-prefect-init:local
+    build:
+      context: ./infra/prefect
+    command: [python, src/register_pools.py]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    networks: [collector]
+
+  windows-worker:
+    profiles: [collector]
+    provider:
+      type: ./collector/workers/windows/compose-provider.cmd
+      options:
+        collector-directory: ./collector/workers/windows
+        runtime-directory: ./.docker/prefect/windows-worker
+        browser-profile-directory: ./.tmp/collector/profiles/edge
+        edge-default-profile-directory: ${LOCALAPPDATA:?LOCALAPPDATA required}/Microsoft/Edge/User Data
+        prefect-api-url: http://127.0.0.1:4200/api
+        browser-cdp-url: http://127.0.0.1:9222
+        worker-pool: windows-collector
+        worker-limit: 1
+    depends_on:
+      prefect-init:
+        condition: service_completed_successfully
+
+  docker-worker:
+    profiles: [collector]
+    image: gyeonggi-docker-worker:local
+    build:
+      context: ./collector/workers/docker
+    restart: unless-stopped
+    command: [prefect, worker, start, --pool, docker-collector, --type, docker, --name, docker-worker, --limit, "2"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_HOME: /var/lib/prefect
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.docker/prefect/worker:/var/lib/prefect
+    depends_on:
+      prefect-init:
+        condition: service_completed_successfully
+    networks: [collector]
+
+networks:
+  collector:
+    name: gyeonggi-collector
