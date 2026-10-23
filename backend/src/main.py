@@ -6,11 +6,17 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from api.collection import router as collection_router
 from api.health import router as health_router
 from api.monitoring import router as monitoring_router
 from api.templates import router as templates_router
 from config import Settings
 from container import create_container
+from domain.collection.errors import (
+    CollectionConflictError,
+    CollectionNotFoundError,
+    CollectionUnavailableError,
+)
 from domain.monitoring.errors import MonitoringUnavailableError, RunNotFoundError
 
 
@@ -33,6 +39,19 @@ def create_app(container: AsyncContainer | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(templates_router)
     app.include_router(monitoring_router)
+    app.include_router(collection_router)
+
+    @app.exception_handler(CollectionNotFoundError)
+    async def collection_not_found(request: Request, error: CollectionNotFoundError):
+        return JSONResponse(status_code=404, content={"detail": str(error)})
+
+    @app.exception_handler(CollectionConflictError)
+    async def collection_conflict(request: Request, error: CollectionConflictError):
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
+    @app.exception_handler(CollectionUnavailableError)
+    async def collection_unavailable(request: Request, error: CollectionUnavailableError):
+        return JSONResponse(status_code=503, content={"detail": str(error)})
 
     @app.exception_handler(MonitoringUnavailableError)
     async def monitoring_unavailable(request: Request, error: MonitoringUnavailableError):

@@ -21,6 +21,28 @@ API 문서는 `http://127.0.0.1:8000/docs`에서 확인한다. `GET /health`는 
 
 실행 전에 `backend/.env.example`의 항목을 채워 `backend/.env`로 저장하거나 동일한 이름의 환경변수를 지정한다. 환경변수가 파일보다 우선하며 DB 접속 설정을 누락하면 앱 시작 시 오류가 발생한다. Prefect 모니터링에는 `PREFECT_API_URL`이 필요하며 로컬 서버 주소는 `http://127.0.0.1:4200/api`다.
 
+## 키워드와 수집 요청
+
+DB에는 `infra/postgres/migrations`의 SQL을 번호순으로 적용한다.
+
+| API | 용도 |
+| --- | --- |
+| `GET /sources` | 채널과 기간 수집 지원 여부 |
+| `GET /keyword-rules`, `POST /keyword-rules` | 검색 규칙 목록과 등록 |
+| `GET /keyword-rules/{id}`, `PUT /keyword-rules/{id}` | 규칙 조회와 버전 확인 후 수정 |
+| `GET /keyword-rules/{id}/versions` | 변경 당시 조건 이력 |
+| `POST /collection-previews` | 저장 전 조건의 비동기 미리보기 요청 |
+| `POST /collection-runs` | 저장한 규칙의 증분·과거 수집 요청 |
+| `GET /collection-runs`, `GET /collection-runs/{id}` | 요청 목록과 진행 상태 |
+| `POST /collection-runs/{id}/cancel` | 대기 요청 취소 또는 진행 중 취소 요청 |
+| `GET /collection-runs/{id}/items` | 요청에서 확보한 목록과 미리보기 샘플 |
+
+수정에는 조회한 `version`을 함께 보낸다. 충돌 시 `409`로 최신 내용 재확인을 요청한다.
+미리보기·수집 생성에는 UUID 형식의 `Idempotency-Key` 헤더가 필요하다.
+같은 키와 조건의 재요청은 기존 요청을 반환하며 다른 조건의 재사용은 거절한다.
+수집 요청에는 규칙 버전과 조건을 고정해 보관한다. 이후 규칙 수정은 기존 요청에 반영되지 않는다.
+신규 규칙은 정기 수집이 꺼진 상태로 등록된다. 네이버 검색은 기간 지정 과거 수집을 지원하지 않는다.
+
 ## 수집 모니터링
 
 | API | 제공 정보 |

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from config import Settings
+from domain.collection.repository import CollectionRepository
 from domain.monitoring.config import MonitoringSettings
 from domain.monitoring.errors import MonitoringUnavailableError
 from domain.monitoring.prefect import PrefectMonitor
@@ -63,6 +64,12 @@ class TemplateProvider(Provider):
         return TemplateRenderer(catalog)
 
 
+class CollectionProvider(Provider):
+    @provide(scope=Scope.REQUEST)
+    def collections(self, session: AsyncSession) -> CollectionRepository:
+        return CollectionRepository(session)
+
+
 class MonitoringProvider(Provider):
     @provide(scope=Scope.APP)
     def settings(self) -> MonitoringSettings:
@@ -87,5 +94,9 @@ class MonitoringProvider(Provider):
 
 def create_container(settings: Settings) -> AsyncContainer:
     return make_async_container(
-        DatabaseProvider(), TemplateProvider(), MonitoringProvider(), context={Settings: settings}
+        DatabaseProvider(),
+        TemplateProvider(),
+        CollectionProvider(),
+        MonitoringProvider(),
+        context={Settings: settings},
     )
