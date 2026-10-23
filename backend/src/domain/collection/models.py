@@ -98,8 +98,6 @@ class DateRange(BaseModel):
     def valid_dates(self) -> Self:
         if self.end_date < self.start_date:
             raise ValueError("종료일은 시작일 이후 필요")
-        if (self.end_date - self.start_date).days > 366:
-            raise ValueError("한 번에 최대 1년까지 수집 요청 가능")
         return self
 
 

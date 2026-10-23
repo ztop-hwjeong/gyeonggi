@@ -9,3 +9,7 @@
 **/.pytest_cache/
 **/.ruff_cache/
 **/*.egg-info/
+**/node_modules/
+**/.next/
+**/*.tsbuildinfo
+**/next-env.d.ts

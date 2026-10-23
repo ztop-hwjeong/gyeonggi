@@ -123,8 +123,11 @@ def test_terms_preserve_phrases_and_deduplicate(definition):
         RuleDefinition.model_validate({**definition, "terms": ['"경기" | "교육"']})
 
 
-def test_reverse_or_excessive_period_is_rejected():
+def test_period_rejects_reverse_dates_and_allows_long_history():
     base = {"rule_id": uuid4(), "version": 1, "source": "bigkinds", "mode": "backfill"}
-    for start, end in [("2026-10-23", "2026-06-01"), ("2024-01-01", "2026-10-23")]:
-        with pytest.raises(ValidationError):
-            RunCreate.model_validate({**base, "start_date": start, "end_date": end})
+    with pytest.raises(ValidationError):
+        RunCreate.model_validate({**base, "start_date": "2026-10-23", "end_date": "2026-06-01"})
+    request = RunCreate.model_validate(
+        {**base, "start_date": "2024-01-01", "end_date": "2026-10-23"}
+    )
+    assert request.start_date.year == 2024
