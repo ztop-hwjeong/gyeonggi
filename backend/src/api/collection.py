@@ -6,6 +6,8 @@ from fastapi import APIRouter, Header, Query
 
 from domain.collection.models import (
     SOURCES,
+    ArticleQuery,
+    Overview,
     Pagination,
     PreviewCreate,
     RequestInfo,
@@ -19,10 +21,24 @@ from domain.collection.models import (
     RuleVersion,
     RunCreate,
     SourceInfo,
+    StoredArticlePage,
 )
+from domain.collection.reporting import CollectionReporting
 from domain.collection.repository import CollectionRepository
 
 router = APIRouter(tags=["collection"], route_class=DishkaRoute)
+
+
+@router.get("/overview")
+async def overview(reporting: FromDishka[CollectionReporting]) -> Overview:
+    return await reporting.overview()
+
+
+@router.get("/articles")
+async def articles(
+    reporting: FromDishka[CollectionReporting], query: Annotated[ArticleQuery, Query()]
+) -> StoredArticlePage:
+    return await reporting.articles(query)
 
 
 @router.get("/sources")

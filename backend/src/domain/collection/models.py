@@ -178,3 +178,33 @@ class ResultItem(BaseModel):
 class ResultPage(BaseModel):
     items: list[ResultItem]
     total: int
+
+
+class ArticleQuery(Pagination):
+    source: SourceCode | None = None
+    q: str = Field(default="", max_length=100)
+
+
+class StoredArticle(ResultItem):
+    source: SourceCode
+    first_seen_at: datetime
+    has_body: bool
+
+
+class StoredArticlePage(BaseModel):
+    items: list[StoredArticle]
+    total: int
+
+
+class DailyCount(BaseModel):
+    day: date
+    count: int
+
+
+class Overview(BaseModel):
+    total_items: int
+    active_rules: int
+    queued_requests: int
+    failed_requests: int
+    daily_counts: list[DailyCount]
+    source_counts: dict[str, int]

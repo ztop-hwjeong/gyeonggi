@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from config import Settings
+from domain.collection.reporting import CollectionReporting
 from domain.collection.repository import CollectionRepository
 from domain.monitoring.config import MonitoringSettings
 from domain.monitoring.errors import MonitoringUnavailableError
@@ -65,6 +66,10 @@ class TemplateProvider(Provider):
 
 
 class CollectionProvider(Provider):
+    @provide(scope=Scope.REQUEST)
+    def reporting(self, session: AsyncSession) -> CollectionReporting:
+        return CollectionReporting(session)
+
     @provide(scope=Scope.REQUEST)
     def collections(self, session: AsyncSession) -> CollectionRepository:
         return CollectionRepository(session)

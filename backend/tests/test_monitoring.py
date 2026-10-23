@@ -123,6 +123,7 @@ def test_runs_filter_pagination_and_private_fields(monitor_setup):
         "collect-article-details",
         "naver-collect-list",
         "collect-naver-cafe-details",
+        "managed-collection",
     }
 
 

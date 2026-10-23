@@ -1,13 +1,16 @@
 import asyncio
+import json
 import os
 from datetime import date
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from domain.collection.errors import CollectionConflictError
-from domain.collection.models import RuleDefinition, RuleUpdate, RunCreate
+from domain.collection.models import ArticleQuery, RuleDefinition, RuleUpdate, RunCreate
+from domain.collection.reporting import CollectionReporting
 from domain.collection.repository import CollectionRepository
 
 
@@ -54,6 +57,34 @@ def test_rule_versions_request_snapshot_idempotency_and_cancellation():
                     with pytest.raises(CollectionConflictError):
                         await repository.enqueue(uuid4(), body)
                     assert (await repository.cancel(key)).status == "cancelled"
+                    reporting = CollectionReporting(session)
+                    before = await reporting.overview()
+                    article_id = str(uuid4())
+                    await session.execute(
+                        text(
+                            "INSERT INTO dw.news_items(source,source_id,data) "
+                            "VALUES ('bigkinds',:id,CAST(:data AS jsonb))"
+                        ),
+                        {
+                            "id": article_id,
+                            "data": json.dumps(
+                                {
+                                    "source_id": article_id,
+                                    "title": "통합 검증 100%",
+                                    "summary": "검색 결과",
+                                    "published_on": "2026-10-23",
+                                }
+                            ),
+                        },
+                    )
+                    after = await reporting.overview()
+                    assert after.total_items == before.total_items + 1
+                    assert len(after.daily_counts) == 7
+                    results = await reporting.articles(ArticleQuery(source="bigkinds", q="100%"))
+                    assert any(item.source_id == article_id for item in results.items)
+                    assert all(
+                        "100%" in item.title or "100%" in item.summary for item in results.items
+                    )
                 await connection.rollback()
         finally:
             await engine.dispose()
