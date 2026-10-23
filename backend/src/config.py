@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     database_name: str
     database_user: str
     database_password: SecretStr
+    template_directory: Path = Field(
+        default_factory=lambda: Path(__file__).resolve().parents[1] / "templates"
+    )
 
     @property
     def database_url(self) -> URL:

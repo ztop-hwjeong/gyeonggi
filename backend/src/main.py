@@ -6,6 +6,7 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 
 from api.health import router as health_router
+from api.templates import router as templates_router
 from config import Settings
 from container import create_container
 
@@ -27,5 +28,6 @@ def create_app(container: AsyncContainer | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(health_router)
+    app.include_router(templates_router)
     setup_dishka(container=container, app=app)
     return app

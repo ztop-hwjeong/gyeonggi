@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from config import Settings
+from domain.templates.archive import TemplateArchive
+from domain.templates.catalog import TemplateCatalog
+from domain.templates.rendering import TemplateRenderer
 
 
 class DatabaseProvider(Provider):
@@ -40,5 +43,21 @@ class DatabaseProvider(Provider):
             yield session
 
 
+class TemplateProvider(Provider):
+    @provide(scope=Scope.APP)
+    def catalog(self, settings: Settings) -> TemplateCatalog:
+        return TemplateCatalog(settings.template_directory)
+
+    @provide(scope=Scope.APP)
+    def archive(self, catalog: TemplateCatalog) -> TemplateArchive:
+        return TemplateArchive(catalog)
+
+    @provide(scope=Scope.APP)
+    def renderer(self, catalog: TemplateCatalog) -> TemplateRenderer:
+        return TemplateRenderer(catalog)
+
+
 def create_container(settings: Settings) -> AsyncContainer:
-    return make_async_container(DatabaseProvider(), context={Settings: settings})
+    return make_async_container(
+        DatabaseProvider(), TemplateProvider(), context={Settings: settings}
+    )
