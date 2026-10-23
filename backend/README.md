@@ -19,7 +19,38 @@ uv run uvicorn main:create_app --app-dir src --factory --reload
 
 API 문서는 `http://127.0.0.1:8000/docs`에서 확인한다. `GET /health`는 서버 상태를 확인하며 `{"status": "ok"}`를 반환한다.
 
-실행 전에 `backend/.env.example`의 모든 항목을 채워 `backend/.env`로 저장하거나 동일한 이름의 환경변수를 지정한다. 환경변수가 파일보다 우선하며 DB 접속 설정을 누락하면 앱 시작 시 오류가 발생한다.
+실행 전에 `backend/.env.example`의 항목을 채워 `backend/.env`로 저장하거나 동일한 이름의 환경변수를 지정한다. 환경변수가 파일보다 우선하며 DB 접속 설정을 누락하면 앱 시작 시 오류가 발생한다. Prefect 모니터링에는 `PREFECT_API_URL`이 필요하며 로컬 서버 주소는 `http://127.0.0.1:4200/api`다.
+
+## 수집 모니터링
+
+| API | 제공 정보 |
+| --- | --- |
+| `GET /monitoring/metrics` | 기사 상세 실행·처리·확보·실패 건수, 성공률, 단계별 시도, HTTP 오류, 원본 응답 개수·바이트 |
+| `GET /monitoring/runs` | 빅카인즈 목록·기사 상세 Prefect 실행 목록과 상세 수집 진행 상태 |
+| `GET /monitoring/runs/{run_id}` | 실행 상태·시작·종료·경과 시간, 상태 메시지, 저장된 상세 수집 진행 상태 |
+| `GET /monitoring/runs/{run_id}/articles` | 실행 내 처리 완료한 기사의 확보 상태와 최종 수집 경로 |
+| `GET /monitoring/errors` | 기사 상세 단계별 실패·검증 거절 사유, HTTP 상태, 이후 본문 확보 여부 |
+| `GET /monitoring/workers` | Docker·Windows pool 상태, worker ONLINE/OFFLINE, 마지막 heartbeat |
+
+기간 조회는 기본 최근 24시간이며 `since`, `until`에 시간대가 있는 ISO 8601 시각을 지정한다.
+기간은 최대 31일이며 목록은 `limit`(최대 200), `offset`으로 조회한다.
+`runs`는 `state=FAILED` 또는 `state=CRASHED` 등 Prefect 상태로 필터링한다.
+`errors`는 `run_id`, `stage`(`curl_cffi`, `browser_fetch`, `bigkinds_api`),
+`recovered=true/false`로 필터링한다. `recovered=false`에는 아직 최종 결과가 없는 시도도 포함된다.
+
+Prefect 실행 완료와 기사 확보 성공은 각각 `state`와 `collection`으로 구분한다.
+목록 실행은 Prefect 상태를 제공하며 `collection` 상세 집계는 없다.
+`metrics`는 `scope=article_details`이며 실행 생성 시각을 기준으로 집계한다.
+원본 응답 개수·바이트는 응답 저장 시각을 기준으로 하며 RustFS의 실제 디스크 사용량을 뜻하지 않는다.
+성공률은 처리 완료한 기사 중 확보한 비율(0~1)이며 처리 결과가 없으면 `null`이다.
+같은 기사의 재수집은 실행별 처리 건수에 포함한다. 중간 단계의 실패를 최종 기사 실패로 세지 않는다.
+`last_completed_run_at`은 조회 기간과 무관한 마지막 상세 수집 완료 시각이다.
+
+조회 실패는 503, 없는 수집 실행은 404, 잘못된 조회 조건은 422를 반환한다.
+응답에 실행 매개변수·원본 HTML·인프라 자격 증명을 포함하지 않는다.
+Prefect REST 계약은 [공식 API 문서](https://docs.prefect.io/v3/api-ref/rest-api/server/flow-runs/count-flow-runs)를 따른다.
+대상 flow·pool은 `MONITORING_FLOW_NAMES`, `MONITORING_POOL_NAMES`의 JSON 배열로,
+요청 제한 시간은 `MONITORING_TIMEOUT_SECONDS`로 설정할 수 있다.
 
 ## Excel 템플릿
 

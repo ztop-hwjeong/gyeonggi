@@ -1,6 +1,8 @@
 from collections.abc import AsyncIterator
 
+import httpx2
 from dishka import AsyncContainer, Provider, Scope, from_context, make_async_container, provide
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -9,6 +11,10 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from config import Settings
+from domain.monitoring.config import MonitoringSettings
+from domain.monitoring.errors import MonitoringUnavailableError
+from domain.monitoring.prefect import PrefectMonitor
+from domain.monitoring.repository import MonitoringRepository
 from domain.templates.archive import TemplateArchive
 from domain.templates.catalog import TemplateCatalog
 from domain.templates.rendering import TemplateRenderer
@@ -57,7 +63,29 @@ class TemplateProvider(Provider):
         return TemplateRenderer(catalog)
 
 
+class MonitoringProvider(Provider):
+    @provide(scope=Scope.APP)
+    def settings(self) -> MonitoringSettings:
+        try:
+            return MonitoringSettings.model_validate({})
+        except ValidationError as error:
+            raise MonitoringUnavailableError("Prefect 모니터링 설정 오류") from error
+
+    @provide(scope=Scope.APP)
+    async def monitor(self, settings: MonitoringSettings) -> AsyncIterator[PrefectMonitor]:
+        async with httpx2.AsyncClient(
+            base_url=str(settings.prefect_api_url).rstrip("/") + "/",
+            timeout=settings.monitoring_timeout_seconds,
+            trust_env=False,
+        ) as client:
+            yield PrefectMonitor(client, settings)
+
+    @provide(scope=Scope.REQUEST)
+    def repository(self, session: AsyncSession) -> MonitoringRepository:
+        return MonitoringRepository(session)
+
+
 def create_container(settings: Settings) -> AsyncContainer:
     return make_async_container(
-        DatabaseProvider(), TemplateProvider(), context={Settings: settings}
+        DatabaseProvider(), TemplateProvider(), MonitoringProvider(), context={Settings: settings}
     )
