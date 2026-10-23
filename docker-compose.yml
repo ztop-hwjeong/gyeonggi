@@ -82,6 +82,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./.docker/prefect/worker:/var/lib/prefect
+      - collector-data:/var/lib/collector:ro
     depends_on:
       prefect-init:
         condition: service_completed_successfully
@@ -90,3 +91,7 @@ services:
 networks:
   collector:
     name: gyeonggi-collector
+
+volumes:
+  collector-data:
+    name: gyeonggi-collector-data

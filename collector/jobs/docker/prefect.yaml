@@ -4,7 +4,7 @@ build: []
 push: []
 pull:
   - prefect.deployments.steps.set_working_directory:
-      directory: /app
+      directory: /app/jobs/docker
 deployments:
   - name: docker-check
     entrypoint: src/flows/runtime.py:docker_runtime_check
@@ -19,3 +19,21 @@ deployments:
         auto_remove: true
         env:
           PREFECT_API_URL: http://prefect-server:4200/api
+  - name: bigkinds-list
+    entrypoint: src/flows/bigkinds.py:bigkinds_collect_list
+    tags: [docker, bigkinds, list]
+    schedules: null
+    concurrency_limit: 1
+    work_pool:
+      name: docker-collector
+      job_variables:
+        image: gyeonggi-collector:local
+        image_pull_policy: Never
+        networks: [gyeonggi-collector]
+        auto_remove: true
+        volumes: ["gyeonggi-collector-data:/var/lib/collector"]
+        env:
+          PREFECT_API_URL: http://prefect-server:4200/api
+          BIGKINDS_RATE_LIMIT_NAME: bigkinds-http
+          COLLECTION_OUTPUT_DIRECTORY: /var/lib/collector
+          HTTP_IMPERSONATE: chrome

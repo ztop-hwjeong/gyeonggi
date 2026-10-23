@@ -1,0 +1,10 @@
+[project]
+name = "collector-http"
+version = "0.1.0"
+description = "수집 작업의 Chromium HTTP 전송"
+requires-python = ">=3.13,<3.14"
+dependencies = ["curl-cffi>=0.16.3", "pydantic-settings>=2.16.1"]
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"

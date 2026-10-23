@@ -1,13 +1,14 @@
 FROM python:3.13-slim
 COPY --from=ghcr.io/astral-sh/uv:0.12.0 /uv /uvx /bin/
-WORKDIR /app
+WORKDIR /app/jobs/docker
 ENV UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src \
-    PATH="/app/.venv/bin:$PATH"
-COPY pyproject.toml uv.lock ./
+    PYTHONPATH=/app/jobs/docker/src \
+    PATH="/app/jobs/docker/.venv/bin:$PATH"
+COPY packages/http /app/packages/http
+COPY jobs/docker/pyproject.toml jobs/docker/uv.lock ./
 RUN uv sync --locked --no-dev
-COPY src ./src
+COPY jobs/docker/src ./src
 
 CMD ["prefect", "version"]

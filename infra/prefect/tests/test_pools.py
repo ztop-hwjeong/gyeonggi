@@ -49,3 +49,32 @@ def test_rejects_existing_pool_with_wrong_type(monkeypatch: pytest.MonkeyPatch) 
     with pytest.raises(RuntimeError, match="pool의 타입 불일치"):
         asyncio.run(register_pools.register_pools())
     client.create_work_pool.assert_not_awaited()
+
+
+def test_creates_missing_shared_request_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = AsyncMock()
+    client.read_work_pool.side_effect = [
+        SimpleNamespace(type="docker"),
+        SimpleNamespace(type="process"),
+    ]
+    client.read_global_concurrency_limit_by_name.side_effect = ObjectNotFound(
+        http_exc=HTTPStatusError(
+            "Not found", request=Request("GET", "http://test"), response=Response(404)
+        )
+    )
+    client_context(monkeypatch, client)
+    asyncio.run(register_pools.register_pools())
+    created = client.create_global_concurrency_limit.await_args.args[0]
+    assert created.limit == 1
+    assert created.slot_decay_per_second > 0
+
+
+def test_preserves_existing_request_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = AsyncMock()
+    client.read_work_pool.side_effect = [
+        SimpleNamespace(type="docker"),
+        SimpleNamespace(type="process"),
+    ]
+    client_context(monkeypatch, client)
+    asyncio.run(register_pools.register_pools())
+    client.create_global_concurrency_limit.assert_not_awaited()

@@ -3,7 +3,11 @@ name = "gyeonggi-prefect-infrastructure"
 version = "0.1.0"
 description = "Prefect work pool 초기화"
 requires-python = ">=3.13,<3.14"
-dependencies = ["prefect>=3.9.0", "prefect-docker>=0.7.4"]
+dependencies = [
+    "prefect>=3.9.0",
+    "prefect-docker>=0.7.4",
+    "pydantic-settings>=2.16.1",
+]
 
 [dependency-groups]
 dev = ["pyright>=1.1.414", "pytest>=9.1.1", "ruff>=0.17.1"]
