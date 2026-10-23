@@ -21,8 +21,11 @@ from domain.monitoring.errors import MonitoringUnavailableError, RunNotFoundErro
 
 
 def create_app(container: AsyncContainer | None = None) -> FastAPI:
+    root_path = ""
     if container is None:
-        container = create_container(Settings.model_validate({}))
+        settings = Settings.model_validate({})
+        root_path = settings.api_root_path
+        container = create_container(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -35,6 +38,7 @@ def create_app(container: AsyncContainer | None = None) -> FastAPI:
         title="경기교육 정책 홍보 분석 API",
         version="0.1.0",
         lifespan=lifespan,
+        root_path=root_path,
     )
     app.include_router(health_router)
     app.include_router(templates_router)
