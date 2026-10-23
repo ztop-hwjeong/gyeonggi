@@ -11,16 +11,34 @@ from flows import details
 
 
 @pytest.mark.parametrize(
-    "stages,statuses,expected",
+    "stages,statuses,expected,allow_bigkinds_fallback",
     [
-        (["curl_cffi"], ["accepted"], "curl_cffi"),
-        (["curl_cffi", "browser_fetch"], ["failed", "accepted"], "browser_fetch"),
+        (["curl_cffi"], ["accepted"], "curl_cffi", True),
+        (["curl_cffi", "browser_fetch"], ["failed", "accepted"], "browser_fetch", True),
         (
-            ["curl_cffi", "browser_fetch", "bigkinds_api"],
-            ["failed", "rejected", "accepted"],
+            ["curl_cffi", "browser_fetch", "browser_rendered", "bigkinds_api"],
+            ["failed", "rejected", "failed", "accepted"],
             "bigkinds_api",
+            True,
         ),
-        (["curl_cffi", "browser_fetch", "bigkinds_api"], ["failed", "failed", "failed"], None),
+        (
+            ["curl_cffi", "browser_fetch", "browser_rendered", "bigkinds_api"],
+            ["failed", "failed", "failed", "failed"],
+            None,
+            True,
+        ),
+        (
+            ["curl_cffi", "browser_fetch", "browser_rendered"],
+            ["failed", "rejected", "failed"],
+            None,
+            False,
+        ),
+        (
+            ["curl_cffi", "browser_fetch", "browser_rendered"],
+            ["failed", "rejected", "accepted"],
+            "browser_rendered",
+            False,
+        ),
     ],
 )
 def test_stage_order_and_early_success(
@@ -30,6 +48,7 @@ def test_stage_order_and_early_success(
     stages: list,
     statuses: list,
     expected: str | None,
+    allow_bigkinds_fallback: bool,
 ) -> None:
     for name, value in {
         "DATABASE_HOST": "test.invalid",
@@ -64,7 +83,7 @@ def test_stage_order_and_early_success(
     monkeypatch.setattr(details, "get_run_logger", Mock())
     monkeypatch.setattr(details, "collect_stage", details.collect_stage.fn)
     monkeypatch.setattr(details, "finish_article", details.finish_article.fn)
-    result = details.collect_article_details.fn([seed])
+    result = details.collect_article_details.fn([seed], allow_bigkinds_fallback)
     assert [call.args[0] for call in collector.attempt.call_args_list] == stages
     stored = repository.save_detail.call_args.args[1]
     assert stored.selected_stage == expected

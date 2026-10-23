@@ -7,6 +7,7 @@ ENV UV_LINK_MODE=copy \
     PYTHONPATH=/app/jobs/docker/src \
     PATH="/app/jobs/docker/.venv/bin:$PATH"
 COPY packages/http /app/packages/http
+COPY packages/storage /app/packages/storage
 COPY jobs/docker/pyproject.toml jobs/docker/uv.lock ./
 RUN uv sync --locked --no-dev
 COPY jobs/docker/src ./src

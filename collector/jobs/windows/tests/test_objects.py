@@ -3,16 +3,15 @@ from unittest.mock import Mock
 
 import pytest
 from botocore.exceptions import EndpointConnectionError
+from collector_storage.config import ObjectStorageSettings
+from collector_storage.objects import ObjectCredentials, RawObjectStore
 from pydantic import AnyHttpUrl, SecretStr
-
-from articles.objects import ObjectCredentials, RawObjectStore
-from config import ObjectStorageSettings
 
 
 @pytest.fixture
 def objects(monkeypatch: pytest.MonkeyPatch) -> RawObjectStore:
     client = Mock()
-    monkeypatch.setattr("articles.objects.boto3.client", Mock(return_value=client))
+    monkeypatch.setattr("collector_storage.objects.boto3.client", Mock(return_value=client))
     return RawObjectStore(
         ObjectStorageSettings(
             endpoint_url=AnyHttpUrl("http://127.0.0.1:9000"),

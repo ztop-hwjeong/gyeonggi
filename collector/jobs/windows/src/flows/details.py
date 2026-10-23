@@ -3,6 +3,8 @@ from typing import cast
 from uuid import UUID
 
 from collector_http.config import HttpSettings
+from collector_storage.config import DatabaseSettings, ObjectStorageSettings
+from collector_storage.objects import ObjectCredentials, RawObjectStore
 from prefect import flow, get_run_logger, task
 from prefect.blocks.system import Secret
 from prefect.cache_policies import NO_CACHE
@@ -10,15 +12,12 @@ from prefect.context import FlowRunContext
 from pydantic import SecretStr
 
 from articles.models import ArticleDetail, ArticleSeed, DetailAttempt, DetailRunSummary, DetailStage
-from articles.objects import ObjectCredentials, RawObjectStore
 from articles.pipeline import ArticleDetailCollector, browser_allowed
 from articles.storage import DetailRepository
 from config import (
     BrowserFetchSettings,
-    DatabaseSettings,
     DetailSettings,
     ExtractionSettings,
-    ObjectStorageSettings,
 )
 
 
@@ -55,9 +54,13 @@ def finish_article(
 
 
 @flow(name="collect-article-details", persist_result=False)
-def collect_article_details(articles: list[ArticleSeed]) -> DetailRunSummary:
+def collect_article_details(
+    articles: list[ArticleSeed], allow_bigkinds_fallback: bool = True
+) -> DetailRunSummary:
     if not articles:
         raise ValueError("상세 수집할 기사 필요")
+    if any(article.source != "bigkinds" for article in articles):
+        raise ValueError("빅카인즈 기사 전용 흐름")
     identifiers = [(article.source, article.source_id) for article in articles]
     if len(set(identifiers)) != len(identifiers):
         raise ValueError("중복된 상세 수집 대상")
@@ -70,11 +73,14 @@ def collect_article_details(articles: list[ArticleSeed]) -> DetailRunSummary:
         storage_settings, ObjectCredentials.model_validate(credentials.get())
     ) as objects:
         repository = DetailRepository(database, SecretStr(cast(str, block.get())), objects)
-        return run_collection(articles, settings, repository)
+        return run_collection(articles, settings, repository, allow_bigkinds_fallback)
 
 
 def run_collection(
-    articles: list[ArticleSeed], settings: DetailSettings, repository: DetailRepository
+    articles: list[ArticleSeed],
+    settings: DetailSettings,
+    repository: DetailRepository,
+    allow_bigkinds_fallback: bool = True,
 ) -> DetailRunSummary:
     collector = ArticleDetailCollector(
         settings,
@@ -109,7 +115,9 @@ def run_collection(
                     )
                     attempts.append(skipped)
                     repository.save_attempt(UUID(run_id), seed, skipped)
-            if attempts[-1].status != "accepted":
+            if attempts[-1].status not in ("accepted", "skipped") and browser_allowed(attempts[-1]):
+                attempts.append(collect_stage(collector, "browser_rendered", seed, summary))
+            if attempts[-1].status != "accepted" and allow_bigkinds_fallback:
                 attempts.append(collect_stage(collector, "bigkinds_api", seed, summary))
             result = finish_article(seed, attempts, summary, repository)
             results.append(result)

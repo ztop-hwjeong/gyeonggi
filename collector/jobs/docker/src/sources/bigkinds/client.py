@@ -21,7 +21,7 @@ def search_payload(request: ListCollectionRequest, page_number: int) -> dict:
         "endDate": request.end_date.isoformat(),
         "newsIds": [],
         "categoryCodes": [],
-        "providerCodes": [],
+        "providerCodes": list(request.provider_codes),
         "incidentCodes": [],
         "networkNodeType": "",
         "topicOrigin": "",

@@ -56,6 +56,7 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - ./.docker/postgres:/var/lib/postgresql
+    networks: [default, collector]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -98,6 +99,24 @@ services:
         condition: service_healthy
     networks: [collector]
 
+  naver-init:
+    profiles: [collector]
+    image: gyeonggi-prefect-init:local
+    build:
+      context: ./infra/prefect
+    command: [python, src/register_naver.py]
+    environment:
+      X-NCP-APIGW-API-KEY-ID:
+      X-NCP-APIGW-API-KEY:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      NAVER_CREDENTIALS_BLOCK: naver-api-hub-credentials
+      NAVER_RATE_LIMIT_NAME: naver-api-hub-http
+      NAVER_REQUEST_INTERVAL_SECONDS: "3"
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    networks: [collector]
+
   windows-worker:
     profiles: [collector]
     provider:
@@ -134,9 +153,14 @@ services:
     depends_on:
       prefect-init:
         condition: service_completed_successfully
+      naver-init:
+        condition: service_completed_successfully
+      rustfs-init:
+        condition: service_completed_successfully
     networks: [collector]
 
 networks:
+  default:
   collector:
     name: gyeonggi-collector
 

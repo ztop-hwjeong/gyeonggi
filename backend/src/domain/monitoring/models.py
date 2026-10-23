@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
-type Stage = Literal["curl_cffi", "browser_fetch", "bigkinds_api"]
+type Stage = Literal["curl_cffi", "browser_fetch", "browser_rendered", "bigkinds_api"]
 type RunState = Literal[
     "SCHEDULED",
     "PENDING",
@@ -57,6 +57,90 @@ class CollectionProgress(BaseModel):
     finished_at: datetime | None
 
 
+class SearchProgress(BaseModel):
+    missing_date_count: int = 0
+    date_boundary_reached: bool = False
+    channel: Literal["news", "blog", "cafearticle"]
+    query: str
+    status: Literal["running", "completed", "partial", "failed"]
+    started_at: datetime
+    finished_at: datetime | None
+    pages_collected: int
+    retrieved_count: int
+    new_count: int
+    updated_count: int
+    total_count: int | None
+    cursor_advanced: bool
+    stop_reason: str | None
+    error_type: str | None
+    error_code: str | None
+
+
+class SearchWindow(Window):
+    channel: Literal["news", "blog", "cafearticle"] | None = None
+
+
+class SearchMetrics(BaseModel):
+    since: datetime
+    until: datetime
+    run_status_counts: dict[str, int]
+    pages_collected: int
+    retrieved_count: int
+    new_count: int
+    updated_count: int
+    raw_response_count: int
+    raw_response_bytes: int
+    requests_today: int
+
+
+class StreamQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    channel: Literal["news", "blog", "cafearticle"] | None = None
+    limit: int = Field(default=50, ge=1, le=200)
+    offset: int = Field(default=0, ge=0)
+
+
+class SearchCursor(BaseModel):
+    completed_at: datetime
+    run_id: UUID
+    head_ids: list[str]
+
+
+class SearchStream(BaseModel):
+    stream_key: str
+    channel: str
+    query: str
+    cursor: SearchCursor | None
+    last_run: SearchProgress | None
+
+
+class StreamPage(BaseModel):
+    items: list[SearchStream]
+    total: int
+    limit: int
+    offset: int
+
+
+class SearchItem(BaseModel):
+    channel: str
+    source_id: str
+    title: str
+    url: str
+    original_url: str | None
+    summary: str
+    published_at: datetime | None
+    published_on: str | None
+    container_name: str | None
+
+
+class SearchItemPage(BaseModel):
+    items: list[SearchItem]
+    total: int
+    limit: int
+    offset: int
+
+
 class RunStateInfo(BaseModel):
     type: RunState
     name: str
@@ -74,7 +158,7 @@ class RunInfo(BaseModel):
     start_time: datetime | None
     end_time: datetime | None
     estimated_run_time: float
-    collection: CollectionProgress | None = None
+    collection: CollectionProgress | SearchProgress | None = None
 
 
 class RunPage(BaseModel):

@@ -37,3 +37,68 @@ deployments:
           BIGKINDS_RATE_LIMIT_NAME: bigkinds-http
           COLLECTION_OUTPUT_DIRECTORY: /var/lib/collector
           HTTP_IMPERSONATE: chrome
+  - name: naver-news
+    entrypoint: src/flows/naver.py:naver_collect_list
+    tags: [docker, naver, list, news]
+    schedules:
+      - interval: 900
+        active: true
+    concurrency_limit: 1
+    parameters:
+      request:
+        channel: news
+        terms: &policy-terms [폰프리스쿨, 폰프리 스쿨, 교권보호, 경기RAS, 벽깨기교육, 편한교복]
+        page_size: 50
+        max_pages: 20
+    work_pool: &naver-pool
+      name: docker-collector
+      job_variables:
+        image: gyeonggi-collector:local
+        image_pull_policy: Never
+        networks: [gyeonggi-collector]
+        auto_remove: true
+        env:
+          PREFECT_API_URL: http://prefect-server:4200/api
+          NAVER_CREDENTIALS_BLOCK: naver-api-hub-credentials
+          NAVER_RATE_LIMIT_NAME: naver-api-hub-http
+          NAVER_DAILY_REQUEST_LIMIT: "1000"
+          NAVER_OVERLAP_PAGES: "1"
+          NAVER_DATE_OVERLAP_DAYS: "1"
+          DATABASE_HOST: postgres
+          DATABASE_PORT: "5432"
+          DATABASE_NAME: gyeonggi
+          DATABASE_USER: gyeonggi
+          DATABASE_PASSWORD_BLOCK: collector-postgres-password
+          OBJECT_STORAGE_ENDPOINT_URL: http://rustfs:9000
+          OBJECT_STORAGE_BUCKET: collector-raw
+          OBJECT_STORAGE_REGION: us-east-1
+          OBJECT_STORAGE_CREDENTIALS_BLOCK: collector-object-storage-credentials
+          HTTP_IMPERSONATE: chrome
+  - name: naver-blog
+    entrypoint: src/flows/naver.py:naver_collect_list
+    tags: [docker, naver, list, blog]
+    schedules:
+      - interval: 900
+        active: true
+    concurrency_limit: 1
+    parameters:
+      request:
+        channel: blog
+        terms: *policy-terms
+        page_size: 50
+        max_pages: 20
+    work_pool: *naver-pool
+  - name: naver-cafearticle
+    entrypoint: src/flows/naver.py:naver_collect_list
+    tags: [docker, naver, list, cafearticle]
+    schedules:
+      - interval: 900
+        active: true
+    concurrency_limit: 1
+    parameters:
+      request:
+        channel: cafearticle
+        terms: *policy-terms
+        page_size: 50
+        max_pages: 20
+    work_pool: *naver-pool

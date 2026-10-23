@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from pathlib import Path
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
@@ -14,6 +14,7 @@ class ListCollectionRequest(BaseModel):
     # 참고 요청과 실제 조회로 확인한 페이지 크기 범위
     page_size: int = Field(default=10, ge=1, le=10)
     max_pages: int | None = Field(default=None, ge=1)
+    provider_codes: tuple[Annotated[str, Field(pattern=r"^[0-9]{8}$")], ...] = ()
 
     @model_validator(mode="after")
     def validate_period(self) -> Self:

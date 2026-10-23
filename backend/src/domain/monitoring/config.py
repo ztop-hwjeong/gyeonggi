@@ -14,5 +14,7 @@ class MonitoringSettings(BaseSettings):
     monitoring_flow_names: tuple[str, ...] = (
         "bigkinds-collect-list",
         "collect-article-details",
+        "naver-collect-list",
+        "collect-naver-cafe-details",
     )
     monitoring_pool_names: tuple[str, ...] = ("docker-collector", "windows-collector")

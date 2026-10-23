@@ -16,6 +16,14 @@ from domain.monitoring.models import (
     ErrorPage,
     ErrorQuery,
     HttpErrorCount,
+    SearchItem,
+    SearchItemPage,
+    SearchMetrics,
+    SearchProgress,
+    SearchStream,
+    SearchWindow,
+    StreamPage,
+    StreamQuery,
     Window,
 )
 
@@ -30,17 +38,112 @@ class MonitoringRepository:
         except SQLAlchemyError as error:
             raise MonitoringUnavailableError("수집 저장소 조회 실패") from error
 
-    async def progress(self, run_ids: list[UUID]) -> dict[UUID, CollectionProgress]:
+    async def progress(
+        self, run_ids: list[UUID]
+    ) -> dict[UUID, CollectionProgress | SearchProgress]:
         if not run_ids:
             return {}
         statement = text(
-            "SELECT id, summary FROM ops.article_detail_runs WHERE id IN :ids"
+            "SELECT id, summary, 'details' AS kind FROM ops.article_detail_runs WHERE id IN :ids "
+            "UNION ALL SELECT id, summary, 'search' AS kind FROM ops.search_runs WHERE id IN :ids"
         ).bindparams(bindparam("ids", expanding=True))
         try:
             rows = (await self._session.execute(statement, {"ids": run_ids})).mappings().all()
         except SQLAlchemyError as error:
             raise MonitoringUnavailableError("수집 저장소 조회 실패") from error
-        return {row["id"]: CollectionProgress.model_validate(row["summary"]) for row in rows}
+        return {
+            row["id"]: (
+                CollectionProgress.model_validate(row["summary"])
+                if row["kind"] == "details"
+                else SearchProgress.model_validate(row["summary"])
+            )
+            for row in rows
+        }
+
+    async def search_metrics(self, window: SearchWindow) -> SearchMetrics:
+        params = {"since": window.since, "until": window.until, "channel": window.channel}
+        condition = " AND (CAST(:channel AS text) IS NULL OR s.channel=:channel)"
+        rows = await self._rows(
+            "SELECT r.summary->>'status' AS status, count(*) AS count, "
+            "coalesce(sum((r.summary->>'pages_collected')::int),0) AS pages, "
+            "coalesce(sum((r.summary->>'retrieved_count')::int),0) AS retrieved, "
+            "coalesce(sum((r.summary->>'new_count')::int),0) AS new, "
+            "coalesce(sum((r.summary->>'updated_count')::int),0) AS updated "
+            "FROM ops.search_runs r JOIN ops.search_streams s ON s.stream_key=r.stream_key "
+            "WHERE r.created_at>=:since AND r.created_at<:until"
+            + condition
+            + " GROUP BY r.summary->>'status'",
+            params,
+        )
+        raw = await self._rows(
+            "SELECT count(*) AS count, coalesce(sum((a.raw_object->>'byte_length')::bigint),0) "
+            "AS bytes FROM st.search_responses a JOIN ops.search_runs r ON r.id=a.run_id "
+            "JOIN ops.search_streams s ON s.stream_key=r.stream_key "
+            "WHERE a.created_at>=:since AND a.created_at<:until" + condition,
+            params,
+        )
+        usage = await self._rows(
+            "SELECT coalesce(sum(calls),0) AS count FROM ops.api_daily_usage "
+            "WHERE provider='naver-search' AND day=(now() AT TIME ZONE 'Asia/Seoul')::date",
+            {},
+        )
+        return SearchMetrics(
+            since=window.since,
+            until=window.until,
+            run_status_counts={r["status"]: r["count"] for r in rows},
+            pages_collected=sum(r["pages"] for r in rows),
+            retrieved_count=sum(r["retrieved"] for r in rows),
+            new_count=sum(r["new"] for r in rows),
+            updated_count=sum(r["updated"] for r in rows),
+            raw_response_count=raw[0]["count"],
+            raw_response_bytes=raw[0]["bytes"],
+            requests_today=usage[0]["count"],
+        )
+
+    async def streams(self, query: StreamQuery) -> StreamPage:
+        condition = (
+            " WHERE provider='naver' AND (CAST(:channel AS text) IS NULL OR channel=:channel)"
+        )
+        params = {"channel": query.channel, "limit": query.limit, "offset": query.offset}
+        total = (
+            await self._rows(
+                "SELECT count(*) AS count FROM ops.search_streams" + condition,
+                {"channel": query.channel},
+            )
+        )[0]["count"]
+        rows = await self._rows(
+            "SELECT stream_key, channel, query, cursor, "
+            "(SELECT r.summary FROM ops.search_runs r WHERE r.stream_key=s.stream_key "
+            "ORDER BY created_at DESC LIMIT 1) AS last_run FROM ops.search_streams s"
+            + condition
+            + " ORDER BY updated_at DESC, stream_key LIMIT :limit OFFSET :offset",
+            params,
+        )
+        return StreamPage(
+            items=[SearchStream.model_validate(row) for row in rows],
+            total=total,
+            limit=query.limit,
+            offset=query.offset,
+        )
+
+    async def search_items(self, run_id: UUID, limit: int, offset: int) -> SearchItemPage:
+        total = (
+            await self._rows(
+                "SELECT count(*) AS count FROM st.search_run_items WHERE run_id=:id",
+                {"id": run_id},
+            )
+        )[0]["count"]
+        rows = await self._rows(
+            "SELECT data FROM st.search_run_items WHERE run_id=:id "
+            "ORDER BY source_id LIMIT :limit OFFSET :offset",
+            {"id": run_id, "limit": limit, "offset": offset},
+        )
+        return SearchItemPage(
+            items=[SearchItem.model_validate(row["data"]) for row in rows],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
 
     async def metrics(self, window: Window) -> CollectionMetrics:
         params = {"since": window.since, "until": window.until}

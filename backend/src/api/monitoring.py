@@ -13,6 +13,11 @@ from domain.monitoring.models import (
     RunInfo,
     RunPage,
     RunQuery,
+    SearchItemPage,
+    SearchMetrics,
+    SearchWindow,
+    StreamPage,
+    StreamQuery,
     Window,
     WorkerSnapshot,
 )
@@ -82,3 +87,31 @@ async def errors(
 @router.get("/workers")
 async def workers(monitor: FromDishka[PrefectMonitor]) -> WorkerSnapshot:
     return WorkerSnapshot(observed_at=datetime.now(UTC), pools=await monitor.pools())
+
+
+@router.get("/search-metrics")
+async def search_metrics(
+    repository: FromDishka[MonitoringRepository],
+    query: Annotated[SearchWindow, Query()],
+) -> SearchMetrics:
+    return await repository.search_metrics(query)
+
+
+@router.get("/search-streams")
+async def search_streams(
+    repository: FromDishka[MonitoringRepository],
+    query: Annotated[StreamQuery, Query()],
+) -> StreamPage:
+    return await repository.streams(query)
+
+
+@router.get("/runs/{run_id}/items")
+async def search_items(
+    run_id: UUID,
+    monitor: FromDishka[PrefectMonitor],
+    repository: FromDishka[MonitoringRepository],
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> SearchItemPage:
+    await monitor.run(run_id)
+    return await repository.search_items(run_id, limit, offset)

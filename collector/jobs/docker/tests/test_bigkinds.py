@@ -81,6 +81,13 @@ def test_list_client_does_not_fetch_details(request_data: ListCollectionRequest)
     assert "Cookie" not in headers
 
 
+def test_publisher_filter_reaches_search_request(request_data):
+    request = request_data.model_copy(update={"provider_codes": ("01100101", "01100201")})
+    assert search_payload(request, 1)["providerCodes"] == ["01100101", "01100201"]
+    with pytest.raises(ValidationError):
+        ListCollectionRequest.model_validate({**request.model_dump(), "provider_codes": ["wrong"]})
+
+
 def test_invalid_period_is_rejected_before_collection() -> None:
     with pytest.raises(ValidationError, match="종료일"):
         ListCollectionRequest(
@@ -100,6 +107,23 @@ def test_listing_keeps_original_url_and_does_not_claim_full_content(listing: dic
 def test_missing_original_url_does_not_invent_one(listing: dict) -> None:
     listing.pop("PROVIDER_LINK_PAGE")
     assert normalize_listing(listing).original_url is None
+
+
+def test_publisher_url_html_entities_are_decoded(listing):
+    listing["PROVIDER_LINK_PAGE"] = "https://news.kbs.co.kr/news/view.do?ncd=1&amp;ref=DA"
+    assert (
+        str(normalize_listing(listing).original_url)
+        == "https://news.kbs.co.kr/news/view.do?ncd=1&ref=DA"
+    )
+
+
+@pytest.mark.parametrize("prefix", ["www.", "//www."])
+def test_scheme_less_publisher_url_is_normalized(listing, prefix):
+    listing["PROVIDER_LINK_PAGE"] = prefix + "hellodd.com/news/articleView.html?idxno=113593"
+    assert (
+        str(normalize_listing(listing).original_url)
+        == "https://www.hellodd.com/news/articleView.html?idxno=113593"
+    )
 
 
 @pytest.mark.parametrize("body", [b"<html>error</html>", b'{"success":false}'])

@@ -11,7 +11,7 @@ deployments:
     tags: [windows, articles, details]
     schedules: null
     concurrency_limit: 1
-    work_pool:
+    work_pool: &windows-pool
       name: windows-collector
       job_variables:
         command: '"{{ $WINDOWS_JOB_DIRECTORY }}/.venv/Scripts/python.exe" -m prefect.engine'
@@ -29,3 +29,9 @@ deployments:
           OBJECT_STORAGE_CREDENTIALS_BLOCK: "{{ $OBJECT_STORAGE_CREDENTIALS_BLOCK }}"
           DETAIL_BIGKINDS_RATE_LIMIT_NAME: bigkinds-http
           HTTP_IMPERSONATE: chrome
+  - name: naver-cafe-details
+    entrypoint: src/flows/naver_cafe.py:collect_naver_cafe_details
+    tags: [windows, naver, cafearticle, details]
+    schedules: null
+    concurrency_limit: 1
+    work_pool: *windows-pool

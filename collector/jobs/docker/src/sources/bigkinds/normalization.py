@@ -1,9 +1,11 @@
 import json
 from datetime import datetime
+from html import unescape
 from html.parser import HTMLParser
 from typing import Any
 
 from collector_http.client import AccessRestrictedError, UnexpectedResponseError
+from pydantic import HttpUrl
 
 from sources.bigkinds.models import ArticleListing, SearchResponse
 
@@ -37,11 +39,17 @@ def parse_search_response(body: bytes) -> SearchResponse:
 
 
 def normalize_listing(item: dict[str, Any]) -> ArticleListing:
+    original_url = unescape((item.get("PROVIDER_LINK_PAGE") or "").strip())
+    # 실제 응답에 포함된 스킴 없는 원문 주소의 HTTPS 정규화
+    if original_url.startswith("www."):
+        original_url = "https://" + original_url
+    elif original_url.startswith("//"):
+        original_url = "https:" + original_url
     return ArticleListing(
         source_id=item["NEWS_ID"],
         published_on=datetime.strptime(item["DATE"], "%Y%m%d").date(),
         publisher=plain_text(item["PROVIDER"]),
         title=plain_text(item["TITLE"]),
-        original_url=item.get("PROVIDER_LINK_PAGE") or None,
+        original_url=HttpUrl(original_url) if original_url else None,
         summary=plain_text(item["CONTENT"]),
     )

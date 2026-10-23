@@ -4,15 +4,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
-type DetailStage = Literal["curl_cffi", "browser_fetch", "bigkinds_api"]
+type DetailStage = Literal["curl_cffi", "browser_fetch", "browser_rendered", "bigkinds_api"]
 
 
 class ArticleSeed(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    source: Literal["bigkinds"] = "bigkinds"
+    source: Literal["bigkinds", "naver_cafearticle"] = "bigkinds"
     source_id: str = Field(min_length=1)
-    published_on: date
+    published_on: date | None
     publisher: str = Field(min_length=1)
     title: str = Field(min_length=1)
     original_url: HttpUrl | None
@@ -27,14 +27,16 @@ class Evidence(BaseModel):
     snippet_match_fraction: float
     body_chars: int
     reason: str
+    summary_score: float | None = None
 
 
 class ExtractedArticle(BaseModel):
     title: str
     text: str
-    method: Literal["adaptive", "trafilatura", "snippet_dom", "bigkinds_api"]
+    method: Literal["adaptive", "trafilatura", "snippet_dom", "bigkinds_api", "naver_cafe_api"]
     evidence: Evidence
     adaptive_scope: str | None = None
+    published_at: datetime | None = None
 
 
 class FetchSnapshot(BaseModel):

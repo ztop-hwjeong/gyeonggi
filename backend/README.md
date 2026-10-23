@@ -31,6 +31,9 @@ API 문서는 `http://127.0.0.1:8000/docs`에서 확인한다. `GET /health`는 
 | `GET /monitoring/runs/{run_id}/articles` | 실행 내 처리 완료한 기사의 확보 상태와 최종 수집 경로 |
 | `GET /monitoring/errors` | 기사 상세 단계별 실패·검증 거절 사유, HTTP 상태, 이후 본문 확보 여부 |
 | `GET /monitoring/workers` | Docker·Windows pool 상태, worker ONLINE/OFFLINE, 마지막 heartbeat |
+| `GET /monitoring/search-metrics` | 네이버 목록의 조회·신규·갱신 건수, 원본 응답량, 당일 공통 요청 수 |
+| `GET /monitoring/search-streams` | 채널·검색식별 마지막 성공 커서와 최근 실행 결과 |
+| `GET /monitoring/runs/{run_id}/items` | 네이버 실행 당시의 정규화 목록 |
 
 기간 조회는 기본 최근 24시간이며 `since`, `until`에 시간대가 있는 ISO 8601 시각을 지정한다.
 기간은 최대 31일이며 목록은 `limit`(최대 200), `offset`으로 조회한다.
@@ -39,7 +42,11 @@ API 문서는 `http://127.0.0.1:8000/docs`에서 확인한다. `GET /health`는 
 `recovered=true/false`로 필터링한다. `recovered=false`에는 아직 최종 결과가 없는 시도도 포함된다.
 
 Prefect 실행 완료와 기사 확보 성공은 각각 `state`와 `collection`으로 구분한다.
-목록 실행은 Prefect 상태를 제공하며 `collection` 상세 집계는 없다.
+빅카인즈 목록 실행은 Prefect 상태를 제공하며 `collection` 상세 집계는 없다.
+네이버 목록 실행은 `collection`에 페이지·신규·갱신 건수와 커서 갱신 여부를 제공한다.
+`search-metrics`는 실행 생성 시각 기준이며 `requests_today`는 조회 기간·채널과 무관한
+한국 시각 당일의 네이버 검색 공통 요청 수다. `search-streams`는 오래된 커서도 확인할 수
+있도록 기간 필터 없이 `channel`, `limit`, `offset`으로 조회한다.
 `metrics`는 `scope=article_details`이며 실행 생성 시각을 기준으로 집계한다.
 원본 응답 개수·바이트는 응답 저장 시각을 기준으로 하며 RustFS의 실제 디스크 사용량을 뜻하지 않는다.
 성공률은 처리 완료한 기사 중 확보한 비율(0~1)이며 처리 결과가 없으면 `null`이다.

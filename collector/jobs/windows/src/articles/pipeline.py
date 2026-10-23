@@ -6,7 +6,7 @@ from collector_http.config import HttpSettings
 from curl_cffi.requests.exceptions import RequestException
 from playwright.async_api import Error as PlaywrightError
 
-from articles.browser import fetch_browser
+from articles.browser import fetch_browser, fetch_rendered_browser
 from articles.extraction import ArticleExtractor, ExtractionRejectedError
 from articles.http import fetch_bigkinds, fetch_original
 from articles.models import ArticleSeed, DetailAttempt, DetailStage, ExtractedArticle, FetchSnapshot
@@ -41,16 +41,15 @@ class ArticleDetailCollector:
                     seed, store, self._settings, self._http, self._limiter, snapshots
                 )
                 extraction = self._extractor.extract(
-                    seed, self._repository.read_body(snapshot), snapshot.url
+                    seed, self._repository.read_body(snapshot), snapshot.url, snapshot.content_type
                 )
-            elif stage == "browser_fetch":
+            elif stage in ("browser_fetch", "browser_rendered"):
+                fetch = fetch_browser if stage == "browser_fetch" else fetch_rendered_browser
                 snapshot = asyncio.run(
-                    fetch_browser(
-                        seed, store, self._settings, self._browser, self._limiter, snapshots
-                    )
+                    fetch(seed, store, self._settings, self._browser, self._limiter, snapshots)
                 )
                 extraction = self._extractor.extract(
-                    seed, self._repository.read_body(snapshot), snapshot.url
+                    seed, self._repository.read_body(snapshot), snapshot.url, snapshot.content_type
                 )
             else:
                 extraction = fetch_bigkinds(

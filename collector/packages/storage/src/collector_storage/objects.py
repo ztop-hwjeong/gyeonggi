@@ -5,7 +5,7 @@ import boto3
 from botocore.config import Config
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from config import ObjectStorageSettings
+from collector_storage.config import ObjectStorageSettings
 
 
 class ObjectCredentials(BaseModel):

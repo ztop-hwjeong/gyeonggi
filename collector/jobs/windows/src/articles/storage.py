@@ -4,6 +4,8 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import psycopg
+from collector_storage.config import DatabaseSettings
+from collector_storage.objects import RawObject, RawObjectStore
 from psycopg.types.json import Jsonb
 from pydantic import SecretStr
 
@@ -15,8 +17,6 @@ from articles.models import (
     DetailStage,
     FetchSnapshot,
 )
-from articles.objects import RawObject, RawObjectStore
-from config import DatabaseSettings
 
 
 class DetailRepository:

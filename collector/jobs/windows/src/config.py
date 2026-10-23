@@ -13,27 +13,6 @@ class DetailSettings(BaseSettings):
     bigkinds_rate_limit_name: str = Field(min_length=1)
 
 
-class DatabaseSettings(BaseSettings):
-    model_config = SettingsConfigDict(extra="ignore", hide_input_in_errors=True)
-
-    database_host: str = Field(min_length=1)
-    database_port: int = Field(gt=0, le=65535)
-    database_name: str = Field(min_length=1)
-    database_user: str = Field(min_length=1)
-    database_password_block: str = Field(min_length=1)
-
-
-class ObjectStorageSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="OBJECT_STORAGE_", extra="ignore")
-
-    endpoint_url: AnyHttpUrl
-    bucket: str = Field(min_length=3)
-    region: str = Field(min_length=1)
-    credentials_block: str = Field(min_length=1)
-    connect_timeout_seconds: int = Field(default=5, gt=0)
-    read_timeout_seconds: int = Field(default=30, gt=0)
-
-
 class BrowserFetchSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -57,6 +36,8 @@ class ExtractionSettings(BaseSettings):
     min_added_body_chars: int = Field(default=40, ge=0)
     min_summary_chars: int = Field(default=40, ge=1)
     title_similarity: float = Field(default=70, ge=0, le=100)
+    revised_title_similarity: float = Field(default=85, ge=0, le=100)
+    revised_summary_similarity: float = Field(default=65, ge=0, le=100)
     snippet_similarity: float = Field(default=85, ge=0, le=100)
     snippet_window_chars: int = Field(default=60, ge=20)
     snippet_step_chars: int = Field(default=40, ge=10)

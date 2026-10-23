@@ -15,7 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.monitoring.config import MonitoringSettings
 from domain.monitoring.errors import MonitoringUnavailableError
-from domain.monitoring.models import ErrorPage, RunQuery, Window
+from domain.monitoring.models import (
+    ErrorPage,
+    RunQuery,
+    SearchMetrics,
+    SearchProgress,
+    StreamPage,
+    Window,
+)
 from domain.monitoring.prefect import PrefectMonitor
 from domain.monitoring.repository import MonitoringRepository
 from main import create_app
@@ -114,6 +121,8 @@ def test_runs_filter_pagination_and_private_fields(monitor_setup):
     assert set(request["flows"]["name"]["any_"]) == {
         "bigkinds-collect-list",
         "collect-article-details",
+        "naver-collect-list",
+        "collect-naver-cafe-details",
     }
 
 
@@ -231,3 +240,60 @@ def test_database_failure_does_not_look_like_empty_metrics():
             await MonitoringRepository(session).metrics(Window())
 
     asyncio.run(check())
+
+
+def test_search_partial_progress_is_distinct_from_prefect_completion(monitor_setup):
+    client, repository, _, run_id = monitor_setup
+    now = datetime.now(UTC)
+    repository.progress.return_value = {
+        run_id: SearchProgress(
+            channel="news",
+            query="교육",
+            status="partial",
+            started_at=now,
+            finished_at=now,
+            pages_collected=3,
+            retrieved_count=60,
+            new_count=2,
+            updated_count=0,
+            total_count=1000,
+            cursor_advanced=False,
+            stop_reason="페이지 상한",
+            error_type=None,
+            error_code=None,
+        )
+    }
+    data = client.get("/monitoring/runs").json()["items"][0]
+    assert data["state"]["type"] == "COMPLETED"
+    assert data["collection"]["status"] == "partial"
+    assert not data["collection"]["cursor_advanced"]
+
+
+def test_search_streams_keep_old_cursors_visible_and_support_channel_filter(monitor_setup):
+    client, repository, _, _ = monitor_setup
+    repository.streams.return_value = StreamPage(items=[], total=4, limit=1, offset=10)
+    response = client.get("/monitoring/search-streams?channel=cafearticle&limit=1&offset=10")
+    assert response.status_code == 200 and response.json()["total"] == 4
+    query = repository.streams.call_args.args[0]
+    assert query.channel == "cafearticle" and query.offset == 10
+    assert not hasattr(query, "since")
+
+
+def test_search_metrics_expose_shared_request_usage(monitor_setup):
+    client, repository, _, _ = monitor_setup
+    now = datetime.now(UTC)
+    repository.search_metrics.return_value = SearchMetrics(
+        since=now,
+        until=now,
+        run_status_counts={},
+        pages_collected=0,
+        retrieved_count=0,
+        new_count=0,
+        updated_count=0,
+        raw_response_count=0,
+        raw_response_bytes=0,
+        requests_today=25,
+    )
+    response = client.get("/monitoring/search-metrics?channel=blog")
+    assert response.status_code == 200 and response.json()["requests_today"] == 25
+    assert repository.search_metrics.call_args.args[0].channel == "blog"

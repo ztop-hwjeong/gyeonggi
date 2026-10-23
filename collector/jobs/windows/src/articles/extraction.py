@@ -7,6 +7,7 @@ from rapidfuzz.fuzz import ratio
 from scrapling import Selector
 from trafilatura import bare_extraction
 from trafilatura.settings import Document
+from w3lib.encoding import html_to_unicode
 
 from articles.adaptive import PostgresAdaptiveStorage, ProfileContext
 from articles.matching import normalized_text, verify_article
@@ -30,12 +31,15 @@ class ArticleExtractor:
         origin = sha256(host.encode()).hexdigest()[:16]
         return f"{publisher}:{origin}"
 
-    def extract(self, seed: ArticleSeed, body: bytes, url: str) -> ExtractedArticle:
+    def extract(
+        self, seed: ArticleSeed, body: bytes, url: str, content_type: str | None = None
+    ) -> ExtractedArticle:
+        _, decoded = html_to_unicode(content_type, body)
         scope = self.scope_key(seed, url)
         origin = f"{urlsplit(url).scheme}://{urlsplit(url).netloc}"
         profile = ProfileContext(seed.publisher, origin, seed.source_id, url)
         page = Selector(
-            content=body,
+            content=decoded,
             url=url,
             adaptive=True,
             storage=PostgresAdaptiveStorage,
@@ -48,16 +52,14 @@ class ArticleExtractor:
         )
         document = cast(
             Document | None,
-            bare_extraction(body, url=url, with_metadata=True, include_comments=False),
+            bare_extraction(decoded, url=url, with_metadata=True, include_comments=False),
         )
         title = document.title if document is not None and document.title else ""
-        if not title:
-            headings = [str(node.get_all_text(strip=True)) for node in page.css("h1")]
-            title = max(
-                headings,
-                key=lambda value: ratio(normalized_text(seed.title), normalized_text(value)),
-                default="",
-            )
+        headings = [str(node.get_all_text(strip=True)) for node in page.css("h1")]
+        title = max(
+            [title, *headings],
+            key=lambda value: ratio(normalized_text(seed.title), normalized_text(value)),
+        )
         saved = page.retrieve("article-body")
         if saved is not None:
             relocated = page.relocate(
