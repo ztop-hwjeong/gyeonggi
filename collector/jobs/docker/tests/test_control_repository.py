@@ -79,4 +79,16 @@ def test_dispatch_recovery_preview_isolation_and_final_state_preservation(monkey
         row = conn.execute("SELECT status,summary FROM ops.collection_requests").fetchall()[0]
         assert row["status"] == "completed"
         assert row["summary"]["retrieved_count"] == 1
+        conn.execute(
+            "INSERT INTO ops.collection_requests "
+            "(id,rule_id,rule_version,source,mode,definition,start_date,end_date) "
+            "SELECT %s,rule_id,rule_version,source,'backfill',definition,start_date,end_date "
+            "FROM ops.collection_requests WHERE id=%s",
+            (uuid4(), request_id),
+        )
+        client.create_flow_run_from_deployment.side_effect = None
+        client.create_flow_run_from_deployment.return_value = Mock(id=uuid4())
+        assert submit_one(repository, client, ControlSettings())
+        destinations = [call.args[0] for call in client.read_deployment_by_name.call_args_list]
+        assert destinations[0] != destinations[-1]
         conn.rollback()

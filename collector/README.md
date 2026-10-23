@@ -104,6 +104,7 @@ Docker 작업 이미지를 빌드한 뒤 `collector/jobs/docker`에서 배포한
 
 ```powershell
 $env:PREFECT_API_URL = 'http://127.0.0.1:4200/api'
+$env:PREFECT_DEPLOYMENTS_CLEAR_SCHEDULES_ON_EMPTY = 'true'
 uv run prefect deploy --name naver-news --name naver-blog --name naver-cafearticle --no-prompt
 ```
 
@@ -151,13 +152,19 @@ API 계약: [뉴스](https://api.ncloud-docs.com/docs/naver-api-hub-search-news)
 ## 키워드 규칙 기반 수집 요청
 
 DB 마이그레이션을 번호순으로 적용하고 Docker 작업 이미지를 빌드한 뒤,
-`collector/jobs/docker`에서 두 배포를 등록한다.
+`collector/jobs/docker`에서 배포를 등록한다.
 
 ```powershell
-uv run prefect deploy --name managed-collection --name collection-dispatch --no-prompt
+$env:PREFECT_DEPLOYMENTS_CLEAR_SCHEDULES_ON_EMPTY = 'true'
+uv run prefect deploy --name naver-news --name naver-blog --name naver-cafearticle --name managed-collection --name managed-backfill --name collection-dispatch --no-prompt
 ```
 
 `collection-dispatch`는 1분마다 활성 규칙의 실행 시각을 확인하고 요청 큐를 처리한다.
+과거 수집은 `managed-backfill`, 증분·미리보기는 `managed-collection` 배포로 보낸다.
+각 배포는 한 번에 하나씩 실행하며 Docker Worker의 세 슬롯은 과거 수집·일반 수집·요청 제어를
+함께 처리한다. 긴 과거 수집 중에도 정기 수집과 취소 요청을 처리하며 소스별 요청 제한은 공유한다.
+기존 네이버 배포의 고정 키워드 스케줄은 빈 배열과 명시적 초기화 설정으로 제거한다.
+`schedules: null`은 기존 스케줄을 보존하므로 정기 실행 해제에 사용하지 않는다.
 규칙의 주기는 15분 이상이며 실행 중인 같은 규칙·채널의 정기 요청을 중복 생성하지 않는다.
 규칙 변경은 이후 요청에 적용한다. 기존 요청은 당시 버전과 검색 조건을 유지한다.
 Prefect 제출은 요청 UUID로 중복 방지하며, 제출 응답이 유실돼도 같은 실행을 조회한다.

@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class ControlSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CONTROL_", extra="ignore")
     deployment_name: str = "managed-collection/managed-collection"
+    backfill_deployment_name: str = "managed-collection/managed-backfill"
     dispatch_batch_size: int = Field(default=20, ge=1, le=100)
     bigkinds_max_pages_per_day: int = Field(default=100, ge=1, le=1000)
 

@@ -40,7 +40,7 @@ deployments:
   - name: naver-news
     entrypoint: src/flows/naver.py:naver_collect_list
     tags: [docker, naver, list, news]
-    schedules: null
+    schedules: []
     concurrency_limit: 1
     parameters:
       request:
@@ -76,7 +76,7 @@ deployments:
   - name: naver-blog
     entrypoint: src/flows/naver.py:naver_collect_list
     tags: [docker, naver, list, blog]
-    schedules: null
+    schedules: []
     concurrency_limit: 1
     parameters:
       request:
@@ -88,7 +88,7 @@ deployments:
   - name: naver-cafearticle
     entrypoint: src/flows/naver.py:naver_collect_list
     tags: [docker, naver, list, cafearticle]
-    schedules: null
+    schedules: []
     concurrency_limit: 1
     parameters:
       request:
@@ -109,5 +109,11 @@ deployments:
     schedules:
       - interval: 60
         active: true
+    concurrency_limit: 1
+    work_pool: *naver-pool
+  - name: managed-backfill
+    entrypoint: src/flows/managed.py:managed_collection
+    tags: [docker, collection, backfill]
+    schedules: null
     concurrency_limit: 1
     work_pool: *naver-pool

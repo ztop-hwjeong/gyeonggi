@@ -49,12 +49,17 @@ def submit_one(
 ) -> bool:
     with repository.connect() as conn, conn.transaction():
         row = conn.execute(
-            "SELECT id FROM ops.collection_requests WHERE status='queued' "
+            "SELECT id,mode FROM ops.collection_requests WHERE status='queued' "
             "ORDER BY created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED"
         ).fetchone()
         if row is None:
             return False
-        deployment = client.read_deployment_by_name(settings.deployment_name)
+        deployment_name = (
+            settings.backfill_deployment_name
+            if row["mode"] == "backfill"
+            else settings.deployment_name
+        )
+        deployment = client.read_deployment_by_name(deployment_name)
         # Prefect 응답 유실 후 재실행에도 같은 실행을 돌려받는 요청 UUID
         run = client.create_flow_run_from_deployment(
             deployment.id,
