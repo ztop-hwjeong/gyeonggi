@@ -1,4 +1,50 @@
 services:
+  rustfs:
+    image: rustfs/rustfs:1.0.3
+    restart: unless-stopped
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY_FILE: /run/secrets/rustfs_access_key
+      RUSTFS_SECRET_KEY_FILE: /run/secrets/rustfs_secret_key
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    secrets: [rustfs_access_key, rustfs_secret_key]
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - ./.docker/rustfs/data:/data
+    networks: [collector]
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:9000/health/ready]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  rustfs-init:
+    profiles: [collector]
+    image: gyeonggi-prefect-init:local
+    build:
+      context: ./infra/prefect
+    command: [python, src/register_storage.py]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      OBJECT_STORAGE_ENDPOINT_URL: http://rustfs:9000
+      OBJECT_STORAGE_BUCKET: collector-raw
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_CREDENTIALS_BLOCK: collector-object-storage-credentials
+      OBJECT_STORAGE_ACCESS_KEY_FILE: /run/secrets/rustfs_access_key
+      OBJECT_STORAGE_SECRET_KEY_FILE: /run/secrets/rustfs_secret_key
+    secrets: [rustfs_access_key, rustfs_secret_key]
+    depends_on:
+      rustfs:
+        condition: service_healthy
+      prefect-server:
+        condition: service_healthy
+    networks: [collector]
+
   postgres:
     image: postgres:18.6
     restart: unless-stopped
@@ -68,6 +114,8 @@ services:
     depends_on:
       prefect-init:
         condition: service_completed_successfully
+      rustfs-init:
+        condition: service_completed_successfully
 
   docker-worker:
     profiles: [collector]
@@ -95,3 +143,9 @@ networks:
 volumes:
   collector-data:
     name: gyeonggi-collector-data
+
+secrets:
+  rustfs_access_key:
+    file: ./.docker/rustfs/secrets/access_key
+  rustfs_secret_key:
+    file: ./.docker/rustfs/secrets/secret_key

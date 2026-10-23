@@ -7,6 +7,7 @@
 저장소 루트에서 실행한다.
 
 ```powershell
+& ./infra/rustfs/initialize-secrets.ps1
 docker build -f collector/jobs/docker/Dockerfile -t gyeonggi-collector:local collector
 docker compose --profile collector up -d --build
 ```
@@ -122,7 +123,69 @@ Windows 점검은 관리 중인 Edge에 연결해 실행을 확인하고 연결�
 
 Edge 기본 사용자 프로필은 자동화 연결에 사용할 수 없다. 로그인은 수집 전용 프로필의 Edge 창에서 한 번 진행하며 이후 실행에서도 같은 프로필을 유지한다.
 
-점검 배포에는 자동 스케줄이 없다. UI에서 pool별 worker ONLINE/OFFLINE, 마지막 heartbeat, 작업 상태와 로그를 확인한다. worker 생존 상태와 수집 성공 여부는 별도로 확인한다.
+UI에서 pool별 worker ONLINE/OFFLINE, 마지막 heartbeat, 작업 상태와 로그를 확인한다. worker 생존 상태와 수집 성공 여부는 별도로 확인한다.
+
+## 기사 원문 수집과 원본 보존
+
+`collector/jobs/windows`는 원문 수집과 본문 추출을 담당한다. 공통 HTTP 전송은
+`collector/packages/http`를 사용하며 worker 운영 환경과 의존성을 분리한다.
+`curl_cffi` 원문 요청 → 실제 Edge 탭의 `fetch()` → 빅카인즈 상세 API 순서로 시도한다.
+제목과 목록 요약의 일부 문장이 실제 본문에 일치하는지 검증하고 통과한 결과만 채택한다.
+401·429·Retry-After는 같은 언론사에 브라우저로 반복 요청하지 않는다.
+Edge 탭은 원문 사이트의 시작 화면으로 연결한 뒤 해당 출처에서 기사를 fetch한다.
+작업 완료 후 창을 유지한다.
+
+RustFS의 S3 API는 `http://127.0.0.1:9000`, 콘솔은 `http://127.0.0.1:9001`이다.
+데이터는 `.docker/rustfs/data`, Compose 자격 증명 파일은 `.docker/rustfs/secrets`에 둔다.
+`infra/rustfs/initialize-secrets.ps1`은 없는 자격 증명만 생성한다. 기존 파일을 덮어쓰지 않는다.
+`rustfs-init`은 비공개 `collector-raw` 버킷과 Prefect Secret 블록
+`collector-object-storage-credentials`를 등록하며 기존 자격 증명이 다르면 실패한다.
+로컬 구성은 같은 자격 증명을 사용하므로 운영 배포 시 수집용 계정·버킷 권한을 분리한다.
+
+응답 바이트는 문자 인코딩이나 HTML을 변경하지 않고 RustFS에 저장한다.
+객체 키는 `articles/{run_id}/{stage}/{response_id}`이며, 같은 키를 덮어쓰지 않는다.
+PostgreSQL의 `st.article_responses`에는 요청 대상·상태·객체 위치·크기·SHA-256을 기록한다.
+원본을 읽을 때 크기와 해시를 검증한다. 객체 업로드 실패·누락·손상은 실행 실패로
+표시하며 언론사에 재요청해 숨기지 않는다. 객체 업로드 후 DB 기록이 실패하면 객체만
+남을 수 있으므로 백업·정리 시 DB 참조를 대조한다. 자동 만료는 설정하지 않는다.
+
+`ops`에는 실행 상태와 언론사·호스트별 adaptive 특성 및 변경 이력,
+`st`에는 수집 응답과 단계별 시도, `dw`에는 검증된 본문과 내용 버전을 보관한다.
+adaptive 특성은 검증을 통과한 본문 요소만 갱신한다. 보존한 HTML과 추출 기록을
+재사용하면 외부 요청 없이 본문을 다시 추출할 수 있다.
+
+DB 초기 구성은 저장소 루트에서 다음과 같이 적용한다. DB와 RustFS 원본은 함께 백업하고 복구한다.
+
+```powershell
+docker compose cp infra/postgres/migrations/001_article_collection.sql postgres:/tmp/001_article_collection.sql
+docker compose exec -T postgres psql -U gyeonggi -d gyeonggi -v ON_ERROR_STOP=1 -f /tmp/001_article_collection.sql
+```
+
+`collector/jobs/windows`에서 배포한다. DB 비밀번호는 환경변수 대신 지정한 Prefect Secret에
+등록한다. 자격 증명 값은 배포 YAML이나 실행 매개변수에 넣지 않는다.
+
+```powershell
+uv sync --locked
+$env:PREFECT_API_URL = 'http://127.0.0.1:4200/api'
+$env:WINDOWS_JOB_DIRECTORY = (Get-Location).Path.Replace('\', '/')
+$env:BROWSER_CDP_URL = 'http://127.0.0.1:9222'
+$env:DATABASE_HOST = '127.0.0.1'
+$env:DATABASE_PORT = '5432'
+$env:DATABASE_NAME = 'gyeonggi'
+$env:DATABASE_USER = 'gyeonggi'
+$env:DATABASE_PASSWORD_BLOCK = 'collector-postgres-password'
+$env:OBJECT_STORAGE_ENDPOINT_URL = 'http://127.0.0.1:9000'
+$env:OBJECT_STORAGE_BUCKET = 'collector-raw'
+$env:OBJECT_STORAGE_REGION = 'us-east-1'
+$env:OBJECT_STORAGE_CREDENTIALS_BLOCK = 'collector-object-storage-credentials'
+uv run prefect deploy --name article-details --no-prompt
+```
+
+`collect-article-details/article-details`의 `articles`에 목록 결과의 기사 배열을 전달한다.
+원문 URL·소스 ID·언론사·제목·발행일·요약을 함께 전달해야 한다. 자동 주기는 배포하지 않는다.
+한 실행 내 중복 ID는 거부하며 같은 내용의 본문은 DW에 중복 적재하지 않는다.
+요청 간격, 응답 크기 제한과 본문 검증 임계값은 `DETAIL_`·`EXTRACTION_` 설정으로 관리한다.
+요약이 너무 짧거나 제목·본문이 맞지 않으면 성공으로 취급하지 않는다.
 
 ## 검증
 

@@ -1,0 +1,31 @@
+name: windows-collector-jobs
+prefect-version: 3.9.0
+build: []
+push: []
+pull:
+  - prefect.deployments.steps.set_working_directory:
+      directory: "{{ $WINDOWS_JOB_DIRECTORY }}"
+deployments:
+  - name: article-details
+    entrypoint: src/flows/details.py:collect_article_details
+    tags: [windows, articles, details]
+    schedules: null
+    concurrency_limit: 1
+    work_pool:
+      name: windows-collector
+      job_variables:
+        command: '"{{ $WINDOWS_JOB_DIRECTORY }}/.venv/Scripts/python.exe" -m prefect.engine'
+        env:
+          PYTHONPATH: "{{ $WINDOWS_JOB_DIRECTORY }}/src"
+          BROWSER_CDP_URL: "{{ $BROWSER_CDP_URL }}"
+          DATABASE_HOST: "{{ $DATABASE_HOST }}"
+          DATABASE_PORT: "{{ $DATABASE_PORT }}"
+          DATABASE_NAME: "{{ $DATABASE_NAME }}"
+          DATABASE_USER: "{{ $DATABASE_USER }}"
+          DATABASE_PASSWORD_BLOCK: "{{ $DATABASE_PASSWORD_BLOCK }}"
+          OBJECT_STORAGE_ENDPOINT_URL: "{{ $OBJECT_STORAGE_ENDPOINT_URL }}"
+          OBJECT_STORAGE_BUCKET: "{{ $OBJECT_STORAGE_BUCKET }}"
+          OBJECT_STORAGE_REGION: "{{ $OBJECT_STORAGE_REGION }}"
+          OBJECT_STORAGE_CREDENTIALS_BLOCK: "{{ $OBJECT_STORAGE_CREDENTIALS_BLOCK }}"
+          DETAIL_BIGKINDS_RATE_LIMIT_NAME: bigkinds-http
+          HTTP_IMPERSONATE: chrome

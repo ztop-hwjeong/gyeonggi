@@ -1,0 +1,117 @@
+import json
+from datetime import UTC, datetime
+from hashlib import sha256
+from types import SimpleNamespace
+from unittest.mock import MagicMock, Mock
+from uuid import uuid4
+
+import pytest
+from collector_http.config import HttpSettings
+
+from articles.http import fetch_bigkinds
+from articles.models import ArticleSeed, FetchSnapshot
+from articles.requests import RequestStoppedError
+from config import DetailSettings, ExtractionSettings
+
+
+@pytest.fixture
+def transport(monkeypatch: pytest.MonkeyPatch) -> tuple:
+    http = Mock()
+    client = MagicMock()
+    client.__enter__.return_value = http
+    monkeypatch.setattr("articles.http.ChromiumHttpClient", Mock(return_value=client))
+    store = Mock()
+
+    def save(stage, url, status, content_type, body, retry_after):
+        return FetchSnapshot(
+            response_id=uuid4(),
+            url=url,
+            status_code=status,
+            content_type=content_type,
+            sha256=sha256(body).hexdigest(),
+            retry_after=retry_after,
+            received_at=datetime.now(UTC),
+        )
+
+    store.save_response.side_effect = save
+    return http, store
+
+
+def response(status: int, body: bytes, **headers: str) -> SimpleNamespace:
+    return SimpleNamespace(status_code=status, content=body, headers=headers)
+
+
+def test_bigkinds_initializes_session_and_verifies_detail(
+    transport: tuple, seed: ArticleSeed, article_text: str
+) -> None:
+    http, store = transport
+    http.request_raw.side_effect = [
+        response(200, b"<html>search</html>"),
+        response(
+            200,
+            json.dumps(
+                {
+                    "detail": {
+                        "NEWS_ID": seed.source_id,
+                        "TITLE": seed.title,
+                        "CONTENT": article_text,
+                    }
+                }
+            ).encode(),
+        ),
+    ]
+    snapshots = []
+    result = fetch_bigkinds(
+        seed,
+        store,
+        DetailSettings(bigkinds_rate_limit_name="test"),
+        HttpSettings(),
+        Mock(),
+        ExtractionSettings(),
+        snapshots,
+    )
+    assert result.evidence.verified
+    assert result.method == "bigkinds_api"
+    assert len(snapshots) == 2
+    assert http.request_raw.call_args_list[0].args[1].endswith("/v2/news/search.do")
+
+
+@pytest.mark.parametrize("status,retry_after", [(403, None), (429, None), (200, "120")])
+def test_failed_session_does_not_request_detail(
+    transport: tuple, seed: ArticleSeed, status: int, retry_after: str | None
+) -> None:
+    http, store = transport
+    http.request_raw.return_value = response(
+        status, b"restricted", **({"Retry-After": retry_after} if retry_after else {})
+    )
+    snapshots = []
+    with pytest.raises(RequestStoppedError, match="세션 초기화"):
+        fetch_bigkinds(
+            seed,
+            store,
+            DetailSettings(bigkinds_rate_limit_name="test"),
+            HttpSettings(),
+            Mock(),
+            ExtractionSettings(),
+            snapshots,
+        )
+    assert http.request_raw.call_count == 1
+    assert len(snapshots) == 1
+
+
+def test_other_article_id_is_rejected(transport: tuple, seed: ArticleSeed) -> None:
+    http, store = transport
+    http.request_raw.side_effect = [
+        response(200, b"search"),
+        response(200, b'{"detail":{"NEWS_ID":"other-article"}}'),
+    ]
+    with pytest.raises(RequestStoppedError, match="ID 불일치"):
+        fetch_bigkinds(
+            seed,
+            store,
+            DetailSettings(bigkinds_rate_limit_name="test"),
+            HttpSettings(),
+            Mock(),
+            ExtractionSettings(),
+            [],
+        )
