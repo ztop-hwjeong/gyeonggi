@@ -107,7 +107,8 @@ $env:PREFECT_API_URL = 'http://127.0.0.1:4200/api'
 uv run prefect deploy --name naver-news --name naver-blog --name naver-cafearticle --no-prompt
 ```
 
-세 배포는 15분마다 실행한다. `parameters.request`에서 채널과 정책 검색어를 관리한다.
+세 배포는 수동 실행용이다. `parameters.request`에서 채널과 정책 검색어를 지정한다.
+정기 수집은 아래 수집 요청 배포와 저장된 키워드 규칙으로 관리한다.
 `terms`는 따옴표 없는 문구 배열이며 `"문구1" | "문구2"`로 합쳐 최신순으로 조회한다.
 동일 문구를 중복 제거하고 순서를 정규화한다. 채널이나 검색식이 달라지면 별도 커서로 시작한다.
 제목·요약의 강조 태그를 제거하며 뉴스 제공 시각과 블로그 작성일을 보존한다.
@@ -146,6 +147,33 @@ PostgreSQL advisory lock으로 차단한다. 커서와 완료 상태는 같은 �
 API 계약: [뉴스](https://api.ncloud-docs.com/docs/naver-api-hub-search-news),
 [블로그](https://api.ncloud-docs.com/docs/naver-api-hub-search-blog),
 [카페글](https://api.ncloud-docs.com/docs/naver-api-hub-search-cafearticle).
+
+## 키워드 규칙 기반 수집 요청
+
+DB 마이그레이션을 번호순으로 적용하고 Docker 작업 이미지를 빌드한 뒤,
+`collector/jobs/docker`에서 두 배포를 등록한다.
+
+```powershell
+uv run prefect deploy --name managed-collection --name collection-dispatch --no-prompt
+```
+
+`collection-dispatch`는 1분마다 활성 규칙의 실행 시각을 확인하고 요청 큐를 처리한다.
+규칙의 주기는 15분 이상이며 실행 중인 같은 규칙·채널의 정기 요청을 중복 생성하지 않는다.
+규칙 변경은 이후 요청에 적용한다. 기존 요청은 당시 버전과 검색 조건을 유지한다.
+Prefect 제출은 요청 UUID로 중복 방지하며, 제출 응답이 유실돼도 같은 실행을 조회한다.
+작업이 중단되면 Prefect 종료 상태를 대조해 요청이 계속 실행 중으로 남지 않게 한다.
+대기 요청 취소는 즉시 반영하고 실행 중 취소는 Prefect `CANCELLING`으로 전달한다.
+
+미리보기는 첫 페이지와 검색 건수만 보관하고 정식 자료·증분 커서를 변경하지 않는다.
+빅카인즈 과거 수집은 기간을 일별로 나눠 원본 응답을 RustFS에, 요청별 목록을 `st`에,
+중복 제거한 기사를 `dw.news_items`에 저장한다. 날짜별 건수·확보 범위를 요청 요약에 남긴다.
+일별 페이지 상한(`CONTROL_BIGKINDS_MAX_PAGES_PER_DAY`, 기본 100)이나 건수 변동·반복
+페이지가 있으면 전체 요청을 `partial`로 표시한다. 이미 확보한 결과는 보존한다.
+빅카인즈 정기 수집은 한국 시각 전일과 당일을 겹쳐 조회한다.
+네이버는 기존 커서·요청 예산을 공유하며 기간 수집 대신 최신 증분만 실행한다.
+모든 경로는 기존 소스별 요청 속도 제한을 공유한다.
+
+실제 외부 수집 없이 구현을 검증할 때는 작업 이미지만 빌드하고 수집 배포를 실행하지 않는다.
 
 ## Windows worker와 작업 배포
 

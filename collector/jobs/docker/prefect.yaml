@@ -40,9 +40,7 @@ deployments:
   - name: naver-news
     entrypoint: src/flows/naver.py:naver_collect_list
     tags: [docker, naver, list, news]
-    schedules:
-      - interval: 900
-        active: true
+    schedules: null
     concurrency_limit: 1
     parameters:
       request:
@@ -74,12 +72,11 @@ deployments:
           OBJECT_STORAGE_REGION: us-east-1
           OBJECT_STORAGE_CREDENTIALS_BLOCK: collector-object-storage-credentials
           HTTP_IMPERSONATE: chrome
+          BIGKINDS_RATE_LIMIT_NAME: bigkinds-http
   - name: naver-blog
     entrypoint: src/flows/naver.py:naver_collect_list
     tags: [docker, naver, list, blog]
-    schedules:
-      - interval: 900
-        active: true
+    schedules: null
     concurrency_limit: 1
     parameters:
       request:
@@ -91,9 +88,7 @@ deployments:
   - name: naver-cafearticle
     entrypoint: src/flows/naver.py:naver_collect_list
     tags: [docker, naver, list, cafearticle]
-    schedules:
-      - interval: 900
-        active: true
+    schedules: null
     concurrency_limit: 1
     parameters:
       request:
@@ -101,4 +96,18 @@ deployments:
         terms: *policy-terms
         page_size: 50
         max_pages: 20
+    work_pool: *naver-pool
+  - name: managed-collection
+    entrypoint: src/flows/managed.py:managed_collection
+    tags: [docker, collection, managed]
+    schedules: null
+    concurrency_limit: 1
+    work_pool: *naver-pool
+  - name: collection-dispatch
+    entrypoint: src/flows/dispatch.py:dispatch_collections
+    tags: [docker, collection, dispatch]
+    schedules:
+      - interval: 60
+        active: true
+    concurrency_limit: 1
     work_pool: *naver-pool
