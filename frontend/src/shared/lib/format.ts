@@ -28,19 +28,19 @@ export const sourceNames: Record<string, string> = {
 
 export const stateNames: Record<string, string> = {
   queued: "실행 대기",
-  submitted: "worker 대기",
+  submitted: "수집 준비 중",
   running: "수집 중",
   completed: "완료",
   partial: "일부 수집",
-  failed: "실패",
+  failed: "수집 오류",
   cancelled: "취소됨",
   cancelling: "취소 중",
 };
 
 export const modeNames: Record<string, string> = {
   preview: "미리보기",
-  incremental: "증분 수집",
-  backfill: "과거 수집",
+  incremental: "새 자료 수집",
+  backfill: "기간 수집",
 };
 
 export function safeUrl(value: string | null | undefined) {

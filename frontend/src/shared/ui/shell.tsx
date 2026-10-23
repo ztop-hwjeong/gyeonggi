@@ -15,11 +15,11 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 const navigation = [
-  { href: "/", label: "운영 현황", icon: ChartLineUpIcon },
+  { href: "/", label: "수집 현황", icon: ChartLineUpIcon },
   { href: "/keywords", label: "키워드 관리", icon: MagnifyingGlassIcon },
-  { href: "/runs", label: "수집 실행", icon: ClockCounterClockwiseIcon },
-  { href: "/results", label: "수집 결과", icon: DatabaseIcon },
-  { href: "/workers", label: "실행 환경", icon: GearSixIcon },
+  { href: "/runs", label: "수집 이력", icon: ClockCounterClockwiseIcon },
+  { href: "/results", label: "수집 자료", icon: DatabaseIcon },
+  { href: "/workers", label: "수집 환경", icon: GearSixIcon },
 ];
 
 export function Shell({ children }: { children: ReactNode }) {

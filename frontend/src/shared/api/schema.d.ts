@@ -310,6 +310,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/articles/detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Article */
+        get: operations["article_articles_detail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sources": {
         parameters: {
             query?: never;
@@ -443,6 +460,23 @@ export interface paths {
         put?: never;
         /** Cancel */
         post: operations["cancel_collection_runs__request_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/collection-runs/{request_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review */
+        post: operations["review_collection_runs__request_id__review_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -653,10 +687,14 @@ export interface components {
             total_items: number;
             /** Active Rules */
             active_rules: number;
+            /** Total Rules */
+            total_rules: number;
             /** Queued Requests */
             queued_requests: number;
             /** Failed Requests */
             failed_requests: number;
+            /** Partial Requests */
+            partial_requests: number;
             /** Daily Counts */
             daily_counts: components["schemas"]["DailyCount"][];
             /** Source Counts */
@@ -736,6 +774,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Reviewed At */
+            reviewed_at?: string | null;
         };
         /** @enum {string} */
         RequestMode: "preview" | "incremental" | "backfill";
@@ -745,6 +785,11 @@ export interface components {
             items: components["schemas"]["RequestInfo"][];
             /** Total */
             total: number;
+        };
+        /** RequestReview */
+        RequestReview: {
+            /** Reviewed */
+            reviewed: boolean;
         };
         /** ResultItem */
         ResultItem: {
@@ -1120,6 +1165,37 @@ export interface components {
             first_seen_at: string;
             /** Has Body */
             has_body: boolean;
+        };
+        /** StoredArticleDetail */
+        StoredArticleDetail: {
+            /** Source Id */
+            source_id: string;
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+            /** Publisher */
+            publisher?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Original Url */
+            original_url?: string | null;
+            /** Published At */
+            published_at?: string | null;
+            /** Published On */
+            published_on?: string | null;
+            source: components["schemas"]["SourceCode"];
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /** Has Body */
+            has_body: boolean;
+            /** Body */
+            body: string | null;
+            /** Body Collected At */
+            body_collected_at: string | null;
         };
         /** StoredArticlePage */
         StoredArticlePage: {
@@ -1887,6 +1963,38 @@ export interface operations {
             };
         };
     };
+    article_articles_detail_get: {
+        parameters: {
+            query: {
+                source: components["schemas"]["SourceCode"];
+                source_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredArticleDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     sources_sources_get: {
         parameters: {
             query?: never;
@@ -1912,6 +2020,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                q?: string;
+                enabled?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -2110,6 +2220,9 @@ export interface operations {
                 limit?: number;
                 offset?: number;
                 rule_id?: string | null;
+                source?: components["schemas"]["SourceCode"] | null;
+                mode?: components["schemas"]["RequestMode"] | null;
+                status?: ("queued" | "submitted" | "running" | "completed" | "partial" | "failed" | "cancelled" | "cancelling" | "attention" | "active") | null;
             };
             header?: never;
             path?: never;
@@ -2216,6 +2329,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_collection_runs__request_id__review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestReview"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

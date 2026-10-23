@@ -17,7 +17,7 @@ export function RunTable({ items }: { items: Schema["RequestInfo"][] }) {
       <table>
         <thead>
           <tr>
-            <th scope="col">검색 규칙</th>
+            <th scope="col">검색 조건</th>
             <th scope="col">채널 / 유형</th>
             <th scope="col">상태</th>
             <th scope="col">확보 건수</th>
@@ -41,6 +41,7 @@ export function RunTable({ items }: { items: Schema["RequestInfo"][] }) {
               </td>
               <td>
                 <State value={run.status} />
+                {run.reviewed_at && <div className="table-sub">확인 완료</div>}
               </td>
               <td className="mono-value">
                 {number(run.summary.retrieved_count as number | undefined)}

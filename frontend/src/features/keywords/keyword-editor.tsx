@@ -1,27 +1,20 @@
 "use client";
 
-import {
-  ArrowLeftIcon,
-  FloppyDiskIcon,
-  MagnifyingGlassIcon,
-} from "@phosphor-icons/react";
+import { ArrowLeftIcon, FloppyDiskIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, useState } from "react";
-import {
-  api,
-  type Schema,
-  useApi,
-  useIdempotentPost,
-} from "@/shared/api/client";
-import { sourceNames, today } from "@/shared/lib/format";
+import { api, type Schema, useApi } from "@/shared/api/client";
+import { sourceNames } from "@/shared/lib/format";
+import { useUnsavedChanges } from "@/shared/lib/unsaved-changes";
 import { ErrorNotice, Loading, PageHeading } from "@/shared/ui/feedback";
-import { PreviewResult } from "./preview";
+import { KeywordPreview } from "./keyword-preview";
 
 type Definition = Schema["RuleDefinition"];
 
 export function KeywordEditor({ id }: { id?: string }) {
+  const params = useSearchParams();
   const rule = useApi<Schema["RuleInfo"]>(
     id ? `/keyword-rules/${id}` : null,
     false,
@@ -29,11 +22,18 @@ export function KeywordEditor({ id }: { id?: string }) {
   if (id && rule.error)
     return <ErrorNotice error={rule.error} retry={() => rule.refetch()} />;
   if (id && !rule.data) return <Loading />;
-  return <EditorForm rule={rule.data} />;
+  return (
+    <EditorForm rule={rule.data} initiallySaved={params.get("saved") === "1"} />
+  );
 }
 
-function EditorForm({ rule }: { rule?: Schema["RuleInfo"] }) {
-  const createPreview = useIdempotentPost<Schema["RequestInfo"]>();
+function EditorForm({
+  rule,
+  initiallySaved,
+}: {
+  rule?: Schema["RuleInfo"];
+  initiallySaved: boolean;
+}) {
   const router = useRouter(),
     cache = useQueryClient();
   const [name, setName] = useState(rule?.definition.name ?? "");
@@ -48,14 +48,21 @@ function EditorForm({ rule }: { rule?: Schema["RuleInfo"] }) {
   const [interval, setInterval] = useState(
     rule?.definition.interval_minutes ?? 15,
   );
-  const [previewSource, setPreviewSource] = useState<Schema["SourceCode"]>(
-    sources[0],
-  );
-  const [start, setStart] = useState(today),
-    [end, setEnd] = useState(today);
-  const [requestId, setRequestId] = useState<string>();
-  const [pending, setPending] = useState<"save" | "preview" | null>(null);
+  const [pending, setPending] = useState<"save" | null>(null);
   const [error, setError] = useState<Error>();
+  const [saved, setSaved] = useState(initiallySaved);
+  const [baseline, setBaseline] = useState(
+    JSON.stringify(
+      rule?.definition ?? {
+        name: "",
+        description: "",
+        terms: [],
+        sources: ["bigkinds"],
+        enabled: false,
+        interval_minutes: 15,
+      },
+    ),
+  );
   const definition: Definition = {
     name,
     description,
@@ -67,9 +74,12 @@ function EditorForm({ rule }: { rule?: Schema["RuleInfo"] }) {
     enabled,
     interval_minutes: interval,
   };
-  const actualSource = sources.includes(previewSource)
-    ? previewSource
-    : sources[0];
+  const dirty = JSON.stringify(definition) !== baseline;
+  useUnsavedChanges(dirty);
+  const versions = useApi<Schema["RuleVersion"][]>(
+    rule ? `/keyword-rules/${rule.id}/versions` : null,
+    false,
+  );
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -78,7 +88,9 @@ function EditorForm({ rule }: { rule?: Schema["RuleInfo"] }) {
     try {
       if (!sources.length || !definition.terms.length)
         throw new Error("키워드와 채널을 하나 이상 선택해 주세요.");
-      await api<Schema["RuleInfo"]>(
+      if (definition.terms.length > 10)
+        throw new Error("키워드는 최대 10개까지 입력해 주세요.");
+      const result = await api<Schema["RuleInfo"]>(
         rule ? `/keyword-rules/${rule.id}` : "/keyword-rules",
         {
           method: rule ? "PUT" : "POST",
@@ -87,33 +99,15 @@ function EditorForm({ rule }: { rule?: Schema["RuleInfo"] }) {
           ),
         },
       );
+      setName(result.definition.name);
+      setDescription(result.definition.description ?? "");
+      setTerms(result.definition.terms.join("\n"));
+      setBaseline(JSON.stringify(result.definition));
+      setSaved(true);
       await cache.invalidateQueries();
-      router.push("/keywords");
+      if (!rule) router.push(`/keywords/${result.id}?saved=1`);
     } catch (e) {
       setError(e instanceof Error ? e : new Error("저장하지 못했어요."));
-    } finally {
-      setPending(null);
-    }
-  }
-
-  async function preview() {
-    setPending("preview");
-    setError(undefined);
-    try {
-      if (!sources.length || !definition.terms.length)
-        throw new Error("키워드와 채널을 하나 이상 선택해 주세요.");
-      const result = await createPreview("/collection-previews", {
-        definition: { ...definition, name: name || "키워드 미리보기" },
-        source: actualSource,
-        start_date: actualSource === "bigkinds" ? start : today(),
-        end_date: actualSource === "bigkinds" ? end : today(),
-      });
-      setRequestId(result.id);
-      await cache.invalidateQueries({ queryKey: ["/collection-runs?limit=5"] });
-    } catch (e) {
-      setError(
-        e instanceof Error ? e : new Error("미리보기를 요청하지 못했어요."),
-      );
     } finally {
       setPending(null);
     }
@@ -126,17 +120,36 @@ function EditorForm({ rule }: { rule?: Schema["RuleInfo"] }) {
         키워드 관리
       </Link>
       <PageHeading
-        title={rule ? "검색 규칙 수정" : "새 검색 규칙"}
+        title={rule ? rule.definition.name : "새 검색 조건"}
         description="같은 주제의 키워드를 묶고, 수집 전에 검색 결과를 확인해 보세요."
       />
       {error && <ErrorNotice error={error} />}
+      {saved && !dirty && (
+        <div className="notice" role="status">
+          검색 조건을 저장했어요. 아래에서 미리보기를 확인하거나 수집을 요청할
+          수 있어요.
+        </div>
+      )}
+      {rule && (
+        <div className="context-actions">
+          <Link href={`/runs?rule_id=${rule.id}`} className="button secondary">
+            이 조건의 수집 이력
+          </Link>
+          <Link href={`/runs/new?rule=${rule.id}`} className="button">
+            기간·새 자료 수집
+          </Link>
+          <span className="hint">
+            {dirty ? "저장하지 않은 변경 내용이 있어요" : "저장된 검색 조건"}
+          </span>
+        </div>
+      )}
       <div className="editor-grid">
         <form className="panel" onSubmit={save}>
           <section className="form-section">
             <h2>검색 조건</h2>
             <div className="form-stack">
               <div className="field">
-                <label htmlFor="rule-name">규칙 이름</label>
+                <label htmlFor="rule-name">조건 이름</label>
                 <input
                   id="rule-name"
                   value={name}
@@ -154,7 +167,7 @@ function EditorForm({ rule }: { rule?: Schema["RuleInfo"] }) {
                   id="rule-description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="어떤 내용을 살펴보는 규칙인가요?"
+                  placeholder="어떤 내용을 살펴보는 조건인가요?"
                   maxLength={500}
                 />
               </div>
@@ -197,7 +210,7 @@ function EditorForm({ rule }: { rule?: Schema["RuleInfo"] }) {
             </div>
           </section>
           <section className="form-section">
-            <h2>정기 수집</h2>
+            <h2>자동 수집</h2>
             <div className="form-stack">
               <label className="check-label">
                 <input
@@ -205,7 +218,7 @@ function EditorForm({ rule }: { rule?: Schema["RuleInfo"] }) {
                   checked={enabled}
                   onChange={(e) => setEnabled(e.target.checked)}
                 />
-                정기 수집 사용
+                자동 수집 사용
               </label>
               <div className="field">
                 <label htmlFor="rule-interval">수집 주기</label>
@@ -222,8 +235,9 @@ function EditorForm({ rule }: { rule?: Schema["RuleInfo"] }) {
                 </select>
               </div>
               <p className="hint">
-                저장 후 활성 규칙부터 수집해요. 키워드 수정은 이후 요청에
-                적용되며, 과거 자료는 별도로 기간 수집을 요청해 주세요.
+                자동 수집을 켜고 저장하면 선택한 모든 채널에서 새 자료를
+                주기적으로 모아요. 이전 자료가 필요하면 기간 수집을 별도로
+                요청해 주세요.
               </p>
             </div>
           </section>
@@ -237,76 +251,43 @@ function EditorForm({ rule }: { rule?: Schema["RuleInfo"] }) {
               disabled={pending !== null}
             >
               <FloppyDiskIcon size={18} />
-              {pending === "save" ? "저장 중…" : "규칙 저장"}
+              {pending === "save" ? "저장 중…" : "검색 조건 저장"}
             </button>
           </div>
         </form>
-        <section className="panel">
-          <div className="panel-body">
-            <h2>검색 결과 미리보기</h2>
-            <p className="hint" style={{ marginTop: 8, marginBottom: 24 }}>
-              현재 입력한 조건으로 확인해요. 정식 수집 자료나 마지막 수집 위치는
-              바뀌지 않아요.
-            </p>
-            <div className="form-stack">
-              <div className="field">
-                <label htmlFor="preview-source">미리보기 채널</label>
-                <select
-                  id="preview-source"
-                  value={actualSource ?? ""}
-                  onChange={(e) =>
-                    setPreviewSource(e.target.value as Schema["SourceCode"])
-                  }
-                >
-                  {sources.map((source) => (
-                    <option key={source} value={source}>
-                      {sourceNames[source]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {actualSource === "bigkinds" ? (
-                <div className="field-grid">
-                  <div className="field">
-                    <label htmlFor="preview-start">시작일</label>
-                    <input
-                      id="preview-start"
-                      type="date"
-                      value={start}
-                      max={end}
-                      onChange={(e) => setStart(e.target.value)}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="preview-end">종료일</label>
-                    <input
-                      id="preview-end"
-                      type="date"
-                      value={end}
-                      min={start}
-                      onChange={(e) => setEnd(e.target.value)}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <p className="hint">
-                  네이버는 기간 검색 대신 최신 검색 결과를 확인해요.
-                </p>
-              )}
-              <button
-                type="button"
-                className="button secondary"
-                disabled={pending !== null || !sources.length}
-                onClick={preview}
-              >
-                <MagnifyingGlassIcon size={18} />
-                {pending === "preview" ? "요청 중…" : "미리보기 실행"}
-              </button>
-            </div>
-            {requestId && <PreviewResult id={requestId} />}
-          </div>
-        </section>
+        <KeywordPreview definition={definition} />
       </div>
+      {rule && (
+        <section className="panel section-gap">
+          <details className="panel-body">
+            <summary>검색 조건 변경 이력</summary>
+            <p className="hint section-gap">
+              조건을 바꾸기 전 요청은 당시 조건으로 보존돼요.
+            </p>
+            {versions.error ? (
+              <ErrorNotice
+                error={versions.error}
+                retry={() => versions.refetch()}
+              />
+            ) : (
+              <ul className="history-list">
+                {versions.data?.map((version) => (
+                  <li key={version.version}>
+                    <strong>{version.definition.name}</strong>
+                    <span>{version.definition.terms.join(" · ")}</span>
+                    <span className="hint">
+                      {new Date(version.created_at).toLocaleString("ko-KR", {
+                        timeZone: "Asia/Seoul",
+                      })}{" "}
+                      · 저장 기록 {version.version}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </details>
+        </section>
+      )}
     </>
   );
 }

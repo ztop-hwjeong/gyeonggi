@@ -35,13 +35,20 @@ DB에는 `infra/postgres/migrations`의 SQL을 번호순으로 적용한다.
 | `POST /collection-runs` | 저장한 규칙의 증분·과거 수집 요청 |
 | `GET /collection-runs`, `GET /collection-runs/{id}` | 요청 목록과 진행 상태 |
 | `POST /collection-runs/{id}/cancel` | 대기 요청 취소 또는 진행 중 취소 요청 |
+| `POST /collection-runs/{id}/review` | 오류·일부 수집의 검토 완료 표시와 되돌리기 |
 | `GET /collection-runs/{id}/items` | 요청에서 확보한 목록과 미리보기 샘플 |
+| `GET /articles`, `GET /articles/detail` | 저장 자료 검색과 최신 확보 본문 조회 |
 
 수정에는 조회한 `version`을 함께 보낸다. 충돌 시 `409`로 최신 내용 재확인을 요청한다.
 미리보기·수집 생성에는 UUID 형식의 `Idempotency-Key` 헤더가 필요하다.
 같은 키와 조건의 재요청은 기존 요청을 반환하며 다른 조건의 재사용은 거절한다.
 수집 요청에는 규칙 버전과 조건을 고정해 보관한다. 이후 규칙 수정은 기존 요청에 반영되지 않는다.
 신규 규칙은 정기 수집이 꺼진 상태로 등록된다. 네이버 검색은 기간 지정 과거 수집을 지원하지 않는다.
+
+검색 조건 목록은 `q`와 `enabled`로 조회한다. 수집 이력은 `rule_id`, `source`, `mode`, `status`를 조합한다.
+`status=attention`은 검토 전 오류·일부 수집, `status=active`는 대기·준비·수집·취소 중인 요청이다.
+검토 표시는 `{"reviewed": true}`로 설정하고 `false`로 되돌린다. 수집 상태와 확보 자료는 유지한다.
+본문 조회에는 `source`, `source_id`를 지정한다. 확보한 본문이 없으면 `body`는 `null`이며 검색 요약과 구분한다.
 
 ## 수집 모니터링
 

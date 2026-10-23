@@ -116,6 +116,34 @@ def test_unavailable_storage_is_not_an_empty_list(setup_collection):
     assert client.get("/keyword-rules").status_code == 503
 
 
+def test_request_filters_are_validated_and_passed_together(setup_collection):
+    client, repository, rule_id = setup_collection
+    repository.requests.return_value = {"items": [], "total": 0}
+    response = client.get(
+        "/collection-runs",
+        params={
+            "rule_id": str(rule_id),
+            "status": "attention",
+            "source": "bigkinds",
+            "mode": "backfill",
+            "offset": 20,
+        },
+    )
+    assert response.status_code == 200
+    query = repository.requests.await_args.args[0]
+    assert (query.rule_id, query.status, query.source, query.mode, query.offset) == (
+        rule_id,
+        "attention",
+        "bigkinds",
+        "backfill",
+        20,
+    )
+    assert client.get("/collection-runs?status=typo").status_code == 422
+    repository.rules.return_value = {"items": [], "total": 0}
+    assert client.get("/keyword-rules?q=교육&enabled=false").status_code == 200
+    assert repository.rules.await_args.args[0].enabled is False
+
+
 def test_terms_preserve_phrases_and_deduplicate(definition):
     rule = RuleDefinition.model_validate({**definition, "terms": ["  경기  교육 ", "경기 교육"]})
     assert rule.terms == ("경기 교육",)

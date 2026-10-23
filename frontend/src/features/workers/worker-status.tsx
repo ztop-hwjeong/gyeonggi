@@ -10,8 +10,18 @@ export function WorkerStatus() {
   return (
     <>
       <PageHeading
-        title="실행 환경"
-        description="Docker 수집과 Windows 브라우저 수집의 연결 상태를 확인해요."
+        title="수집 환경"
+        description="요청을 처리할 수 있는지 확인해요. 연결 문제가 계속되면 운영 담당자에게 알려 주세요."
+        action={
+          <button
+            type="button"
+            className="button secondary"
+            disabled={query.isFetching}
+            onClick={() => query.refetch()}
+          >
+            {query.isFetching ? "확인 중…" : "연결 상태 다시 확인"}
+          </button>
+        }
       />
       {query.error && (
         <ErrorNotice error={query.error} retry={() => query.refetch()} />
@@ -33,25 +43,29 @@ export function WorkerStatus() {
                       ) : (
                         <PackageIcon size={23} />
                       )}
-                      {windows ? "Windows Worker" : "Docker Worker"}
+                      {windows ? "브라우저 수집" : "목록 수집"}
                     </h2>
                   </div>
                   <div className="panel-body">
                     <p className="hint">
                       {windows
-                        ? "실제 Edge가 필요한 브라우저 수집"
-                        : "브라우저 없이 처리하는 목록·원문 수집"}
+                        ? "로그인이 필요한 원문 등 실제 브라우저로 확인하는 작업"
+                        : "빅카인즈·네이버 검색 목록과 미리보기·기간 수집"}
                     </p>
                     {!pool ? (
-                      <Empty title="등록된 실행 환경이 없어요">
-                        Prefect의 work pool 등록 상태를 확인해 주세요.
+                      <Empty title="등록된 수집 환경이 없어요">
+                        운영 담당자에게 수집 환경 등록을 요청해 주세요.
                       </Empty>
                     ) : (
                       <>
                         <p className="section-gap">
                           {pool.is_paused
-                            ? "작업 배정 일시 중지"
-                            : "작업 배정 사용"}{" "}
+                            ? "새 요청 처리 중지"
+                            : pool.workers.some(
+                                  (worker) => worker.status === "ONLINE",
+                                )
+                              ? "새 요청 처리 가능"
+                              : "연결 대기 · 요청 처리 불가"}{" "}
                           · 연결{" "}
                           {
                             pool.workers.filter((w) => w.status === "ONLINE")
@@ -59,30 +73,62 @@ export function WorkerStatus() {
                           }
                           대
                         </p>
-                        {pool.workers.length === 0 ? (
-                          <Empty title="연결된 Worker가 없어요">
-                            Worker가 연결되면 대기 중인 요청을 실행해요.
+                        {!pool.workers.some(
+                          (worker) => worker.status === "ONLINE",
+                        ) ? (
+                          <Empty title="수집 환경이 연결되지 않았어요">
+                            접수한 요청은 대기해요. 운영 담당자에게 연결 확인을
+                            요청해 주세요.
                           </Empty>
                         ) : (
-                          pool.workers.map((worker) => (
-                            <div className="worker-row" key={worker.id}>
-                              <div>
-                                <strong>{worker.name}</strong>
-                                <div className="table-sub">
-                                  마지막 응답{" "}
-                                  {dateTime(worker.last_heartbeat_time)}
+                          pool.workers
+                            .filter((worker) => worker.status === "ONLINE")
+                            .map((worker, index) => (
+                              <div className="worker-row" key={worker.id}>
+                                <div>
+                                  <strong>연결된 수집 장치 {index + 1}</strong>
+                                  <div className="table-sub">
+                                    마지막 응답{" "}
+                                    {dateTime(worker.last_heartbeat_time)}
+                                  </div>
                                 </div>
+                                <span
+                                  className={`state ${worker.status === "OFFLINE" ? "failed" : ""}`}
+                                >
+                                  <span className="state-dot" />
+                                  {worker.status === "ONLINE"
+                                    ? "연결됨"
+                                    : "연결 끊김"}
+                                </span>
                               </div>
-                              <span
-                                className={`state ${worker.status === "OFFLINE" ? "failed" : ""}`}
-                              >
-                                <span className="state-dot" />
-                                {worker.status === "ONLINE"
-                                  ? "연결됨"
-                                  : "연결 끊김"}
-                              </span>
-                            </div>
-                          ))
+                            ))
+                        )}
+                        {pool.workers.some(
+                          (worker) => worker.status !== "ONLINE",
+                        ) && (
+                          <details className="technical-details section-gap">
+                            <summary>
+                              연결되지 않은 장치{" "}
+                              {
+                                pool.workers.filter(
+                                  (worker) => worker.status !== "ONLINE",
+                                ).length
+                              }
+                              대
+                            </summary>
+                            <p>
+                              이전에 사용한 장치가 포함될 수 있어요. 현재 수집
+                              가능 여부는 연결된 장치를 기준으로 확인해 주세요.
+                            </p>
+                            {pool.workers
+                              .filter((worker) => worker.status !== "ONLINE")
+                              .map((worker) => (
+                                <p key={worker.id}>
+                                  {worker.name} · 마지막 응답{" "}
+                                  {dateTime(worker.last_heartbeat_time)}
+                                </p>
+                              ))}
+                          </details>
                         )}
                       </>
                     )}
@@ -92,8 +138,8 @@ export function WorkerStatus() {
             })}
           </div>
           <p className="hint section-gap">
-            Worker 연결과 실제 사이트 접근 성공은 별개예요. 요청별 수집 오류는
-            수집 실행에서 확인해 주세요. 마지막 조회{" "}
+            연결되어 있어도 사이트 응답에 따라 수집이 중단될 수 있어요. 요청별
+            오류는 수집 이력에서 확인해 주세요. 마지막 조회{" "}
             {dateTime(query.data?.observed_at)}
           </p>
         </>

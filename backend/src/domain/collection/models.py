@@ -140,6 +140,12 @@ class RequestInfo(BaseModel):
     error: str | None
     created_at: datetime
     updated_at: datetime
+    reviewed_at: datetime | None = None
+
+
+class RequestReview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reviewed: bool
 
 
 class Pagination(BaseModel):
@@ -153,8 +159,30 @@ class RulePage(BaseModel):
     total: int
 
 
+class RuleQuery(Pagination):
+    q: str = Field(default="", max_length=100)
+    enabled: bool | None = None
+
+
 class RequestQuery(Pagination):
     rule_id: UUID | None = None
+    source: SourceCode | None = None
+    mode: RequestMode | None = None
+    status: (
+        Literal[
+            "queued",
+            "submitted",
+            "running",
+            "completed",
+            "partial",
+            "failed",
+            "cancelled",
+            "cancelling",
+            "attention",
+            "active",
+        ]
+        | None
+    ) = None
 
 
 class RequestPage(BaseModel):
@@ -194,6 +222,16 @@ class StoredArticlePage(BaseModel):
     total: int
 
 
+class ArticleIdentity(BaseModel):
+    source: SourceCode
+    source_id: str = Field(min_length=1, max_length=2048)
+
+
+class StoredArticleDetail(StoredArticle):
+    body: str | None
+    body_collected_at: datetime | None
+
+
 class DailyCount(BaseModel):
     day: date
     count: int
@@ -202,7 +240,9 @@ class DailyCount(BaseModel):
 class Overview(BaseModel):
     total_items: int
     active_rules: int
+    total_rules: int
     queued_requests: int
     failed_requests: int
+    partial_requests: int
     daily_counts: list[DailyCount]
     source_counts: dict[str, int]

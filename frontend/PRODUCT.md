@@ -12,7 +12,7 @@ Next.js와 TypeScript, FastAPI, PostgreSQL, Prefect. nginx를 통한 단일 진�
 
 ## Users
 
-경기교육 정책의 언론·온라인 반응을 장기간 수집하고 운영하는 내부 담당자.
+경기교육 정책의 언론·온라인 반응을 분석하는 내부 담당자. 개발자가 아니며, 매일 수집 상태를 확인하고 오류·누락에 대응한다.
 
 ## Product Purpose
 

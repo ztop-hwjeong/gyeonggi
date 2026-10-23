@@ -9,6 +9,8 @@ body {
   font-family: "Pretendard Variable", Pretendard, -apple-system, sans-serif;
   font-size: 15px;
   line-height: 1.6;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   color: var(--color-text-primary);
   background: var(--color-surface-canvas);
   -webkit-font-smoothing: antialiased;

@@ -20,13 +20,13 @@ export function PreviewResult({ id }: { id: string }) {
     <div className="section-gap" aria-live="polite">
       <div className="button-row" style={{ justifyContent: "space-between" }}>
         <State value={run.status} />
-        <Link href={`/runs/${id}`}>실행 상세</Link>
+        <Link href={`/runs/${id}`}>요청 상세</Link>
       </div>
       {["queued", "submitted"].includes(run.status) && (
         <div className="notice section-gap">
           <span>
-            미리보기 요청을 접수했어요. Worker가 연결되면 결과가 표시돼요.{" "}
-            <Link href="/workers">실행 환경 확인</Link>
+            미리보기 요청을 접수했어요. 수집 환경이 연결되면 결과가 표시돼요.{" "}
+            <Link href="/workers">수집 환경 확인</Link>
           </span>
         </div>
       )}

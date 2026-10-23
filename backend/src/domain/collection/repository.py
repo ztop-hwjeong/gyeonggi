@@ -17,11 +17,13 @@ from domain.collection.models import (
     RequestInfo,
     RequestPage,
     RequestQuery,
+    RequestReview,
     ResultItem,
     ResultPage,
     RuleDefinition,
     RuleInfo,
     RulePage,
+    RuleQuery,
     RuleUpdate,
     RuleVersion,
     RunCreate,
@@ -43,15 +45,29 @@ class CollectionRepository:
     async def rows(self, sql: str, parameters: dict | None = None):
         return (await self._session.execute(text(sql), parameters or {})).mappings().all()
 
-    async def rules(self, page: Pagination) -> RulePage:
+    async def rules(self, page: RuleQuery) -> RulePage:
         async with self.transaction():
-            total = (await self.rows("SELECT count(*) AS total FROM ops.collection_rules"))[0][
-                "total"
-            ]
+            condition = (
+                " WHERE (CAST(:enabled AS boolean) IS NULL "
+                "OR (definition->>'enabled')::boolean=:enabled) "
+                "AND (:q='' OR definition->>'name' ILIKE :pattern "
+                "OR definition->>'terms' ILIKE :pattern)"
+            )
+            parameters = {
+                **page.model_dump(),
+                "pattern": "%"
+                + page.q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                + "%",
+            }
+            total = (
+                await self.rows(
+                    "SELECT count(*) AS total FROM ops.collection_rules" + condition, parameters
+                )
+            )[0]["total"]
             rows = await self.rows(
-                "SELECT * FROM ops.collection_rules ORDER BY updated_at DESC, id "
+                "SELECT * FROM ops.collection_rules" + condition + " ORDER BY updated_at DESC, id "
                 "LIMIT :limit OFFSET :offset",
-                page.model_dump(),
+                parameters,
             )
             return RulePage(items=[RuleInfo.model_validate(row) for row in rows], total=total)
 
@@ -180,11 +196,20 @@ class CollectionRepository:
 
     async def requests(self, query: RequestQuery) -> RequestPage:
         async with self.transaction():
-            condition = " WHERE (CAST(:rule_id AS uuid) IS NULL OR rule_id=:rule_id)"
+            condition = (
+                " WHERE (CAST(:rule_id AS uuid) IS NULL OR rule_id=:rule_id)"
+                " AND (CAST(:source AS text) IS NULL OR source=:source)"
+                " AND (CAST(:mode AS text) IS NULL OR mode=:mode)"
+                " AND (CAST(:status AS text) IS NULL OR status=:status"
+                " OR (:status='attention' AND status IN ('failed','partial') "
+                "AND reviewed_at IS NULL)"
+                " OR (:status='active' AND status IN "
+                "('queued','submitted','running','cancelling')))"
+            )
             total = (
                 await self.rows(
                     "SELECT count(*) AS total FROM ops.collection_requests" + condition,
-                    {"rule_id": query.rule_id},
+                    query.model_dump(),
                 )
             )[0]["total"]
             rows = await self.rows(
@@ -215,6 +240,20 @@ class CollectionRepository:
             )
             if not rows:
                 raise CollectionConflictError("진행 중인 요청만 취소할 수 있어요.")
+            return RequestInfo.model_validate(rows[0])
+
+    async def review(self, request_id: UUID, body: RequestReview) -> RequestInfo:
+        async with self.transaction():
+            rows = await self.rows(
+                "UPDATE ops.collection_requests SET reviewed_at=CASE WHEN :reviewed "
+                "THEN now() ELSE NULL END WHERE id=:id AND status IN ('failed','partial') "
+                "RETURNING *",
+                {"id": request_id, "reviewed": body.reviewed},
+            )
+            if not rows:
+                raise CollectionConflictError(
+                    "오류 또는 일부 수집된 요청만 확인 표시를 바꿀 수 있어요."
+                )
             return RequestInfo.model_validate(rows[0])
 
     async def results(self, request_id: UUID, page: Pagination) -> ResultPage:

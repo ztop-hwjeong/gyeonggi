@@ -2,8 +2,15 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from domain.collection.errors import CollectionUnavailableError
-from domain.collection.models import ArticleQuery, Overview, StoredArticle, StoredArticlePage
+from domain.collection.errors import CollectionNotFoundError, CollectionUnavailableError
+from domain.collection.models import (
+    ArticleIdentity,
+    ArticleQuery,
+    Overview,
+    StoredArticle,
+    StoredArticleDetail,
+    StoredArticlePage,
+)
 
 
 class CollectionReporting:
@@ -22,6 +29,23 @@ class CollectionReporting:
             "SELECT 'naver_'||channel AS source,source_id,data,first_seen_at FROM dw.search_items"
         )
 
+    async def article(self, identity: ArticleIdentity) -> StoredArticleDetail:
+        rows = await self.rows(
+            "SELECT i.*,c.body,c.created_at AS body_collected_at,"
+            "(c.body IS NOT NULL) AS has_body FROM (" + self.items_sql() + ") i "
+            "LEFT JOIN LATERAL (SELECT body,created_at FROM dw.article_contents "
+            "WHERE source=i.source AND source_id=i.source_id "
+            "ORDER BY created_at DESC,id DESC LIMIT 1) c ON true "
+            "WHERE i.source=:source AND i.source_id=:source_id",
+            identity.model_dump(),
+        )
+        if not rows:
+            raise CollectionNotFoundError(
+                "저장된 자료가 없어요. 수집 자료 목록에서 다시 선택해 주세요."
+            )
+        row = rows[0]
+        return StoredArticleDetail.model_validate({**row["data"], **row})
+
     async def overview(self) -> Overview:
         sources = await self.rows(
             "SELECT source,count(*) AS count FROM (" + self.items_sql() + ") items GROUP BY source"
@@ -29,9 +53,12 @@ class CollectionReporting:
         counts = await self.rows(
             "SELECT (SELECT count(*) FROM ops.collection_rules "
             "WHERE definition->>'enabled'='true') AS active_rules, "
+            "(SELECT count(*) FROM ops.collection_rules) AS total_rules, "
             "count(*) FILTER (WHERE status IN ('queued','submitted','running','cancelling')) "
             "AS queued_requests, count(*) FILTER (WHERE status='failed' "
-            "AND created_at>=now()-interval '24 hours') AS failed_requests "
+            "AND updated_at>=now()-interval '24 hours') AS failed_requests "
+            ", count(*) FILTER (WHERE status='partial' "
+            "AND updated_at>=now()-interval '24 hours') AS partial_requests "
             "FROM ops.collection_requests"
         )
         days = await self.rows(

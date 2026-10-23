@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowClockwiseIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { WarningCircleIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { stateNames } from "../lib/format";
 
@@ -62,7 +62,12 @@ export function Empty({
 export function Loading() {
   return (
     <div className="loading" role="status">
-      <ArrowClockwiseIcon className="spin" size={20} /> 불러오는 중이에요
+      <span className="sr-only">불러오는 중이에요</span>
+      <div className="loading-skeleton" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
     </div>
   );
 }

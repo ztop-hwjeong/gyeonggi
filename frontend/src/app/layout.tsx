@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
+import { Loading } from "@/shared/ui/feedback";
 import { Shell } from "@/shared/ui/shell";
 
 export const metadata: Metadata = {
@@ -14,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body>
-        <Shell>{children}</Shell>
+        <Shell>
+          <Suspense fallback={<Loading />}>{children}</Suspense>
+        </Shell>
       </body>
     </html>
   );

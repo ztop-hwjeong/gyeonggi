@@ -1,9 +1,11 @@
 "use client";
 
 import { MagnifyingGlassIcon } from "@phosphor-icons/react";
-import { type FormEvent, useState } from "react";
+import Link from "next/link";
+import { type FormEvent, useEffect, useState } from "react";
 import { type Schema, useApi } from "@/shared/api/client";
 import { dateTime, safeUrl, sourceNames } from "@/shared/lib/format";
+import { useListLocation } from "@/shared/lib/list-location";
 import {
   Empty,
   ErrorNotice,
@@ -13,10 +15,11 @@ import {
 } from "@/shared/ui/feedback";
 
 export function ResultList() {
-  const [offset, setOffset] = useState(0),
-    [source, setSource] = useState("");
-  const [text, setText] = useState(""),
-    [search, setSearch] = useState("");
+  const { params: location, offset, update } = useListLocation();
+  const source = location.get("source") ?? "";
+  const search = location.get("q") ?? "";
+  const [text, setText] = useState(search);
+  useEffect(() => setText(search), [search]);
   const params = new URLSearchParams({
     limit: "20",
     offset: String(offset),
@@ -26,13 +29,12 @@ export function ResultList() {
   const query = useApi<Schema["StoredArticlePage"]>(`/articles?${params}`);
   function submit(event: FormEvent) {
     event.preventDefault();
-    setSearch(text);
-    setOffset(0);
+    update({ q: text });
   }
   return (
     <>
       <PageHeading
-        title="수집 결과"
+        title="수집 자료"
         description="채널별로 저장한 목록을 찾아보고 원문과 본문 확보 여부를 확인해요."
       />
       {query.error && (
@@ -48,8 +50,7 @@ export function ResultList() {
               id="result-channel"
               value={source}
               onChange={(e) => {
-                setSource(e.target.value);
-                setOffset(0);
+                update({ source: e.target.value });
               }}
             >
               <option value="">전체 채널</option>
@@ -74,7 +75,14 @@ export function ResultList() {
               검색
             </button>
           </form>
-          <span className="hint">신규 저장순</span>
+          <div className="button-row">
+            {(search || source) && (
+              <Link className="button quiet" href="/results">
+                조건 초기화
+              </Link>
+            )}
+            <span className="hint">새로 저장한 자료부터</span>
+          </div>
         </div>
         {query.error && !query.data ? null : query.isLoading ? (
           <Loading />
@@ -105,20 +113,24 @@ export function ResultList() {
                   </span>
                 </div>
                 <h2>
-                  {safeUrl(item.original_url ?? item.url) ? (
-                    <a
-                      className="article-link"
-                      href={safeUrl(item.original_url ?? item.url)}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {item.title}
-                    </a>
-                  ) : (
-                    item.title
-                  )}
+                  <Link
+                    className="article-link"
+                    href={`/results/read?${new URLSearchParams({ source: item.source, source_id: item.source_id, return_query: location.toString() })}`}
+                  >
+                    {item.title}
+                  </Link>
                 </h2>
                 <p>{item.summary}</p>
+                {safeUrl(item.original_url ?? item.url) && (
+                  <a
+                    className="source-link"
+                    href={safeUrl(item.original_url ?? item.url)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    원문 새 창에서 보기
+                  </a>
+                )}
               </li>
             ))}
           </ul>
@@ -127,7 +139,7 @@ export function ResultList() {
           total={query.data?.total ?? 0}
           offset={offset}
           size={20}
-          onChange={setOffset}
+          onChange={(offset) => update({ offset })}
         />
       </section>
     </>

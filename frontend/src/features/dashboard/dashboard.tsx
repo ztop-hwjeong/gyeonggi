@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowRightIcon, PlusIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon } from "@phosphor-icons/react";
 import Link from "next/link";
 import { RunTable } from "@/features/runs/run-table";
 import { type Schema, useApi } from "@/shared/api/client";
 import { number, sourceNames } from "@/shared/lib/format";
 import { ErrorNotice, Loading, PageHeading } from "@/shared/ui/feedback";
+import { OperationsSummary } from "./operations-summary";
 
 export function Dashboard() {
   const overview = useApi<Schema["Overview"]>("/overview");
@@ -18,12 +19,11 @@ export function Dashboard() {
   return (
     <>
       <PageHeading
-        title="수집 운영 현황"
-        description="정책 키워드의 수집 흐름과 실행 상태를 한눈에 확인해요."
+        title="수집 현황"
+        description="수집이 잘 되고 있는지 확인하고, 빠진 기간이나 오류에 대응해요."
         action={
-          <Link href="/keywords/new" className="button">
-            <PlusIcon size={18} />
-            키워드 등록
+          <Link href="/runs" className="button secondary">
+            수집 이력 보기 <ArrowRightIcon size={18} />
           </Link>
         }
       />
@@ -35,12 +35,17 @@ export function Dashboard() {
       ) : (
         data && (
           <>
+            <OperationsSummary data={data} />{" "}
             <section className="panel summary-strip" aria-label="수집 요약">
               {[
                 ["누적 수집 자료", data.total_items, "건"],
-                ["활성 검색 규칙", data.active_rules, "개"],
+                ["자동 수집 조건", data.active_rules, "개"],
                 ["대기·진행 중", data.queued_requests, "건"],
-                ["최근 24시간 실패", data.failed_requests, "건"],
+                [
+                  "24시간 오류·일부 수집",
+                  data.failed_requests + data.partial_requests,
+                  "건",
+                ],
               ].map(([label, value, unit]) => (
                 <div className="summary-stat" key={label}>
                   <span>{label}</span>
@@ -100,9 +105,13 @@ export function Dashboard() {
                           />
                           {name}
                         </span>
-                        <strong>
-                          {number(data.source_counts[code] ?? 0)}건
-                        </strong>
+                        <Link
+                          href={`/results?source=${code}`}
+                          aria-label={`${name} 자료 보기`}
+                        >
+                          {number(data.source_counts[code] ?? 0)}건{" "}
+                          <ArrowRightIcon size={14} />
+                        </Link>
                       </li>
                     ))}
                   </ul>
@@ -121,7 +130,7 @@ export function Dashboard() {
       )}
       <section className="panel section-gap">
         <div className="panel-header" style={{ paddingBottom: 22 }}>
-          <h2>최근 수집 실행</h2>
+          <h2>최근 수집 이력</h2>
           <Link href="/runs" className="button quiet">
             전체 보기 <ArrowRightIcon size={16} />
           </Link>

@@ -29,12 +29,32 @@ export function RunDetail({ id }: { id: string }) {
   );
   const [pending, setPending] = useState(false),
     [error, setError] = useState<Error>();
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const cache = useQueryClient();
+  async function review() {
+    setPending(true);
+    setError(undefined);
+    try {
+      await post(`/collection-runs/${id}/review`, {
+        reviewed: !query.data?.reviewed_at,
+      });
+      await cache.invalidateQueries();
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error
+          : new Error("확인 표시를 저장하지 못했어요."),
+      );
+    } finally {
+      setPending(false);
+    }
+  }
   async function cancel() {
     setPending(true);
     setError(undefined);
     try {
       await post(`/collection-runs/${id}/cancel`, {});
+      setConfirmCancel(false);
       await cache.invalidateQueries();
     } catch (e) {
       setError(e instanceof Error ? e : new Error("취소하지 못했어요."));
@@ -46,6 +66,8 @@ export function RunDetail({ id }: { id: string }) {
     return <ErrorNotice error={query.error} retry={() => query.refetch()} />;
   if (!query.data) return <Loading />;
   const run = query.data;
+  const repeatLink = (start = run.start_date, end = run.end_date) =>
+    `/runs/new?${new URLSearchParams({ rule: run.rule_id ?? "", source: run.source, mode: run.mode === "preview" ? "backfill" : run.mode, start, end, repeat: "1" })}`;
   const days = Array.isArray(run.summary.days)
     ? (run.summary.days as {
         date: string;
@@ -58,7 +80,7 @@ export function RunDetail({ id }: { id: string }) {
     <>
       <Link href="/runs" className="back-link">
         <ArrowLeftIcon size={16} />
-        수집 실행 목록
+        수집 이력
       </Link>
       <PageHeading
         title={run.definition.name}
@@ -69,7 +91,7 @@ export function RunDetail({ id }: { id: string }) {
               type="button"
               className="button danger-button"
               disabled={pending}
-              onClick={cancel}
+              onClick={() => setConfirmCancel(true)}
             >
               {pending ? "요청 중…" : "실행 취소"}
             </button>
@@ -77,18 +99,40 @@ export function RunDetail({ id }: { id: string }) {
         }
       />
       {error && <ErrorNotice error={error} />}
+      {confirmCancel && (
+        <div className="notice warning" role="alert">
+          <span>이 수집을 중단할까요? 이미 확보한 자료는 남아 있어요.</span>
+          <button
+            className="button secondary"
+            type="button"
+            disabled={pending}
+            onClick={() => setConfirmCancel(false)}
+          >
+            계속 수집
+          </button>
+          <button
+            className="button danger-button"
+            type="button"
+            disabled={pending}
+            onClick={cancel}
+          >
+            {pending ? "취소 요청 중…" : "수집 중단"}
+          </button>
+        </div>
+      )}
       {run.error && (
         <div className="notice danger" role="alert">
           <span>
-            수집 중 문제가 발생했어요. {run.error} · 확보한 결과는 보존돼요.
+            수집을 마치지 못했어요. 확보한 자료는 남아 있어요. 수집 환경을
+            확인하고 다시 요청해 주세요.
           </span>
         </div>
       )}
       {["queued", "submitted"].includes(run.status) && (
         <div className="notice">
           <span>
-            요청을 접수했어요. Dispatcher와 Worker가 연결되면 순서대로 실행해요.{" "}
-            <Link href="/workers">실행 환경 확인</Link>
+            요청을 접수했어요. 수집 환경이 준비되면 순서대로 자료를 모아요.{" "}
+            <Link href="/workers">수집 환경 확인</Link>
           </span>
         </div>
       )}
@@ -100,6 +144,49 @@ export function RunDetail({ id }: { id: string }) {
           </span>
         </div>
       )}
+      {["failed", "partial"].includes(run.status) && (
+        <div className="review-status">
+          <div>
+            <strong>
+              {run.reviewed_at
+                ? "확인 완료로 표시한 요청이에요"
+                : "아직 확인 완료 표시를 하지 않은 요청이에요"}
+            </strong>
+            <p className="hint">
+              {run.reviewed_at
+                ? "수집 결과와 오류 이력은 보존돼요. 다시 대응해야 하면 확인 표시를 되돌릴 수 있어요."
+                : "내용을 검토하거나 보충 수집을 요청한 뒤 확인 완료로 표시하면, 첫 화면의 확인 필요 목록에서 제외돼요."}
+            </p>
+          </div>
+          <button
+            className="button secondary"
+            type="button"
+            disabled={pending}
+            onClick={review}
+          >
+            {pending
+              ? "저장 중…"
+              : run.reviewed_at
+                ? "확인 표시 되돌리기"
+                : "확인 완료로 표시"}
+          </button>
+        </div>
+      )}
+      <div className="context-actions">
+        {run.rule_id && (
+          <Link href={repeatLink()} className="button">
+            같은 채널·기간으로 다시 요청
+          </Link>
+        )}
+        <Link href="/workers" className="button secondary">
+          수집 환경 확인
+        </Link>
+        {run.rule_id && (
+          <Link href={`/keywords/${run.rule_id}`} className="button quiet">
+            검색 조건 확인
+          </Link>
+        )}
+      </div>
       <section className="panel panel-body">
         <dl className="detail-facts">
           <div>
@@ -116,10 +203,10 @@ export function RunDetail({ id }: { id: string }) {
             </dd>
           </div>
           <div>
-            <dt>규칙 버전</dt>
+            <dt>사용한 검색 조건</dt>
             <dd>
               {run.rule_version
-                ? `버전 ${run.rule_version}`
+                ? `저장 기록 ${run.rule_version}`
                 : "저장 전 미리보기"}
             </dd>
           </div>
@@ -128,11 +215,11 @@ export function RunDetail({ id }: { id: string }) {
             <dd>{dateTime(run.created_at)}</dd>
           </div>
           <div>
-            <dt>최근 상태 확인</dt>
+            <dt>최근 진행 기록</dt>
             <dd>{dateTime(run.updated_at)}</dd>
           </div>
           <div>
-            <dt>조회 페이지</dt>
+            <dt>확인한 검색 페이지</dt>
             <dd>{number(run.summary.pages_collected as number)}</dd>
           </div>
         </dl>
@@ -143,16 +230,14 @@ export function RunDetail({ id }: { id: string }) {
             </span>
           ))}
         </div>
-        {typeof run.summary.stop_reason === "string" && (
-          <p className="hint section-gap">{String(run.summary.stop_reason)}</p>
-        )}
-        {run.rule_id && (
-          <Link
-            href={`/runs/new?rule=${run.rule_id}`}
-            className="button secondary section-gap"
-          >
-            이 규칙으로 수집 요청
-          </Link>
+        {(typeof run.summary.stop_reason === "string" || run.error) && (
+          <details className="technical-details section-gap">
+            <summary>운영 담당자에게 전달할 정보</summary>
+            {typeof run.summary.stop_reason === "string" && (
+              <p>{run.summary.stop_reason}</p>
+            )}
+            {run.error && <p>{run.error}</p>}
+          </details>
         )}
       </section>
       {days.length > 0 && (
@@ -160,14 +245,18 @@ export function RunDetail({ id }: { id: string }) {
           <div className="panel-header" style={{ paddingBottom: 22 }}>
             <h2>날짜별 수집 범위</h2>
           </div>
+          <p className="mobile-table-hint">
+            표를 옆으로 밀면 날짜별 보충 수집 버튼을 볼 수 있어요.
+          </p>
           <div className="table-wrap">
-            <table>
+            <table className="range-table">
               <thead>
                 <tr>
                   <th scope="col">날짜</th>
                   <th scope="col">검색 건수</th>
                   <th scope="col">확보 건수</th>
                   <th scope="col">범위 확인</th>
+                  <th scope="col">다음 작업</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,6 +266,18 @@ export function RunDetail({ id }: { id: string }) {
                     <td>{number(day.total_count)}</td>
                     <td>{number(day.retrieved_count)}</td>
                     <td>{day.complete ? "완료" : "미완료"}</td>
+                    <td>
+                      {!day.complete &&
+                        run.rule_id &&
+                        run.source === "bigkinds" && (
+                          <Link
+                            className="button secondary"
+                            href={repeatLink(day.date, day.date)}
+                          >
+                            이 날짜 다시 수집
+                          </Link>
+                        )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -198,8 +299,20 @@ export function RunDetail({ id }: { id: string }) {
         ) : results.isLoading ? (
           <Loading />
         ) : !results.data?.items.length ? (
-          <Empty title="아직 표시할 자료가 없어요">
-            수집이 진행되면 확보한 목록이 여기에 표시돼요.
+          <Empty
+            title={
+              run.status === "completed"
+                ? "이 조건으로 확보한 자료가 없어요"
+                : ["failed", "cancelled"].includes(run.status)
+                  ? "이 요청에서 확보한 자료가 없어요"
+                  : "아직 표시할 자료가 없어요"
+            }
+          >
+            {run.status === "completed"
+              ? "키워드와 조회 기간을 확인해 주세요."
+              : ["failed", "cancelled"].includes(run.status)
+                ? "조건과 수집 환경을 확인하고 다시 요청할 수 있어요."
+                : "수집이 진행되면 확보한 목록이 여기에 표시돼요."}
           </Empty>
         ) : (
           <ul className="article-list">

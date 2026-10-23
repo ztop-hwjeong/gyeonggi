@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, Query
 
 from domain.collection.models import (
     SOURCES,
+    ArticleIdentity,
     ArticleQuery,
     Overview,
     Pagination,
@@ -13,14 +14,17 @@ from domain.collection.models import (
     RequestInfo,
     RequestPage,
     RequestQuery,
+    RequestReview,
     ResultPage,
     RuleDefinition,
     RuleInfo,
     RulePage,
+    RuleQuery,
     RuleUpdate,
     RuleVersion,
     RunCreate,
     SourceInfo,
+    StoredArticleDetail,
     StoredArticlePage,
 )
 from domain.collection.reporting import CollectionReporting
@@ -41,6 +45,13 @@ async def articles(
     return await reporting.articles(query)
 
 
+@router.get("/articles/detail")
+async def article(
+    reporting: FromDishka[CollectionReporting], identity: Annotated[ArticleIdentity, Query()]
+) -> StoredArticleDetail:
+    return await reporting.article(identity)
+
+
 @router.get("/sources")
 async def sources() -> tuple[SourceInfo, ...]:
     return SOURCES
@@ -48,7 +59,7 @@ async def sources() -> tuple[SourceInfo, ...]:
 
 @router.get("/keyword-rules")
 async def rules(
-    repository: FromDishka[CollectionRepository], page: Annotated[Pagination, Query()]
+    repository: FromDishka[CollectionRepository], page: Annotated[RuleQuery, Query()]
 ) -> RulePage:
     return await repository.rules(page)
 
@@ -112,6 +123,13 @@ async def request(request_id: UUID, repository: FromDishka[CollectionRepository]
 @router.post("/collection-runs/{request_id}/cancel", status_code=202)
 async def cancel(request_id: UUID, repository: FromDishka[CollectionRepository]) -> RequestInfo:
     return await repository.cancel(request_id)
+
+
+@router.post("/collection-runs/{request_id}/review")
+async def review(
+    request_id: UUID, body: RequestReview, repository: FromDishka[CollectionRepository]
+) -> RequestInfo:
+    return await repository.review(request_id, body)
 
 
 @router.get("/collection-runs/{request_id}/items")
