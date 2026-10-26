@@ -77,7 +77,7 @@ class TagQuery(BaseModel):
     include_descendants: bool = True
     unfiled: bool = False
     inclusion: Literal["all", "included", "excluded"] = "all"
-    kind: Literal["news", "cafe", "blog"] | None = None
+    kind: Literal["news", "blog"] | None = None
 
     @model_validator(mode="after")
     def folder_scope(self) -> Self:
@@ -90,4 +90,4 @@ class FolderQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     inclusion: Literal["all", "included", "excluded"] = "all"
-    kind: Literal["news", "cafe", "blog"] | None = None
+    kind: Literal["news", "blog"] | None = None

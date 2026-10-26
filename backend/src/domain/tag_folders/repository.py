@@ -129,6 +129,7 @@ class TagFolderRepository:
             topics.c.archived_at.is_(None),
             topics.c.merged_into.is_(None),
             self._inclusion_condition(inclusion),
+            materials.c.kind.in_(("news", "blog")),
         ]
         if kind is not None:
             criteria.append(materials.c.kind == kind)

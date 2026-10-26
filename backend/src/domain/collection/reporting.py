@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Date, cast, func, literal, or_, select
+from sqlalchemy import ColumnElement, Date, cast, func, literal, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -64,8 +64,6 @@ class CollectionReporting:
             materials.c.title,
             func.coalesce(materials.c.summary, "").label("summary"),
             materials.c.publisher,
-            materials.c.cafe_name,
-            materials.c.cafe_url,
             materials.c.blog_name,
             materials.c.blog_url,
             materials.c.published_at,
@@ -86,7 +84,7 @@ class CollectionReporting:
                     article_inclusions.c.reason.label("inclusion_reason"),
                 ]
             )
-        return select(*fields).select_from(source)
+        return select(*fields).select_from(source).where(materials.c.kind.in_(("news", "blog")))
 
     async def sources(self, material_ids: list[UUID]) -> dict[UUID, list[dict]]:
         result: dict[UUID, list[dict]] = {material_id: [] for material_id in material_ids}
@@ -128,13 +126,13 @@ class CollectionReporting:
         return StoredMaterialDetail.model_validate({**rows[0], "sources": source_map[material_id]})
 
     async def materials(self, query: MaterialQuery) -> StoredMaterialPage:
-        criteria = []
+        criteria: list[ColumnElement[bool]] = [materials.c.kind.in_(("news", "blog"))]
         if query.kind is not None:
             criteria.append(materials.c.kind == query.kind)
         elif query.group == "news":
             criteria.append(materials.c.kind == "news")
         elif query.group == "posts":
-            criteria.append(materials.c.kind.in_(("cafe", "blog")))
+            criteria.append(materials.c.kind == "blog")
         if query.source is not None:
             criteria.append(
                 select(material_sources.c.source_id)
@@ -186,9 +184,9 @@ class CollectionReporting:
 
     async def overview(self) -> Overview:
         source_rows = await self.rows(
-            select(material_sources.c.source, func.count().label("count")).group_by(
-                material_sources.c.source
-            )
+            select(material_sources.c.source, func.count().label("count"))
+            .where(material_sources.c.source.in_(("bigkinds", "naver_news", "naver_blog")))
+            .group_by(material_sources.c.source)
         )
         threshold = datetime.now(UTC) - timedelta(days=1)
         counts = (
@@ -231,13 +229,24 @@ class CollectionReporting:
         day = cast(func.timezone("Asia/Seoul", materials.c.created_at), Date).label("day")
         daily_rows = await self.rows(
             select(day, func.count().label("count"))
-            .where(materials.c.created_at >= datetime.now(UTC) - timedelta(days=7))
+            .where(
+                materials.c.created_at >= datetime.now(UTC) - timedelta(days=7),
+                materials.c.kind.in_(("news", "blog")),
+            )
             .group_by(day)
         )
         daily = {row["day"]: row["count"] for row in daily_rows}
-        total = (await self.rows(select(func.count().label("count")).select_from(materials)))[0]
+        total = (
+            await self.rows(
+                select(func.count().label("count"))
+                .select_from(materials)
+                .where(materials.c.kind.in_(("news", "blog")))
+            )
+        )[0]
         kinds = await self.rows(
-            select(materials.c.kind, func.count().label("count")).group_by(materials.c.kind)
+            select(materials.c.kind, func.count().label("count"))
+            .where(materials.c.kind.in_(("news", "blog")))
+            .group_by(materials.c.kind)
         )
         return Overview.model_validate(
             {
@@ -246,7 +255,6 @@ class CollectionReporting:
                 "total_items": total["count"],
                 "kind_counts": {
                     "news": next((row["count"] for row in kinds if row["kind"] == "news"), 0),
-                    "cafe": next((row["count"] for row in kinds if row["kind"] == "cafe"), 0),
                     "blog": next((row["count"] for row in kinds if row["kind"] == "blog"), 0),
                 },
                 "source_counts": {row["source"]: row["count"] for row in source_rows},

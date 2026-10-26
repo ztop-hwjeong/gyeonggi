@@ -45,7 +45,8 @@ class MonitoringRepository:
             return {}
         statement = text(
             "SELECT id, summary, 'details' AS kind FROM ops.article_detail_runs WHERE id IN :ids "
-            "UNION ALL SELECT id, summary, 'search' AS kind FROM ops.search_runs WHERE id IN :ids"
+            "UNION ALL SELECT id, summary, 'search' AS kind FROM ops.search_runs WHERE id IN :ids "
+            "AND summary->>'channel' IN ('news','blog')"
         ).bindparams(bindparam("ids", expanding=True))
         try:
             rows = (await self._session.execute(statement, {"ids": run_ids})).mappings().all()
@@ -62,7 +63,10 @@ class MonitoringRepository:
 
     async def search_metrics(self, window: SearchWindow) -> SearchMetrics:
         params = {"since": window.since, "until": window.until, "channel": window.channel}
-        condition = " AND (CAST(:channel AS text) IS NULL OR s.channel=:channel)"
+        condition = (
+            " AND s.channel IN ('news','blog') "
+            "AND (CAST(:channel AS text) IS NULL OR s.channel=:channel)"
+        )
         rows = await self._rows(
             "SELECT r.summary->>'status' AS status, count(*) AS count, "
             "coalesce(sum((r.summary->>'pages_collected')::int),0) AS pages, "
@@ -102,7 +106,8 @@ class MonitoringRepository:
 
     async def streams(self, query: StreamQuery) -> StreamPage:
         condition = (
-            " WHERE provider='naver' AND (CAST(:channel AS text) IS NULL OR channel=:channel)"
+            " WHERE provider='naver' AND channel IN ('news','blog') "
+            "AND (CAST(:channel AS text) IS NULL OR channel=:channel)"
         )
         params = {"channel": query.channel, "limit": query.limit, "offset": query.offset}
         total = (
@@ -129,12 +134,14 @@ class MonitoringRepository:
     async def search_items(self, run_id: UUID, limit: int, offset: int) -> SearchItemPage:
         total = (
             await self._rows(
-                "SELECT count(*) AS count FROM st.search_run_items WHERE run_id=:id",
+                "SELECT count(*) AS count FROM st.search_run_items "
+                "WHERE run_id=:id AND data->>'channel' IN ('news','blog')",
                 {"id": run_id},
             )
         )[0]["count"]
         rows = await self._rows(
             "SELECT data FROM st.search_run_items WHERE run_id=:id "
+            "AND data->>'channel' IN ('news','blog') "
             "ORDER BY source_id LIMIT :limit OFFSET :offset",
             {"id": run_id, "limit": limit, "offset": offset},
         )

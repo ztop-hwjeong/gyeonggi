@@ -15,7 +15,6 @@ class MonitoringSettings(BaseSettings):
         "bigkinds-collect-list",
         "collect-article-details",
         "naver-collect-list",
-        "collect-naver-cafe-details",
         "managed-collection",
     )
     monitoring_pool_names: tuple[str, ...] = ("docker-collector", "windows-collector")

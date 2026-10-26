@@ -56,7 +56,6 @@ def normalize_item(channel: Channel, data: dict) -> Listing:
         summary=plain_text(data["description"]),
         published_at=published_at,
         published_on=published_on,
-        container_name=plain_text(data["cafename"]) if channel == "cafearticle" else None,
         blog_name=plain_text(data["bloggername"])
         if channel == "blog" and data.get("bloggername")
         else None,

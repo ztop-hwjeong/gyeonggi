@@ -35,7 +35,9 @@ class MaterialTags:
 
     async def _sources(self, material_id: UUID) -> list[dict]:
         found = await self._session.scalar(
-            select(materials.c.id).where(materials.c.id == material_id)
+            select(materials.c.id).where(
+                materials.c.id == material_id, materials.c.kind.in_(("news", "blog"))
+            )
         )
         if found is None:
             raise TagFolderNotFoundError("자료 없음")

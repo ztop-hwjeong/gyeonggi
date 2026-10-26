@@ -106,7 +106,7 @@ def collect_naver_request(
     if request.mode == "backfill":
         raise ValueError("네이버 기간 수집 미지원")
     search = SearchRequest(
-        channel=cast(Literal["news", "blog", "cafearticle"], request.source.removeprefix("naver_")),
+        channel=cast(Literal["news", "blog"], request.source.removeprefix("naver_")),
         terms=request.definition.terms,
     )
     searches = SearchRepository(repository.settings, repository.password)

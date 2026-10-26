@@ -193,21 +193,12 @@ def test_material_kind_metadata_and_news_only_analysis_queue() -> None:
     dsn = os.environ["ANALYSIS_TEST_DATABASE_URL"]
     suffix = uuid4().hex
     with psycopg.connect(dsn, autocommit=True) as connection:
-        cafe_id = scalar(
-            connection,
-            "SELECT dw.resolve_material_source('naver_cafearticle',%s,%s,NULL,'카페글',"
-            "NULL,NULL,NULL,'교육 카페',NULL,NULL,NULL)",
-            (f"c-{suffix}", f"https://cafe.naver.com/test/{suffix}"),
-        )
         blog_id = scalar(
             connection,
             "SELECT dw.resolve_material_source('naver_blog',%s,%s,NULL,'블로그글',"
             "NULL,NULL,NULL,NULL,NULL,'교육 블로그',NULL)",
             (f"l-{suffix}", f"https://blog.naver.com/test/{suffix}"),
         )
-        assert connection.execute(
-            "SELECT kind,cafe_name,publisher FROM dw.materials WHERE id=%s", (cafe_id,)
-        ).fetchone() == ("cafe", "교육 카페", None)
         assert connection.execute(
             "SELECT kind,blog_name,publisher FROM dw.materials WHERE id=%s", (blog_id,)
         ).fetchone() == ("blog", "교육 블로그", None)
@@ -223,7 +214,6 @@ def test_material_kind_metadata_and_news_only_analysis_queue() -> None:
             (run_id,),
         )
         for source, source_id in (
-            ("naver_cafearticle", f"c-{suffix}"),
             ("naver_blog", f"l-{suffix}"),
             ("naver_news", f"n-{suffix}"),
         ):
@@ -236,8 +226,8 @@ def test_material_kind_metadata_and_news_only_analysis_queue() -> None:
         assert (
             scalar(
                 connection,
-                "SELECT count(*) FROM ops.analysis_queue WHERE article_id IN (%s,%s)",
-                (cafe_id, blog_id),
+                "SELECT count(*) FROM ops.analysis_queue WHERE article_id=%s",
+                (blog_id,),
             )
             == 0
         )

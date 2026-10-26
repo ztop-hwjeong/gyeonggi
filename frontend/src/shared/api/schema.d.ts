@@ -1751,7 +1751,7 @@ export interface components {
         };
         JsonValue: unknown;
         /** @enum {string} */
-        MaterialKind: "news" | "cafe" | "blog";
+        MaterialKind: "news" | "blog";
         /** MaterialTagLink */
         MaterialTagLink: {
             /**
@@ -2206,7 +2206,7 @@ export interface components {
              * Channel
              * @enum {string}
              */
-            channel: "news" | "blog" | "cafearticle";
+            channel: "news" | "blog";
             /** Query */
             query: string;
             /**
@@ -2252,7 +2252,7 @@ export interface components {
             last_run: components["schemas"]["SearchProgress"] | null;
         };
         /** @enum {string} */
-        SourceCode: "bigkinds" | "naver_news" | "naver_blog" | "naver_cafearticle";
+        SourceCode: "bigkinds" | "naver_news" | "naver_blog";
         /** SourceInfo */
         SourceInfo: {
             code: components["schemas"]["SourceCode"];
@@ -2350,10 +2350,6 @@ export interface components {
             summary: string;
             /** Publisher */
             publisher: string | null;
-            /** Cafe Name */
-            cafe_name: string | null;
-            /** Cafe Url */
-            cafe_url: string | null;
             /** Blog Name */
             blog_name: string | null;
             /** Blog Url */
@@ -2381,10 +2377,6 @@ export interface components {
             summary: string;
             /** Publisher */
             publisher: string | null;
-            /** Cafe Name */
-            cafe_name: string | null;
-            /** Cafe Url */
-            cafe_url: string | null;
             /** Blog Name */
             blog_name: string | null;
             /** Blog Url */
@@ -3143,7 +3135,7 @@ export interface operations {
             query?: {
                 since?: string;
                 until?: string;
-                channel?: ("news" | "blog" | "cafearticle") | null;
+                channel?: ("news" | "blog") | null;
             };
             header?: never;
             path?: never;
@@ -3181,7 +3173,7 @@ export interface operations {
     search_streams_monitoring_search_streams_get: {
         parameters: {
             query?: {
-                channel?: ("news" | "blog" | "cafearticle") | null;
+                channel?: ("news" | "blog") | null;
                 limit?: number;
                 offset?: number;
             };
@@ -4807,7 +4799,7 @@ export interface operations {
                 include_descendants?: boolean;
                 unfiled?: boolean;
                 inclusion?: "all" | "included" | "excluded";
-                kind?: ("news" | "cafe" | "blog") | null;
+                kind?: ("news" | "blog") | null;
             };
             header?: never;
             path?: never;
@@ -4871,7 +4863,7 @@ export interface operations {
         parameters: {
             query?: {
                 inclusion?: "all" | "included" | "excluded";
-                kind?: ("news" | "cafe" | "blog") | null;
+                kind?: ("news" | "blog") | null;
             };
             header?: never;
             path?: never;

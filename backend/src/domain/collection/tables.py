@@ -11,8 +11,6 @@ materials = Table(
     Column("kind", String),
     Column("summary", String),
     Column("publisher", String),
-    Column("cafe_name", String),
-    Column("cafe_url", String),
     Column("blog_name", String),
     Column("blog_url", String),
     Column("published_at", DateTime(timezone=True)),

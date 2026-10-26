@@ -60,7 +60,7 @@ class CollectionProgress(BaseModel):
 class SearchProgress(BaseModel):
     missing_date_count: int = 0
     date_boundary_reached: bool = False
-    channel: Literal["news", "blog", "cafearticle"]
+    channel: Literal["news", "blog"]
     query: str
     status: Literal["running", "completed", "partial", "failed"]
     started_at: datetime
@@ -77,7 +77,7 @@ class SearchProgress(BaseModel):
 
 
 class SearchWindow(Window):
-    channel: Literal["news", "blog", "cafearticle"] | None = None
+    channel: Literal["news", "blog"] | None = None
 
 
 class SearchMetrics(BaseModel):
@@ -96,7 +96,7 @@ class SearchMetrics(BaseModel):
 class StreamQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    channel: Literal["news", "blog", "cafearticle"] | None = None
+    channel: Literal["news", "blog"] | None = None
     limit: int = Field(default=50, ge=1, le=200)
     offset: int = Field(default=0, ge=0)
 

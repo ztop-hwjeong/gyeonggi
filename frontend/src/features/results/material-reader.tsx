@@ -15,7 +15,6 @@ import type {
 
 const kindLabels = {
   news: { content: "자료 내용", name: "언론사" },
-  cafe: { content: "자료 내용", name: "카페명" },
   blog: { content: "자료 내용", name: "블로그명" },
 };
 
@@ -124,12 +123,10 @@ export function MaterialReader({
 
 function materialName(material: MaterialDetail) {
   if (material.kind === "news") return material.publisher ?? "—";
-  if (material.kind === "cafe") return material.cafe_name ?? "—";
   return material.blog_name ?? "—";
 }
 
 function materialLink(material: MaterialDetail) {
-  if (material.kind === "cafe") return safeUrl(material.cafe_url);
   if (material.kind === "blog") return safeUrl(material.blog_url);
   return undefined;
 }

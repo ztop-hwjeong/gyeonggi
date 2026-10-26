@@ -85,18 +85,6 @@ deployments:
         page_size: 50
         max_pages: 20
     work_pool: *naver-pool
-  - name: naver-cafearticle
-    entrypoint: src/flows/naver.py:naver_collect_list
-    tags: [docker, naver, list, cafearticle]
-    schedules: []
-    concurrency_limit: 1
-    parameters:
-      request:
-        channel: cafearticle
-        terms: *policy-terms
-        page_size: 50
-        max_pages: 20
-    work_pool: *naver-pool
   - name: managed-collection
     entrypoint: src/flows/managed.py:managed_collection
     tags: [docker, collection, managed]

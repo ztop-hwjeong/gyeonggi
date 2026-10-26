@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
-type Channel = Literal["news", "blog", "cafearticle"]
+type Channel = Literal["news", "blog"]
 
 
 class SearchRequest(BaseModel):
@@ -55,7 +55,6 @@ class Listing(BaseModel):
     summary: str
     published_at: datetime | None = None
     published_on: str | None = None
-    container_name: str | None = None
     blog_name: str | None = None
     blog_url: HttpUrl | None = None
     content_kind: Literal["listing_excerpt"] = "listing_excerpt"
@@ -116,8 +115,6 @@ class Pagination:
         self.date_boundary_reached = False
 
     def date_boundary(self, items: list[Listing]) -> bool:
-        if self.request.channel == "cafearticle":
-            return False
         dates: list[datetime | date] = []
         for item in items:
             value = (

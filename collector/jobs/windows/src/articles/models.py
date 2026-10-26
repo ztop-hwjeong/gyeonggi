@@ -10,7 +10,7 @@ type DetailStage = Literal["curl_cffi", "browser_fetch", "browser_rendered", "bi
 class ArticleSeed(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    source: Literal["bigkinds", "naver_cafearticle"] = "bigkinds"
+    source: Literal["bigkinds"] = "bigkinds"
     source_id: str = Field(min_length=1)
     published_on: date | None
     publisher: str = Field(min_length=1)
@@ -33,7 +33,7 @@ class Evidence(BaseModel):
 class ExtractedArticle(BaseModel):
     title: str
     text: str
-    method: Literal["adaptive", "trafilatura", "snippet_dom", "bigkinds_api", "naver_cafe_api"]
+    method: Literal["adaptive", "trafilatura", "snippet_dom", "bigkinds_api"]
     evidence: Evidence
     adaptive_scope: str | None = None
     published_at: datetime | None = None

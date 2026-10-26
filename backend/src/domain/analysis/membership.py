@@ -14,6 +14,7 @@ def tagged_materials(tag_ids: set[str], kind: str | None = None):
     )
     criteria = [
         material_sources.c.material_id == materials.c.id,
+        materials.c.kind.in_(("news", "blog")),
         article_topics.c.topic_id.in_(tag_ids),
     ]
     if kind is not None:

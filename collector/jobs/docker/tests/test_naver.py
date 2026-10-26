@@ -10,12 +10,11 @@ from sources.naver.models import Channel, Cursor, Pagination, SearchPage, Search
 from sources.naver.normalization import normalize_item
 
 
-def item(number: int, channel: Channel = "cafearticle"):
+def item(number: int, channel: Channel = "news"):
     value = dict(
         title="교육 <b>정책</b> &amp; 소식",
-        link=f"https://cafe.naver.com/test/{number}",
+        link=f"https://example.test/news/{number}",
         description="공개 <b>요약</b>",
-        cafename="교육 카페",
     )
     if channel == "news":
         value.update(pubDate="Fri, 23 Oct 2026 10:00:00 +0900", originallink=value["link"])
@@ -63,15 +62,20 @@ def test_terms_are_literal_phrases(terms):
         SearchRequest(channel="news", terms=terms)
 
 
+def test_retired_channel_is_rejected_before_collection():
+    with pytest.raises(ValidationError):
+        SearchRequest.model_validate({"channel": "cafearticle", "terms": ["교육"]})
+
+
 def test_bootstrap_only_reads_one_page_without_claiming_historical_coverage():
-    state = Pagination(SearchRequest(channel="cafearticle", terms=("교육",)), None, 1)
+    state = Pagination(SearchRequest(channel="news", terms=("교육",)), None, 1)
     complete, reason = state.accept(*page(1, range(20), 10000))
     assert complete and reason == "최신 첫 페이지로 초기화"
     assert len(state.head_ids) == 20
 
 
 def test_existing_boundary_requires_overlap_page_and_includes_late_item():
-    request = SearchRequest(channel="cafearticle", terms=("교육",), page_size=2)
+    request = SearchRequest(channel="news", terms=("교육",), page_size=2)
     state = Pagination(request, cursor([2, 3]), 1)
     assert state.accept(*page(1, [1, 2])) == (False, None)
     assert state.accept(*page(3, [9, 3])) == (False, None)
@@ -105,10 +109,8 @@ def test_repeated_and_unexpected_empty_pages_are_not_success():
     )
 
 
-def test_cafe_has_no_fabricated_publication_date_and_blog_keeps_channel_name():
-    cafe = item(1)
-    assert cafe.published_at is None and cafe.published_on is None
-    assert cafe.title == "교육 정책 & 소식"
+def test_news_and_blog_keep_publication_dates_and_blog_channel_name():
+    assert item(1).title == "교육 정책 & 소식"
     blog = item(2, "blog")
     assert blog.published_on == "2026-10-23"
     assert blog.blog_name == "교육 블로그"

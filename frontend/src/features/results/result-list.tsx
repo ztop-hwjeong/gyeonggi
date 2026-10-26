@@ -17,23 +17,20 @@ import { TagFolderPanel } from "./tag-folder-panel";
 const tabs: { value: "all" | MaterialKind; label: string }[] = [
   { value: "all", label: "전체" },
   { value: "news", label: "기사" },
-  { value: "cafe", label: "카페글" },
   { value: "blog", label: "블로그글" },
 ];
 
 function mediaName(item: {
   kind: MaterialKind;
   publisher?: string | null;
-  cafe_name?: string | null;
   blog_name?: string | null;
 }) {
   if (item.kind === "news") return item.publisher ?? "—";
-  if (item.kind === "cafe") return item.cafe_name ?? "—";
   return item.blog_name ?? "—";
 }
 
 function kindName(kind: MaterialKind) {
-  return { news: "기사", cafe: "카페글", blog: "블로그글" }[kind];
+  return { news: "기사", blog: "블로그글" }[kind];
 }
 
 export function ResultList() {

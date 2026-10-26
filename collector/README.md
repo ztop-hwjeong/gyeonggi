@@ -85,7 +85,7 @@ Prefect UI에서 `bigkinds-collect-list/bigkinds-list`를 선택하고 다음 �
 배포 YAML에 지정한다. 자동 주기는 없으며 요청한 기간만 실행한다. 원본 파일은 정규화가
 실패해도 남는다. 실패한 실행의 자료는 manifest와 페이지 파일로 확인한다.
 
-## 네이버 뉴스·블로그·카페글 목록
+## 네이버 뉴스·블로그 목록
 
 네이버 클라우드 NAVER API HUB의 검색 API를 사용한다.
 저장소 루트 `.env`에 `X-NCP-APIGW-API-KEY-ID`, `X-NCP-APIGW-API-KEY`를 지정한다.
@@ -105,7 +105,7 @@ Docker 작업 이미지를 빌드한 뒤 `collector/jobs/docker`에서 배포한
 ```powershell
 $env:PREFECT_API_URL = 'http://127.0.0.1:4200/api'
 $env:PREFECT_DEPLOYMENTS_CLEAR_SCHEDULES_ON_EMPTY = 'true'
-uv run prefect deploy --name naver-news --name naver-blog --name naver-cafearticle --no-prompt
+uv run prefect deploy --name naver-news --name naver-blog --no-prompt
 ```
 
 세 배포는 수동 실행용이다. `parameters.request`에서 채널과 정책 검색어를 지정한다.
@@ -113,7 +113,6 @@ uv run prefect deploy --name naver-news --name naver-blog --name naver-cafeartic
 `terms`는 따옴표 없는 문구 배열이며 `"문구1" | "문구2"`로 합쳐 최신순으로 조회한다.
 동일 문구를 중복 제거하고 순서를 정규화한다. 채널이나 검색식이 달라지면 별도 커서로 시작한다.
 제목·요약의 강조 태그를 제거하며 뉴스 제공 시각과 블로그 작성일을 보존한다.
-작성일을 주지 않는 카페글에는 수집 시각을 작성일로 대신 넣지 않는다.
 목록 요약은 본문으로 취급하지 않으며 이 flow는 상세 URL에 요청하지 않는다.
 
 최초 실행은 최신 첫 페이지로 커서를 초기화한다. 기본 50건이며 과거 전체 자료를 조회하지 않는다.
@@ -123,7 +122,7 @@ uv run prefect deploy --name naver-news --name naver-blog --name naver-cafeartic
 날짜 경계 도달을 모니터링 정보에 기록하되 날짜만으로 수집 완료를 판정하지 않는다.
 날짜가 없는 글도 저장하며, 날짜 누락 건수는 모니터링 정보에 기록한다.
 날짜가 빠지거나 조회 순서가 역전되면 해당 실행의 날짜 판정을 중단한다.
-날짜 없는 기존 커서는 다음 성공 시 날짜를 함께 저장하며, 작성일 없는 카페는 ID로 판정한다.
+날짜 없는 기존 커서는 다음 성공 시 날짜를 함께 저장하며, 날짜 누락 자료도 ID로 판정한다.
 실행당 기본 50건씩 최대 20페이지, 최대 시작 위치 1000을 적용한다. 매번 20페이지를 모두 요청하지
 않고 경계 확인 시 종료한다. 상한 안에서 경계와 겹침 구간을 확인하지 못하거나 페이지가
 반복·비정상 응답이면 `partial`로 기록하고 커서를 유지한다. 다음 실행은 최신 첫 페이지부터
@@ -139,15 +138,14 @@ PostgreSQL advisory lock으로 차단한다. 커서와 완료 상태는 같은 �
 다른 검색식에서 같은 항목을 찾더라도 채널·URL 기준으로 중복 제거한다.
 페이지 상한을 늘려 재실행할 때는 요청량을 확인하고 배포 매개변수를 명시적으로 변경한다.
 
-세 채널은 `naver-api-hub-http` 요청 제한과 `NAVER_DAILY_REQUEST_LIMIT` 예산을 공유한다.
+뉴스·블로그는 `naver-api-hub-http` 요청 제한과 `NAVER_DAILY_REQUEST_LIMIT` 예산을 공유한다.
 기본 간격은 3초, 하루 예산은 한국 시각 기준 1,000회다. 연결 실패도 요청 예산에 포함하고,
 실패한 HTTP 요청은 자동 재시도하지 않는다. 429·Retry-After 대기는 PostgreSQL에 보존해
 다른 작업도 같은 대기 지시를 따른다. 운영 중인 전역 요청 간격은 초기화가 덮어쓰지 않는다.
 상한·오류 상태는 Prefect 완료 여부와 별도로 `summary.status`, `cursor_advanced`로 확인한다.
 
 API 계약: [뉴스](https://api.ncloud-docs.com/docs/naver-api-hub-search-news),
-[블로그](https://api.ncloud-docs.com/docs/naver-api-hub-search-blog),
-[카페글](https://api.ncloud-docs.com/docs/naver-api-hub-search-cafearticle).
+[블로그](https://api.ncloud-docs.com/docs/naver-api-hub-search-blog).
 
 ## 키워드 규칙 기반 수집 요청
 
@@ -156,7 +154,7 @@ DB 마이그레이션을 번호순으로 적용하고 Docker 작업 이미지를
 
 ```powershell
 $env:PREFECT_DEPLOYMENTS_CLEAR_SCHEDULES_ON_EMPTY = 'true'
-uv run prefect deploy --name naver-news --name naver-blog --name naver-cafearticle --name managed-collection --name managed-backfill --name collection-dispatch --no-prompt
+uv run prefect deploy --name naver-news --name naver-blog --name managed-collection --name managed-backfill --name collection-dispatch --no-prompt
 ```
 
 `collection-dispatch`는 1분마다 활성 규칙의 실행 시각을 확인하고 요청 큐를 처리한다.
@@ -297,31 +295,6 @@ uv run prefect deploy --name article-details --no-prompt
 이 경우 원문 HTTP·브라우저 단계에서 검증하지 못한 기사를 빅카인즈 상세로 대체하지 않는다.
 원문 추출 성공과 PostgreSQL adaptive 프로필 저장 여부를 함께 확인한다.
 
-## 네이버 카페 상세 수집
-
-`collector/jobs/windows`의 `naver-cafe-details` 배포는 저장된 카페 목록에서 본문 미수집 항목을
-선택한다. 위 Windows 작업 환경변수를 지정한 뒤 다음 명령으로 배포·실행한다.
-
-```powershell
-uv run prefect deploy --name naver-cafe-details --no-prompt
-uv run prefect deployment run collect-naver-cafe-details/naver-cafe-details --watch
-```
-
-DB에는 `infra/postgres/migrations`의 SQL을 번호순으로 적용한다.
-카페 상세는 별도 주기 없이 실행하며 `NAVER_CAFE_BATCH_SIZE`(기본 10건)씩 처리한다.
-수집 완료한 항목은 제외하고 실패 항목은 `NAVER_CAFE_RETRY_DELAY_MINUTES`(기본 60분) 후
-다시 선택한다. 같은 카페 상세 흐름의 중복 실행은 PostgreSQL advisory lock으로 차단한다.
-
-Edge 전용 탭을 실제 글 주소로 이동시키고 페이지가 자동 요청하는 상세 JSON 응답을 캡처한다.
-글 본문을 별도로 HTTP 요청하지 않으며 탭·창은 유지한다. 카페·글 ID와 제목을 검증한 뒤
-원본 JSON은 RustFS, 추출한 본문·작성 시각과 처리 상태는 기존 상세 수집 테이블에 저장한다.
-텍스트 없는 이미지 글은 원본 응답을 보존하고 본문 추출 미완료로 남긴다.
-
-글 이동 간격은 `NAVER_CAFE_REQUEST_INTERVAL_SECONDS`(기본 10초)로 전역 제한한다.
-이미 존재하는 Prefect 전역 제한은 설정 변경으로 덮어쓰지 않는다.
-401·403·429·Retry-After에서는 배치를 중단하고 대기 시각을 DB에 보존한다.
-기본 대기는 `NAVER_CAFE_ERROR_PAUSE_SECONDS`(900초)이며 더 긴 Retry-After를 우선한다.
-수집 실행·항목별 성공 및 실패·원본 응답은 기존 모니터링 API에서 확인한다.
 
 ## 검증
 

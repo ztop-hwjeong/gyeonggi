@@ -260,7 +260,7 @@ test("네이버를 선택하면 기간 입력 대신 증분 수집을 안내한�
 test("조회 오류를 빈 결과로 표시하지 않는다", async ({ page }) => {
   await mockApi(page, { unavailable: true });
   await page.goto("/results");
-  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+  await expect(page.getByRole("main").getByRole("alert").first()).toContainText(
     "수집 저장소 연결 실패",
   );
   await expect(page.getByText("아직 수집된 자료가 없어요")).toHaveCount(0);
@@ -404,8 +404,6 @@ test("자료 본문을 읽고 검색하던 위치로 돌아간다", async ({ pag
   const material = {
     ...article,
     kind: "news",
-    cafe_name: null,
-    cafe_url: null,
     blog_name: null,
     blog_url: null,
     content_preview: "확보한 본문 첫 문단",
@@ -448,8 +446,6 @@ test("기사의 분석 대상 판단을 저장한 뒤 바로 표시한다", asyn
   const material = {
     ...article,
     kind: "news",
-    cafe_name: null,
-    cafe_url: null,
     blog_name: null,
     blog_url: null,
   };
@@ -513,8 +509,6 @@ test("통합 자료에서 유형별 목록을 구분한다", async ({ page }) =>
       title: "기사 제목",
       summary: "기사 요약",
       publisher: "경기일보",
-      cafe_name: null,
-      cafe_url: null,
       blog_name: null,
       blog_url: null,
       published_at: now,
@@ -523,28 +517,11 @@ test("통합 자료에서 유형별 목록을 구분한다", async ({ page }) =>
       has_body: true,
     },
     {
-      id: "22222222-2222-4222-8222-222222222222",
-      kind: "cafe",
-      title: "카페글 제목",
-      summary: "카페글 요약",
-      publisher: null,
-      cafe_name: "교육 카페",
-      cafe_url: "https://example.com/cafe",
-      blog_name: null,
-      blog_url: null,
-      published_at: now,
-      sources: [],
-      content_preview: "",
-      has_body: false,
-    },
-    {
       id: "33333333-3333-4333-8333-333333333333",
       kind: "blog",
       title: "블로그글 제목",
       summary: "블로그글 요약",
       publisher: null,
-      cafe_name: null,
-      cafe_url: null,
       blog_name: "교육 블로그",
       blog_url: "https://example.com/blog",
       published_at: now,
@@ -558,15 +535,15 @@ test("통합 자료에서 유형별 목록을 구분한다", async ({ page }) =>
     return route.fulfill({
       json: {
         items: kind ? items.filter((item) => item.kind === kind) : items,
-        total: kind ? 1 : 3,
+        total: kind ? 1 : 2,
       },
     });
   });
   await page.goto("/results");
   await expect(page.getByRole("columnheader", { name: "구분" })).toBeVisible();
   await expect(page.getByText("경기일보")).toBeVisible();
-  await page.getByRole("tab", { name: "카페글" }).click();
-  await expect(page.getByText("교육 카페")).toBeVisible();
+  await expect(page.getByRole("tab", { name: "카페글" })).toHaveCount(0);
+  await page.getByRole("tab", { name: "블로그글" }).click();
   await expect(
     page.getByRole("complementary", { name: "자료 분류" }),
   ).toBeVisible();
@@ -582,8 +559,6 @@ test("수집 자료 작업 영역은 데스크톱 가로 폭을 사용한다", a
     title: "경기교육 정책 자료",
     summary: "검색 요약",
     publisher: "경기일보",
-    cafe_name: null,
-    cafe_url: null,
     blog_name: null,
     blog_url: null,
     published_at: now,

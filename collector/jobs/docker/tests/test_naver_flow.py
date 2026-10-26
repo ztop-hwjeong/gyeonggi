@@ -35,7 +35,7 @@ def test_cursor_advances_only_after_confirmed_coverage(
     monkeypatch.setattr(naver, "fetch_page", fetch)
     monkeypatch.setattr(naver, "store_page", store)
     result = naver.collect(
-        SearchRequest(channel="cafearticle", terms=("교육",), page_size=2, max_pages=max_pages),
+        SearchRequest(channel="news", terms=("교육",), page_size=2, max_pages=max_pages),
         uuid4(),
         repository,
         MagicMock(),
@@ -88,7 +88,7 @@ def test_default_window_scans_twenty_pages_without_skipping_unconfirmed_gap(
         naver, "store_page", Mock(side_effect=[(items, 0, 0) for _, items in batches])
     )
     result = naver.collect(
-        SearchRequest(channel="cafearticle", terms=("교육",), page_size=2),
+        SearchRequest(channel="news", terms=("교육",), page_size=2),
         uuid4(),
         repository,
         MagicMock(),

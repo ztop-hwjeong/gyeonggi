@@ -55,6 +55,13 @@ def test_create_and_update_rule_pass_expected_version(setup_collection, definiti
     )
 
 
+def test_retired_collection_source_cannot_be_registered(setup_collection, definition):
+    client, repository, _ = setup_collection
+    response = client.post("/keyword-rules", json={**definition, "sources": ["naver_cafearticle"]})
+    assert response.status_code == 422
+    repository.save_rule.assert_not_awaited()
+
+
 def test_run_requires_idempotency_key_and_supported_period(setup_collection):
     client, repository, rule_id = setup_collection
     body = {

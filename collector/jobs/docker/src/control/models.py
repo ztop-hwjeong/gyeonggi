@@ -25,7 +25,7 @@ class Definition(BaseModel):
 class ManagedRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: UUID
-    source: Literal["bigkinds", "naver_news", "naver_blog", "naver_cafearticle"]
+    source: Literal["bigkinds", "naver_news", "naver_blog"]
     mode: Literal["preview", "incremental", "backfill"]
     definition: Definition
     start_date: date

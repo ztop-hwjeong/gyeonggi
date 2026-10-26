@@ -122,7 +122,6 @@ def test_runs_filter_pagination_and_private_fields(monitor_setup):
         "bigkinds-collect-list",
         "collect-article-details",
         "naver-collect-list",
-        "collect-naver-cafe-details",
         "managed-collection",
     }
 
@@ -273,10 +272,10 @@ def test_search_partial_progress_is_distinct_from_prefect_completion(monitor_set
 def test_search_streams_keep_old_cursors_visible_and_support_channel_filter(monitor_setup):
     client, repository, _, _ = monitor_setup
     repository.streams.return_value = StreamPage(items=[], total=4, limit=1, offset=10)
-    response = client.get("/monitoring/search-streams?channel=cafearticle&limit=1&offset=10")
+    response = client.get("/monitoring/search-streams?channel=blog&limit=1&offset=10")
     assert response.status_code == 200 and response.json()["total"] == 4
     query = repository.streams.call_args.args[0]
-    assert query.channel == "cafearticle" and query.offset == 10
+    assert query.channel == "blog" and query.offset == 10
     assert not hasattr(query, "since")
 
 

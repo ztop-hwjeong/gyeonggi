@@ -23,7 +23,6 @@ export const sourceNames: Record<string, string> = {
   bigkinds: "빅카인즈",
   naver_news: "네이버 뉴스",
   naver_blog: "네이버 블로그",
-  naver_cafearticle: "네이버 카페",
 };
 
 export const stateNames: Record<string, string> = {

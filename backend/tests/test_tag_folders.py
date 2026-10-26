@@ -125,7 +125,7 @@ def test_folder_counts_unfiled_and_manual_membership() -> None:
     not os.environ.get("ANALYSIS_TEST_DATABASE_URL"),
     reason="독립 PostgreSQL 테스트 데이터베이스 필요",
 )
-def test_cafe_blog_tag_counts_match_material_drilldown() -> None:
+def test_blog_tag_counts_match_material_drilldown() -> None:
     async def check() -> None:
         engine = create_async_engine(os.environ["ANALYSIS_TEST_DATABASE_URL"])
         factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -134,7 +134,7 @@ def test_cafe_blog_tag_counts_match_material_drilldown() -> None:
         try:
             async with factory() as session:
                 async with session.begin():
-                    for index, channel in enumerate(("cafearticle", "cafearticle", "blog")):
+                    for index, channel in enumerate(("blog", "blog", "blog")):
                         await session.execute(
                             text(
                                 "INSERT INTO dw.search_items"
@@ -163,7 +163,7 @@ def test_cafe_blog_tag_counts_match_material_drilldown() -> None:
                     )
                 ).all()
                 await session.rollback()
-                assert sorted(kind for _, kind in rows) == ["blog", "cafe", "cafe"]
+                assert sorted(kind for _, kind in rows) == ["blog", "blog", "blog"]
                 await TopicRegistry(session).ensure_topics(
                     [Topic(id=tag_id, name=f"교육 글 {marker}")]
                 )
@@ -179,8 +179,7 @@ def test_cafe_blog_tag_counts_match_material_drilldown() -> None:
                 reporting = CollectionReporting(session)
                 scopes: list[tuple[MaterialKind | None, int]] = [
                     (None, 3),
-                    ("cafe", 2),
-                    ("blog", 1),
+                    ("blog", 3),
                     ("news", 0),
                 ]
                 for kind, expected in scopes:
@@ -198,21 +197,21 @@ def test_cafe_blog_tag_counts_match_material_drilldown() -> None:
                     assert tag.material_count == scoped.material_count == page.total == expected
                     assert len(page.items) == expected
                     await session.rollback()
-                cafe_id = next(material_id for material_id, kind in rows if kind == "cafe")
+                blog_id = next(material_id for material_id, kind in rows if kind == "blog")
                 await material_tags.override(
-                    cafe_id, tag_id, ArticleTopicOverride(decision="exclude")
+                    blog_id, tag_id, ArticleTopicOverride(decision="exclude")
                 )
                 assert (
-                    await reporting.materials(MaterialQuery(kind="cafe", tag_id=tag_id))
-                ).total == 1
+                    await reporting.materials(MaterialQuery(kind="blog", tag_id=tag_id))
+                ).total == 2
                 await session.rollback()
                 assert (
                     next(
                         item
-                        for item in await folders.tags(TagQuery(kind="cafe"))
+                        for item in await folders.tags(TagQuery(kind="blog"))
                         if item.id == tag_id
                     ).material_count
-                    == 1
+                    == 2
                 )
         finally:
             await engine.dispose()

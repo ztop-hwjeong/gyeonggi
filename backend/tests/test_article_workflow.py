@@ -5,7 +5,7 @@ from datetime import date
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import insert, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from domain.analysis.registry import TopicRegistry, TopicRegistryInvalidMaterialError
@@ -18,8 +18,10 @@ from domain.article_workflow.models import (
     TargetWrite,
 )
 from domain.article_workflow.repository import ArticleWorkflow, WorkflowInvalidMaterial
+from domain.collection.errors import CollectionNotFoundError
 from domain.collection.models import ArticleQuery, MaterialQuery
 from domain.collection.reporting import CollectionReporting
+from domain.collection.tables import materials
 
 
 @pytest.mark.skipif(
@@ -164,7 +166,7 @@ def test_canonical_sources_rule_priority_and_manual_override():
     not os.environ.get("ANALYSIS_TEST_DATABASE_URL"),
     reason="독립 PostgreSQL 테스트 데이터베이스 필요",
 )
-def test_cafe_and_blog_materials_stay_out_of_news_analysis():
+def test_blog_materials_stay_out_of_news_analysis():
     async def check() -> None:
         engine = create_async_engine(os.environ["ANALYSIS_TEST_DATABASE_URL"])
         factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -172,7 +174,7 @@ def test_cafe_and_blog_materials_stay_out_of_news_analysis():
         try:
             async with factory() as session:
                 async with session.begin():
-                    for channel in ("cafearticle", "blog"):
+                    for channel in ("blog",):
                         await session.execute(
                             text(
                                 "INSERT INTO dw.search_items"
@@ -188,7 +190,6 @@ def test_cafe_and_blog_materials_stay_out_of_news_analysis():
                                         "title": f"교육 소식 {marker}",
                                         "summary": "경기도교육청",
                                         "url": f"https://example.test/{channel}/{marker}",
-                                        "container_name": "교사 카페",
                                     },
                                     ensure_ascii=False,
                                 ),
@@ -196,19 +197,13 @@ def test_cafe_and_blog_materials_stay_out_of_news_analysis():
                         )
                 reporting = CollectionReporting(session)
                 posts = await reporting.materials(MaterialQuery(group="posts", q=marker))
-                assert {item.kind for item in posts.items} == {"cafe", "blog"}
-                assert posts.total == 2
+                assert {item.kind for item in posts.items} == {"blog"}
+                assert posts.total == 1
                 assert all(item.summary == "경기도교육청" for item in posts.items)
                 assert all(item.content_preview == "" for item in posts.items)
-                assert (
-                    next(item for item in posts.items if item.kind == "cafe").cafe_name
-                    == "교사 카페"
-                )
-                assert (await reporting.materials(MaterialQuery(kind="cafe", q=marker))).total == 1
                 assert (await reporting.materials(MaterialQuery(group="news", q=marker))).total == 0
                 assert (await reporting.articles(ArticleQuery(q=marker))).total == 0
                 overview = await reporting.overview()
-                assert overview.kind_counts["cafe"] >= 1
                 assert overview.kind_counts["blog"] >= 1
                 assert overview.total_items == sum(overview.kind_counts.values())
                 for material in posts.items:
@@ -225,6 +220,35 @@ def test_cafe_and_blog_materials_stay_out_of_news_analysis():
                         )
                     with pytest.raises(TopicRegistryInvalidMaterialError):
                         await registry.canonical_article_topics(material.id)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(check())
+
+
+@pytest.mark.skipif(
+    not os.environ.get("ANALYSIS_TEST_DATABASE_URL"),
+    reason="독립 PostgreSQL 테스트 데이터베이스 필요",
+)
+def test_retired_materials_remain_stored_without_active_exposure():
+    async def check() -> None:
+        engine = create_async_engine(os.environ["ANALYSIS_TEST_DATABASE_URL"])
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        material_id = uuid4()
+        marker = uuid4().hex
+        try:
+            async with factory() as session:
+                async with session.begin():
+                    await session.execute(
+                        insert(materials).values(id=material_id, kind="cafe", title=marker)
+                    )
+                reporting = CollectionReporting(session)
+                assert (await reporting.materials(MaterialQuery(q=marker))).total == 0
+                with pytest.raises(CollectionNotFoundError):
+                    await reporting.material(material_id)
+                assert await session.scalar(
+                    select(materials.c.id).where(materials.c.id == material_id)
+                ) == material_id
         finally:
             await engine.dispose()
 

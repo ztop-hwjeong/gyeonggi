@@ -4,8 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-type SourceCode = Literal["bigkinds", "naver_news", "naver_blog", "naver_cafearticle"]
-type MaterialKind = Literal["news", "cafe", "blog"]
+type SourceCode = Literal["bigkinds", "naver_news", "naver_blog"]
+type MaterialKind = Literal["news", "blog"]
 type RequestMode = Literal["preview", "incremental", "backfill"]
 
 
@@ -35,12 +35,6 @@ SOURCES = (
         supports_backfill=False,
         description="최신순 검색과 커서 이후 증분 수집",
     ),
-    SourceInfo(
-        code="naver_cafearticle",
-        name="네이버 카페",
-        supports_backfill=False,
-        description="공개 검색 목록과 커서 이후 증분 수집",
-    ),
 )
 
 
@@ -52,7 +46,7 @@ class RuleDefinition(BaseModel):
     terms: tuple[Annotated[str, Field(min_length=1, max_length=100)], ...] = Field(
         min_length=1, max_length=10
     )
-    sources: tuple[SourceCode, ...] = Field(min_length=1, max_length=4)
+    sources: tuple[SourceCode, ...] = Field(min_length=1, max_length=3)
     enabled: bool = False
     interval_minutes: int = Field(default=15, ge=15, le=1440)
 
@@ -258,8 +252,6 @@ class StoredMaterial(BaseModel):
     title: str
     summary: str
     publisher: str | None
-    cafe_name: str | None
-    cafe_url: str | None
     blog_name: str | None
     blog_url: str | None
     published_at: datetime | None
