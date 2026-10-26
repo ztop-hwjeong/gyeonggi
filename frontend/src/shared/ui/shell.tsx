@@ -36,6 +36,15 @@ export function Shell({ children }: { children: ReactNode }) {
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [open]);
+  if (pathname === "/design")
+    return (
+      <QueryClientProvider client={queryClient}>
+        <a className="skip-link" href="#main">
+          본문으로 이동
+        </a>
+        {children}
+      </QueryClientProvider>
+    );
   return (
     <QueryClientProvider client={queryClient}>
       <a className="skip-link" href="#main">

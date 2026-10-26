@@ -259,8 +259,8 @@ function EditorForm({
       </div>
       {rule && (
         <section className="panel section-gap">
-          <details className="panel-body">
-            <summary>검색 조건 변경 이력</summary>
+          <div className="panel-body">
+            <h2>검색 조건 변경 이력</h2>
             <p className="hint section-gap">
               조건을 바꾸기 전 요청은 당시 조건으로 보존돼요.
             </p>
@@ -285,7 +285,7 @@ function EditorForm({
                 ))}
               </ul>
             )}
-          </details>
+          </div>
         </section>
       )}
     </>

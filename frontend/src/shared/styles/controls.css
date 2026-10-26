@@ -10,16 +10,16 @@
   color: var(--color-text-secondary);
 }
 .button {
-  min-height: 40px;
+  min-height: var(--size-control-m-height);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--size-control-m-gap);
   border: 0;
-  border-radius: 9px;
-  padding: 9px 16px;
-  font-size: 14px;
-  font-weight: 600;
+  border-radius: var(--radius-s);
+  padding: var(--space-8) var(--size-control-m-padding-x);
+  font-size: var(--size-control-m-font-size);
+  font-weight: var(--font-weight-medium);
   background: var(--color-action-primary);
   color: var(--color-action-foreground);
   white-space: nowrap;
@@ -88,9 +88,9 @@ textarea {
   background: var(--color-field-background);
   color: var(--color-field-foreground);
   border: 1px solid var(--color-field-border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  min-height: 42px;
+  border-radius: var(--radius-s);
+  padding: var(--space-8) var(--size-control-m-padding-x);
+  min-height: var(--size-control-m-height);
   max-width: 100%;
   font-size: 14px;
   caret-color: var(--color-action-primary);
@@ -115,8 +115,8 @@ input[type="checkbox"] {
 }
 .field > label,
 .field legend {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
 }
 .field-grid {
   display: grid;

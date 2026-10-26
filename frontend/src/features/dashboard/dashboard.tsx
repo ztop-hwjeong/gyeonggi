@@ -20,7 +20,6 @@ export function Dashboard() {
     <>
       <PageHeading
         title="수집 현황"
-        description="수집이 잘 되고 있는지 확인하고, 빠진 기간이나 오류에 대응해요."
         action={
           <Link href="/runs" className="button secondary">
             수집 이력 보기 <ArrowRightIcon size={18} />

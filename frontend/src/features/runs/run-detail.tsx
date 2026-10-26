@@ -231,13 +231,12 @@ export function RunDetail({ id }: { id: string }) {
           ))}
         </div>
         {(typeof run.summary.stop_reason === "string" || run.error) && (
-          <details className="technical-details section-gap">
-            <summary>운영 담당자에게 전달할 정보</summary>
+          <div className="technical-info section-gap">
             {typeof run.summary.stop_reason === "string" && (
               <p>{run.summary.stop_reason}</p>
             )}
             {run.error && <p>{run.error}</p>}
-          </details>
+          </div>
         )}
       </section>
       {days.length > 0 && (
