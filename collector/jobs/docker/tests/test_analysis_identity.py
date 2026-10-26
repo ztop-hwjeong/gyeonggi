@@ -93,9 +93,9 @@ def test_article_identity_and_exact_cache_across_sources() -> None:
             await dispatch_one(repository, cast(SyncPrefectClient, Client()), "analysis/deployment")
             is True
         )
-        run_id, attempt_id = await repository.claim(first_article, [], None, None)
+        run_id, attempt_id = await repository.claim(first_article, None, None)
         await repository.complete(run_id, attempt_id, {"article": {}}, {})
-        second_run_id, second_attempt = await repository.claim(second_article, [], None, None)
+        second_run_id, second_attempt = await repository.claim(second_article, None, None)
         await async_engine.dispose()
         return run_id, attempt_id, second_run_id, second_attempt
 

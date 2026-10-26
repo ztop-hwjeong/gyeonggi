@@ -14,7 +14,7 @@ class Topic(BaseModel):
 
     id: str = Field(pattern=r"^[a-z][a-z0-9-]{0,39}$")
     name: str = Field(min_length=1, max_length=80)
-    description: str = Field(min_length=1, max_length=400)
+    description: str = Field(default="", max_length=400)
     synonyms: list[str] = Field(default_factory=list, max_length=30)
 
     @field_validator("name")
@@ -25,24 +25,17 @@ class Topic(BaseModel):
         return value.strip()
 
 
-class PromotionPolicy(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    minimum_articles: int = Field(default=3, ge=2, le=100)
-    minimum_publishers: int = Field(default=2, ge=1, le=100)
-
-
 class TopicEvidenceCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=80)
-    description: str = Field(min_length=1, max_length=400)
+    description: str = Field(default="", max_length=400)
     source: str = Field(min_length=1, max_length=80)
     source_id: str = Field(min_length=1, max_length=2048)
     publisher: str = Field(min_length=1, max_length=200)
     quote: str = Field(min_length=1, max_length=500)
 
-    @field_validator("name", "description", "publisher", "quote")
+    @field_validator("name", "publisher", "quote")
     @classmethod
     def no_blank(cls, value: str) -> str:
         if not value.strip():
@@ -83,7 +76,7 @@ class TopicUpdate(BaseModel):
 
     version: int = Field(ge=1)
     name: str = Field(min_length=1, max_length=80)
-    description: str = Field(min_length=1, max_length=400)
+    description: str = Field(max_length=400)
     synonyms: list[str] = Field(default_factory=list, max_length=30)
 
     @field_validator("name")

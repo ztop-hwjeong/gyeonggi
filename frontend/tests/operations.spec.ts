@@ -567,9 +567,243 @@ test("통합 자료에서 유형별 목록을 구분한다", async ({ page }) =>
   await expect(page.getByText("경기일보")).toBeVisible();
   await page.getByRole("tab", { name: "카페글" }).click();
   await expect(page.getByText("교육 카페")).toBeVisible();
+  await expect(
+    page.getByRole("complementary", { name: "자료 분류" }),
+  ).toBeVisible();
   await expect(page.getByText("기사 제목")).toHaveCount(0);
   await page.getByRole("tab", { name: "블로그글" }).click();
   await expect(page.getByText("교육 블로그")).toBeVisible();
+});
+
+test("수집 자료 작업 영역은 데스크톱 가로 폭을 사용한다", async ({ page }) => {
+  const item = {
+    id: "66666666-6666-4666-8666-666666666666",
+    kind: "news",
+    title: "경기교육 정책 자료",
+    summary: "검색 요약",
+    publisher: "경기일보",
+    cafe_name: null,
+    cafe_url: null,
+    blog_name: null,
+    blog_url: null,
+    published_at: now,
+    sources: [],
+    content_preview: "본문 일부 내용",
+    has_body: true,
+  };
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname.replace("/api", "");
+    if (path === "/materials")
+      return route.fulfill({ json: { items: [item], total: 1 } });
+    if (path === "/tag-folders" || path === "/tags")
+      return route.fulfill({ json: [] });
+    if (path === "/tags/unfiled/summary")
+      return route.fulfill({ json: { tag_count: 0, material_count: 0 } });
+    if (path === "/analysis-targets") return route.fulfill({ json: [] });
+    return route.fulfill({
+      status: 500,
+      json: { detail: `예상하지 않은 API: ${path}` },
+    });
+  });
+  await page.setViewportSize({ width: 1920, height: 1000 });
+  await page.goto("/results");
+  await expect(page.locator("tbody tr")).toHaveCount(1);
+  const wide = await page
+    .locator("main")
+    .evaluate((element) => element.clientWidth);
+  expect(wide).toBeGreaterThanOrEqual(1680);
+  await page.screenshot({
+    path: "../.tmp/frontend/results-wide.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const standard = await page
+    .locator("main")
+    .evaluate((element) => element.clientWidth);
+  expect(standard).toBeGreaterThanOrEqual(1200);
+});
+
+test("미분류 태그를 폴더에 편입하고 기사 수를 갱신한다", async ({ page }) => {
+  const tagId = "topic-1";
+  const rootFolderId = "77777777-7777-4777-8777-777777777777";
+  const folderId = "44444444-4444-4444-8444-444444444444";
+  const articleId = "55555555-5555-4555-8555-555555555555";
+  let attached = false;
+  const article = {
+    id: articleId,
+    title: "태그가 붙은 기사",
+    summary: "요약",
+    publisher: "경기일보",
+    published_at: now,
+    sources: [],
+    inclusion: "include",
+    inclusion_reason: null,
+    content_preview: "본문 일부",
+    has_body: true,
+  };
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname.replace("/api", "");
+    if (path === "/materials")
+      return route.fulfill({ json: { items: [], total: 0 } });
+    if (path === "/analysis-targets") return route.fulfill({ json: [] });
+    if (path === "/tag-folders")
+      return route.fulfill({
+        json: [
+          {
+            id: rootFolderId,
+            parent_id: null,
+            name: "정책 자료",
+            version: 1,
+            tag_count: attached ? 1 : 0,
+            material_count: attached ? 1 : 0,
+            created_at: now,
+            updated_at: now,
+          },
+          {
+            id: folderId,
+            parent_id: rootFolderId,
+            name: "검토",
+            version: 1,
+            tag_count: attached ? 1 : 0,
+            material_count: attached ? 1 : 0,
+            created_at: now,
+            updated_at: now,
+          },
+        ],
+      });
+    if (path === "/tags/unfiled/summary")
+      return route.fulfill({
+        json: { tag_count: attached ? 0 : 1, material_count: attached ? 0 : 1 },
+      });
+    if (path === "/tags")
+      return route.fulfill({
+        json: [
+          {
+            id: tagId,
+            name: "교권",
+            description: "",
+            synonyms: [],
+            version: 1,
+            material_count: 1,
+            folder_ids: attached ? [folderId] : [],
+            created_at: now,
+            updated_at: now,
+          },
+        ],
+      });
+    if (path === "/articles")
+      return route.fulfill({ json: { items: [article], total: 1 } });
+    if (
+      path === `/tag-folders/${folderId}/tags` &&
+      request.method() === "POST"
+    ) {
+      attached = true;
+      return route.fulfill({ status: 204 });
+    }
+    return route.fulfill({
+      status: 500,
+      json: { detail: `예상하지 않은 API: ${path}` },
+    });
+  });
+  await page.goto("/results?kind=news");
+  await expect(
+    page.getByRole("button", { name: "미분류 태그 펼치기" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "미분류 태그 펼치기" }).click();
+  await page.screenshot({
+    path: "../.tmp/frontend/results-tree.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "교권", exact: true }).click();
+  await expect(page.getByText("태그가 붙은 기사")).toBeVisible();
+  await page.getByRole("checkbox", { name: "교권" }).check();
+  await page.getByRole("button", { name: "정책 자료 펼치기" }).click();
+  await page.getByRole("button", { name: "검토", exact: true }).click();
+  await page.getByRole("button", { name: "선택 태그 편입" }).click();
+  await expect(
+    page.getByRole("button", { name: "검토", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator(".tree-folder")
+      .filter({ hasText: "검토" })
+      .getByText("자료 1"),
+  ).toBeVisible();
+  await expect(page.getByText("전체 1건")).toBeVisible();
+  await expect(
+    page.locator(".tree-folder").first().locator("small"),
+  ).toHaveText("자료 0");
+  await page.getByRole("button", { name: "검토 펼치기" }).click();
+  await expect(
+    page.getByRole("button", { name: "교권", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "../.tmp/frontend/results-tree.png",
+    fullPage: true,
+  });
+});
+
+test("사이드바를 접어도 메뉴 이동과 선택 상태를 유지한다", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/results");
+  const menuIcons = page.locator(".sidebar nav a svg");
+  const expandedPositions = await menuIcons.evaluateAll((icons) =>
+    icons.map((icon) => {
+      const { x, y } = icon.getBoundingClientRect();
+      return { x, y };
+    }),
+  );
+  await page.getByRole("button", { name: "메뉴 접기" }).click();
+  await expect(page.locator(".sidebar")).toHaveAttribute(
+    "data-collapsed",
+    "true",
+  );
+  await expect
+    .poll(async () =>
+      page
+        .locator(".sidebar")
+        .evaluate((element) =>
+          Math.round(element.getBoundingClientRect().width),
+        ),
+    )
+    .toBe(64);
+  expect(
+    await menuIcons.evaluateAll((icons) =>
+      icons.map((icon) => {
+        const { x, y } = icon.getBoundingClientRect();
+        return { x, y };
+      }),
+    ),
+  ).toEqual(expandedPositions);
+  await page.screenshot({
+    path: "../.tmp/frontend/results-collapsed-sidebar.png",
+    fullPage: true,
+  });
+  await expect(
+    page.getByRole("link", { name: "수집 자료", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await page.reload();
+  await expect(page.locator(".sidebar")).toHaveAttribute(
+    "data-collapsed",
+    "true",
+  );
+  await page.getByRole("link", { name: "키워드 관리", exact: true }).click();
+  await expect(page).toHaveURL(/keywords/);
+  await page.getByRole("button", { name: "메뉴 펼치기" }).click();
+  await expect(page.locator(".sidebar")).toHaveAttribute(
+    "data-collapsed",
+    "false",
+  );
+  await expect
+    .poll(async () =>
+      page
+        .locator(".sidebar")
+        .evaluate((element) =>
+          Math.round(element.getBoundingClientRect().width),
+        ),
+    )
+    .toBe(224);
 });
 
 test("저장 전 다른 메뉴로 이동하면 변경 내용 유실을 확인한다", async ({

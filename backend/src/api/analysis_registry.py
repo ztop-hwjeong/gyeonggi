@@ -36,11 +36,14 @@ class ReportRequest(BaseModel):
     analysis_date: date
     article_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=100)
     target_id: UUID | None = None
+    folder_id: UUID | None = None
+    include_descendants: bool = True
 
     @model_validator(mode="after")
     def one_selection(self) -> "ReportRequest":
-        if (self.article_ids is None) == (self.target_id is None):
-            raise ValueError("기사 또는 분석 대상 중 하나만 선택")
+        selections = (self.article_ids, self.target_id, self.folder_id)
+        if sum(value is not None for value in selections) != 1:
+            raise ValueError("기사, 분석 대상, 폴더 중 하나만 선택")
         if self.article_ids is not None and len(set(self.article_ids)) != len(self.article_ids):
             raise ValueError("기사 중복")
         return self
@@ -53,7 +56,14 @@ async def render_analysis_report(
     renderer: FromDishka[TemplateRenderer],
 ) -> Response:
     try:
-        data = await report_data(registry, body.analysis_date, body.article_ids, body.target_id)
+        data = await report_data(
+            registry,
+            body.analysis_date,
+            body.article_ids,
+            body.target_id,
+            body.folder_id,
+            body.include_descendants,
+        )
         content = await run_in_threadpool(renderer.render, "education-audit-press", "1.1.0", data)
     except TopicRegistryNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error

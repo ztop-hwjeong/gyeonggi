@@ -4,8 +4,8 @@ from sqlalchemy import func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from analysis.client import MODEL, PROMPT, PROMPT_HASH
-from analysis.models import Article, Topic
-from analysis.tables import article_contents, attempts, queue, runs, topics
+from analysis.models import Article
+from analysis.tables import article_contents, attempts, queue, runs
 
 
 class AnalysisRepository:
@@ -36,35 +36,13 @@ class AnalysisRepository:
             )
         return Article.model_validate(row) if row else None
 
-    async def topics(self) -> list[Topic]:
-        async with self.sessions() as session:
-            rows = (
-                (
-                    await session.execute(
-                        select(topics.c.id, topics.c.name, topics.c.description, topics.c.synonyms)
-                        .where(topics.c.merged_into.is_(None), topics.c.archived_at.is_(None))
-                        .order_by(topics.c.name)
-                    )
-                )
-                .mappings()
-                .all()
-            )
-        return [Topic.model_validate(row) for row in rows]
-
     async def claim(
         self,
         article: Article,
-        catalog: list[Topic],
         flow_run_id: UUID | None,
         task_run_id: UUID | None,
     ) -> tuple[UUID, int]:
         run_id = uuid4()
-        snapshot = {
-            "topics": [
-                {"id": topic.id, "name": topic.name, "description": topic.description}
-                for topic in catalog
-            ]
-        }
         async with self.sessions() as session, session.begin():
             await session.execute(
                 insert(runs).values(
@@ -77,7 +55,6 @@ class AnalysisRepository:
                     prompt=PROMPT,
                     prompt_hash=PROMPT_HASH,
                     status="running",
-                    catalog_snapshot=snapshot,
                 )
             )
             await self._queue_status(session, article.article_id, article.content_hash, "running")

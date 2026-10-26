@@ -212,6 +212,16 @@ class ArticleQuery(Pagination):
     q: str = Field(default="", max_length=100)
     inclusion: Literal["all", "included", "excluded"] = "all"
     target_id: UUID | None = None
+    tag_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{0,39}$")
+    folder_id: UUID | None = None
+    include_descendants: bool = True
+    unfiled: bool = False
+
+    @model_validator(mode="after")
+    def one_tag_scope(self) -> Self:
+        if sum((self.tag_id is not None, self.folder_id is not None, self.unfiled)) > 1:
+            raise ValueError("태그, 폴더, 미분류 중 하나만 선택")
+        return self
 
 
 class MaterialQuery(Pagination):
@@ -219,11 +229,17 @@ class MaterialQuery(Pagination):
     group: Literal["news", "posts"] | None = None
     source: SourceCode | None = None
     q: str = Field(default="", max_length=100)
+    tag_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{0,39}$")
+    folder_id: UUID | None = None
+    include_descendants: bool = True
+    unfiled: bool = False
 
     @model_validator(mode="after")
     def one_kind_scope(self) -> Self:
         if self.kind is not None and self.group is not None:
             raise ValueError("자료 유형 또는 자료 그룹 중 하나만 선택")
+        if sum((self.tag_id is not None, self.folder_id is not None, self.unfiled)) > 1:
+            raise ValueError("태그, 폴더, 미분류 중 하나만 선택")
         return self
 
 

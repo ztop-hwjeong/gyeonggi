@@ -6,17 +6,10 @@ from prefect.cache_policies import NO_CACHE
 from prefect.context import FlowRunContext, TaskRunContext
 
 from analysis.cache import PostgresResponseCache
-from analysis.client import AnalysisError, OpenAIArticleAnalyzer
+from analysis.client import OpenAIArticleAnalyzer
 from analysis.container import create_analysis_container
-from analysis.models import AnalysisSettings, Article
+from analysis.models import AnalysisSettings
 from analysis.repository import AnalysisRepository
-
-
-def validate(article: Article, draft_topic_ids: list[str], quote: str, topic_ids: set[str]) -> None:
-    if not set(draft_topic_ids).issubset(topic_ids):
-        raise AnalysisError("알 수 없는 표준 주제 ID")
-    if quote not in article.title and quote not in article.body:
-        raise AnalysisError("기사 인용 근거 불일치")
 
 
 @task(name="analyze-article", cache_policy=NO_CACHE, persist_result=False, retries=2)
@@ -29,27 +22,16 @@ async def analyze_article(source: str, source_id: str, content_hash: str) -> UUI
             article = await repository.article(source, source_id, content_hash)
             if article is None:
                 raise ValueError("저장된 기사 본문 없음")
-            topics = await repository.topics()
             flow_context = FlowRunContext.get()
             task_context = TaskRunContext.get()
             run_id, attempt_id = await repository.claim(
                 article,
-                topics,
                 flow_context.flow_run.id if flow_context and flow_context.flow_run else None,
                 task_context.task_run.id if task_context and task_context.task_run else None,
             )
             try:
                 analyzer = await scoped.get(OpenAIArticleAnalyzer)
-                draft, usage = await analyzer.analyze(article, topics)
-                validate(
-                    article,
-                    draft.article.topic_ids,
-                    draft.article.quote,
-                    {topic.id for topic in topics},
-                )
-                for candidate in draft.topic_candidates:
-                    if candidate.quote not in article.title and candidate.quote not in article.body:
-                        raise AnalysisError("새 주제 후보 인용 근거 불일치")
+                draft, usage = await analyzer.analyze(article)
                 await cache.acommit()
                 await repository.complete(run_id, attempt_id, draft.model_dump(mode="json"), usage)
             except Exception as error:

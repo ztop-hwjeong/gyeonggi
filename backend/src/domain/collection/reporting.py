@@ -6,6 +6,7 @@ from sqlalchemy import Date, cast, func, literal, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from domain.analysis.membership import tagged_materials
 from domain.article_workflow.tables import article_inclusions, article_target_links
 from domain.collection.errors import (
     CollectionInvalidMaterialError,
@@ -30,6 +31,7 @@ from domain.collection.tables import (
     material_sources,
     materials,
 )
+from domain.tag_folders.repository import TagFolderRepository
 
 
 class CollectionReporting:
@@ -151,6 +153,16 @@ class CollectionReporting:
                     materials.c.summary.ilike(pattern, escape="\\"),
                 )
             )
+        if query.tag_id is not None:
+            criteria.append(tagged_materials({query.tag_id}))
+        if query.folder_id is not None:
+            tag_ids = await TagFolderRepository(self._session).folder_tag_ids(
+                query.folder_id, query.include_descendants
+            )
+            criteria.append(tagged_materials(tag_ids))
+        if query.unfiled:
+            tag_ids = await TagFolderRepository(self._session).unfiled_tag_ids()
+            criteria.append(tagged_materials(tag_ids))
         total = (
             await self.rows(
                 select(func.count().label("count")).select_from(materials).where(*criteria)
@@ -284,6 +296,16 @@ class CollectionReporting:
                 )
                 .exists()
             )
+        if query.tag_id is not None:
+            criteria.append(tagged_materials({query.tag_id}, kind="news"))
+        if query.folder_id is not None:
+            tag_ids = await TagFolderRepository(self._session).folder_tag_ids(
+                query.folder_id, query.include_descendants
+            )
+            criteria.append(tagged_materials(set(tag_ids), kind="news"))
+        if query.unfiled:
+            tag_ids = await TagFolderRepository(self._session).unfiled_tag_ids()
+            criteria.append(tagged_materials(tag_ids, kind="news"))
         base = materials.outerjoin(
             article_inclusions, article_inclusions.c.article_id == materials.c.id
         )

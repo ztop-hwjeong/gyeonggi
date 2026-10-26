@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from domain.analysis.membership import tagged_materials
 from domain.analysis.registry_models import (
     AnalysisAttemptInfo,
     AnalysisRunInfo,
@@ -15,7 +16,6 @@ from domain.analysis.registry_models import (
     ArticleTopicOverride,
     CandidateInfo,
     CanonicalArticleTopicLink,
-    PromotionPolicy,
     RegistryEvidenceResult,
     Topic,
     TopicEvidenceCreate,
@@ -42,6 +42,8 @@ from domain.analysis.tables import (
 )
 from domain.article_workflow.tables import article_inclusions, article_target_links
 from domain.collection.tables import article_contents, material_sources, materials
+from domain.tag_folders.repository import TagFolderRepository
+from domain.tag_folders.tables import folder_tags
 
 
 class TopicRegistryError(RuntimeError):
@@ -61,9 +63,8 @@ class TopicRegistryInvalidMaterialError(TopicRegistryError):
 
 
 class TopicRegistry:
-    def __init__(self, session: AsyncSession, policy: PromotionPolicy | None = None) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         self._session = session
-        self._policy = policy or PromotionPolicy()
 
     @asynccontextmanager
     async def _transaction(self) -> AsyncGenerator[None]:
@@ -116,6 +117,12 @@ class TopicRegistry:
             )
             rows = (await self._session.execute(statement)).mappings().all()
             return [TopicInfo.model_validate(row) for row in rows]
+
+    async def folder_topic_ids(self, folder_id: UUID, include_descendants: bool = True) -> set[str]:
+        async with self._transaction():
+            return await TagFolderRepository(self._session).folder_tag_ids(
+                folder_id, include_descendants
+            )
 
     async def ensure_topics(self, topics: list[Topic]) -> list[TopicInfo]:
         """초기 표준 주제만 등록하고 기존 사람 수정 내용은 보존."""
@@ -223,7 +230,11 @@ class TopicRegistry:
             return [AnalysisRunInfo.model_validate(row) for row in rows]
 
     async def report_articles(
-        self, article_ids: list[UUID] | None, target_id: UUID | None
+        self,
+        article_ids: list[UUID] | None,
+        target_id: UUID | None,
+        folder_id: UUID | None = None,
+        include_descendants: bool = True,
     ) -> list[dict]:
         async with self._transaction():
             content = (
@@ -245,16 +256,25 @@ class TopicRegistry:
                 .limit(1)
                 .lateral("applied")
             )
-            criteria = (
-                materials.c.id.in_(article_ids)
-                if article_ids is not None
-                else exists(
+            if folder_id is not None:
+                tag_ids = await TagFolderRepository(self._session).folder_tag_ids(
+                    folder_id, include_descendants
+                )
+                selection = tagged_materials(set(tag_ids), kind="news")
+            elif article_ids is not None:
+                selection = materials.c.id.in_(article_ids)
+            else:
+                selection = exists(
                     select(article_target_links.c.article_id).where(
                         article_target_links.c.article_id == materials.c.id,
                         article_target_links.c.target_id == target_id,
                         article_target_links.c.decision == "include",
                     )
                 )
+            inclusion_scope = (
+                []
+                if folder_id is not None
+                else [func.coalesce(article_inclusions.c.decision, "include") == "include"]
             )
             statement = (
                 select(
@@ -271,8 +291,8 @@ class TopicRegistry:
                 .outerjoin(applied, literal(True))
                 .where(
                     materials.c.kind == "news",
-                    func.coalesce(article_inclusions.c.decision, "include") == "include",
-                    criteria,
+                    *inclusion_scope,
+                    selection,
                 )
                 .order_by(
                     materials.c.published_at.desc().nulls_last(),
@@ -412,6 +432,7 @@ class TopicRegistry:
             if matches:
                 if matches[0]["archived_at"] is not None:
                     raise TopicRegistryConflictError("보관된 주제명·별칭 재사용 불가")
+                await self._insert_ai_link(evidence.source, evidence.source_id, matches[0]["id"])
                 return RegistryEvidenceResult(kind="existing_topic", topic_id=matches[0]["id"])
             candidate_id = uuid5(NAMESPACE_URL, f"gyeonggi-topic:{normalized}")
             await self._session.execute(
@@ -454,51 +475,75 @@ class TopicRegistry:
                 return RegistryEvidenceResult(
                     kind="promoted", topic_id=candidate.promoted_topic_id, candidate=candidate
                 )
-            if (
-                candidate.article_count >= self._policy.minimum_articles
-                and candidate.publisher_count >= self._policy.minimum_publishers
-            ):
-                topic_id = (
-                    "topic-" + uuid5(NAMESPACE_URL, f"gyeonggi-topic-id:{normalized}").hex[:12]
+            topic_id = "topic-" + uuid5(NAMESPACE_URL, f"gyeonggi-topic-id:{normalized}").hex[:12]
+            await self._session.execute(
+                insert(analysis_topics_table)
+                .values(
+                    id=topic_id,
+                    name=candidate.name,
+                    description=candidate.description,
+                    synonyms=[],
                 )
-                await self._session.execute(
-                    insert(analysis_topics_table)
-                    .values(
-                        id=topic_id,
-                        name=candidate.name,
-                        description=candidate.description,
-                        synonyms=[],
-                    )
-                    .on_conflict_do_nothing(index_elements=[analysis_topics_table.c.id])
-                )
-                await self._session.execute(
-                    insert(topic_labels)
-                    .values(id=topic_id, normalized_name=normalized, is_canonical=True)
-                    .on_conflict_do_nothing(index_elements=[topic_labels.c.normalized_name])
-                )
-                await self._session.execute(
-                    update(candidates)
-                    .where(candidates.c.id == candidate_id)
-                    .values(promoted_topic_id=topic_id)
-                )
-                evidence_rows = (
-                    (
-                        await self._session.execute(
-                            select(evidence_table.c.source, evidence_table.c.source_id).where(
-                                evidence_table.c.candidate_id == candidate_id
-                            )
+                .on_conflict_do_nothing(index_elements=[analysis_topics_table.c.id])
+            )
+            await self._session.execute(
+                insert(topic_labels)
+                .values(id=topic_id, normalized_name=normalized, is_canonical=True)
+                .on_conflict_do_nothing(index_elements=[topic_labels.c.normalized_name])
+            )
+            await self._session.execute(
+                update(candidates)
+                .where(candidates.c.id == candidate_id)
+                .values(promoted_topic_id=topic_id)
+            )
+            evidence_rows = (
+                (
+                    await self._session.execute(
+                        select(evidence_table.c.source, evidence_table.c.source_id).where(
+                            evidence_table.c.candidate_id == candidate_id
                         )
                     )
-                    .mappings()
-                    .all()
                 )
-                for row in evidence_rows:
-                    await self._insert_ai_link(row["source"], row["source_id"], topic_id)
-                candidate = await self._candidate(candidate_id)
-                return RegistryEvidenceResult(
-                    kind="promoted", topic_id=topic_id, candidate=candidate
+                .mappings()
+                .all()
+            )
+            for row in evidence_rows:
+                await self._insert_ai_link(row["source"], row["source_id"], topic_id)
+            candidate = await self._candidate(candidate_id)
+            return RegistryEvidenceResult(kind="promoted", topic_id=topic_id, candidate=candidate)
+
+    async def ensure_ai_tag(self, name: str) -> str | None:
+        normalized = normalize_label(name)
+        async with self._transaction():
+            existing = (
+                (
+                    await self._session.execute(
+                        select(topic_labels.c.id, analysis_topics_table.c.archived_at)
+                        .join(
+                            analysis_topics_table, analysis_topics_table.c.id == topic_labels.c.id
+                        )
+                        .where(topic_labels.c.normalized_name == normalized)
+                    )
                 )
-            return RegistryEvidenceResult(kind="candidate", candidate=candidate)
+                .mappings()
+                .one_or_none()
+            )
+            if existing is not None:
+                return existing["id"] if existing["archived_at"] is None else None
+            tag_id = "topic-" + uuid5(NAMESPACE_URL, f"gyeonggi-topic-id:{normalized}").hex[:12]
+            await self._session.execute(
+                insert(analysis_topics_table)
+                .values(id=tag_id, name=name.strip(), description="", synonyms=[])
+                .on_conflict_do_nothing(index_elements=[analysis_topics_table.c.id])
+            )
+            await self._session.execute(
+                insert(topic_labels)
+                .values(id=tag_id, normalized_name=normalized, is_canonical=True)
+                .on_conflict_do_nothing(index_elements=[topic_labels.c.normalized_name])
+            )
+            return await self._session.scalar(
+                select(topic_labels.c.id).where(topic_labels.c.normalized_name == normalized)
+            )
 
     async def _candidate(self, candidate_id: UUID) -> CandidateInfo:
         rows = (
@@ -688,6 +733,18 @@ class TopicRegistry:
             )
             if not rows or not target_rows:
                 raise TopicRegistryNotFoundError("병합할 주제 없음")
+            await self._session.execute(
+                insert(folder_tags)
+                .from_select(
+                    [folder_tags.c.folder_id, folder_tags.c.tag_id],
+                    select(folder_tags.c.folder_id, literal(body.target_id)).where(
+                        folder_tags.c.tag_id == topic_id
+                    ),
+                )
+                .on_conflict_do_nothing(
+                    index_elements=[folder_tags.c.folder_id, folder_tags.c.tag_id]
+                )
+            )
             links = (
                 (
                     await self._session.execute(

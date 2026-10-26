@@ -21,9 +21,36 @@
 }
 @media (max-width: 800px) {
   .sidebar {
+    width: 224px;
     visibility: hidden;
     transform: translateX(-100%);
     transition: transform var(--motion-duration-normal);
+  }
+  .sidebar[data-collapsed="true"] {
+    width: 224px;
+  }
+  .sidebar[data-collapsed="true"] .brand,
+  .sidebar[data-collapsed="true"] .workspace-name,
+  .sidebar[data-collapsed="true"] .sidebar-footer {
+    display: flex;
+  }
+  .sidebar[data-collapsed="true"] .workspace-name {
+    display: block;
+    visibility: visible;
+  }
+  .sidebar[data-collapsed="true"] nav a {
+    justify-content: flex-start;
+    padding-inline: 12px;
+  }
+  .sidebar[data-collapsed="true"] nav a span {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+  .sidebar-collapse {
+    display: none;
   }
   .sidebar.open {
     visibility: visible;
@@ -36,6 +63,9 @@
     top: 10px;
   }
   .workspace {
+    margin-left: 0;
+  }
+  .workspace[data-sidebar-collapsed="true"] {
     margin-left: 0;
   }
   .topbar {
@@ -127,6 +157,9 @@
     animation: none;
   }
   .sidebar,
+  .workspace,
+  .tree-folder,
+  .tree-tag,
   .button {
     transition: none;
   }

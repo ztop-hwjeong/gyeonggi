@@ -14,31 +14,39 @@ async def report_data(
     analysis_date: date,
     article_ids: list[UUID] | None = None,
     target_id: UUID | None = None,
+    folder_id: UUID | None = None,
+    include_descendants: bool = True,
 ) -> dict[str, Any]:
-    if (article_ids is None) == (target_id is None):
-        raise AnalysisReportError("기사 또는 분석 대상 중 하나만 선택")
-    rows = await registry.report_articles(article_ids, target_id)
+    if sum(value is not None for value in (article_ids, target_id, folder_id)) != 1:
+        raise AnalysisReportError("기사, 분석 대상, 폴더 중 하나만 선택")
+    rows = await registry.report_articles(article_ids, target_id, folder_id, include_descendants)
     if not rows:
-        raise AnalysisReportError("출력할 포함 기사 없음")
+        raise AnalysisReportError("출력할 기사 없음")
     if article_ids is not None and set(article_ids) != {row["id"] for row in rows}:
         raise AnalysisReportError("없는 기사 또는 제외된 기사 포함")
     topics = await registry.topics()
+    if folder_id is not None:
+        selected_tags = await registry.folder_topic_ids(folder_id, include_descendants)
+        topics = [topic for topic in topics if topic.id in selected_tags]
     articles: list[dict] = []
     for number, row in enumerate(rows, 1):
         applied = row["applied_result"]
-        names = await registry.canonical_topic_names(row["id"])
+        if folder_id is None:
+            names = await registry.canonical_topic_names(row["id"])
+        else:
+            links = await registry.canonical_article_topics(row["id"])
+            included_ids = {
+                link.topic_id for link in links if link.origin in ("ai", "manual_include")
+            }
+            names = [topic.name for topic in topics if topic.id in included_ids]
         articles.append(
             {
                 "number": number,
                 "keywords": ", ".join(names),
                 "publisher": row["publisher"] or "",
                 "title": row["title"],
-                "sentiment": applied["sentiment"] if applied else "",
-                "reason": (
-                    applied["reason"] + (" (검토 필요)" if applied["review_required"] else "")
-                    if applied
-                    else "분석 전"
-                ),
+                "sentiment": applied.get("sentiment", "") if applied else "",
+                "reason": "",
             }
         )
     return {

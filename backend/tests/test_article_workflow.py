@@ -132,7 +132,7 @@ def test_canonical_sources_rule_priority_and_manual_override():
                     TopicRegistry(session), date(2026, 10, 26), target_id=target.id
                 )
                 assert len(data["articles"]) == 1
-                assert data["articles"][0]["reason"] == "분석 전"
+                assert data["articles"][0]["reason"] == ""
                 registry = TopicRegistry(session)
                 topic_id = f"topic-{source_id}"
                 await registry.ensure_topics(

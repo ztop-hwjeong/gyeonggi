@@ -11,3 +11,6 @@ export type MaterialKind = components["schemas"]["MaterialKind"];
 export type MaterialItem = components["schemas"]["StoredMaterial"];
 export type MaterialDetail = components["schemas"]["StoredMaterialDetail"];
 export type MaterialPage = components["schemas"]["StoredMaterialPage"];
+export type TagFolder = components["schemas"]["FolderInfo"];
+export type Tag = components["schemas"]["TagInfo"];
+export type UnfiledTagSummary = components["schemas"]["UnfiledTagSummary"];

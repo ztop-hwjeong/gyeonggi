@@ -15,18 +15,6 @@ article_contents = Table(
     schema="dw",
 )
 
-topics = Table(
-    "analysis_topics",
-    metadata,
-    Column("id", Text),
-    Column("name", Text),
-    Column("description", Text),
-    Column("synonyms", JSONB),
-    Column("merged_into", Text),
-    Column("archived_at", DateTime(timezone=True)),
-    schema="ops",
-)
-
 runs = Table(
     "analysis_runs",
     metadata,

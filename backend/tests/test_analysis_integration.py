@@ -1,12 +1,13 @@
 import asyncio
+import json
 import os
 from datetime import date
 from pathlib import Path
 from typing import Literal, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from domain.analysis.application import AnalysisApplication, AnalysisApplyError
@@ -19,7 +20,12 @@ from domain.analysis.registry_models import (
 )
 from domain.analysis.reporting import report_data
 from domain.analysis.tables import topic_history, topics
+from domain.article_workflow.models import DecisionWrite
 from domain.article_workflow.repository import ArticleWorkflow
+from domain.collection.models import ArticleQuery
+from domain.collection.reporting import CollectionReporting
+from domain.tag_folders.models import FolderCreate, FolderTagAttach
+from domain.tag_folders.repository import TagFolderRepository
 from domain.templates.catalog import TemplateCatalog
 from domain.templates.rendering import TemplateRenderer
 
@@ -138,6 +144,96 @@ def test_saved_single_article_apply_override_and_report():
     "ANALYSIS_TEST_DATABASE_URL" not in os.environ,
     reason="독립 PostgreSQL 테스트 데이터베이스 필요",
 )
+def test_flat_tags_apply_without_generated_candidate_or_reason():
+    async def check() -> None:
+        engine = create_async_engine(os.environ["ANALYSIS_TEST_DATABASE_URL"])
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        prefix = "t" + uuid4().hex[:12]
+        source_id = f"https://example.test/{prefix}/flat"
+        tag_name = f"{prefix} 교육 현안"
+        run_id = uuid4()
+        try:
+            async with factory() as session:
+                async with session.begin():
+                    detail_run_id = uuid4()
+                    await session.execute(
+                        text("INSERT INTO ops.article_detail_runs(id,summary) VALUES (:id,'{}')"),
+                        {"id": detail_run_id},
+                    )
+                    await session.execute(
+                        text(
+                            "INSERT INTO dw.article_contents"
+                            "(source,source_id,content_hash,title,body,stage,run_id,provenance) "
+                            "VALUES ('bigkinds',:source_id,:hash,:title,:body,'http',:run_id,'{}')"
+                        ),
+                        {
+                            "source_id": source_id,
+                            "hash": "b" * 64,
+                            "title": "교육 현안 보도",
+                            "body": "경기도교육청 발표",
+                            "run_id": detail_run_id,
+                        },
+                    )
+                    await session.execute(
+                        text(
+                            "INSERT INTO ops.analysis_runs"
+                            "(id,article_id,source,source_id,content_hash,model,prompt,status,"
+                            "catalog_snapshot,model_draft) VALUES "
+                            "(:id,(SELECT material_id FROM dw.material_sources WHERE "
+                            "source='bigkinds' AND source_id=:source_id),'bigkinds',:source_id,"
+                            ":hash,'gpt-6-luna','테스트 프롬프트','completed','{}',"
+                            "CAST(:draft AS jsonb))"
+                        ),
+                        {
+                            "id": run_id,
+                            "source_id": source_id,
+                            "hash": "b" * 64,
+                            "draft": json.dumps({"tags": [tag_name], "sentiment": "중립"}),
+                        },
+                    )
+                registry = TopicRegistry(session)
+                application = AnalysisApplication(registry, ArticleWorkflow(session))
+                applied = await application.apply(run_id)
+                assert applied["sentiment"] == "중립"
+                assert "reason" not in applied
+                assert len(applied["topic_ids"]) == 1
+                async with session.begin():
+                    candidate_count = await session.scalar(
+                        select(func.count())
+                        .select_from(text("ops.analysis_topic_candidates"))
+                        .where(text("name = :name"))
+                        .params(name=tag_name)
+                    )
+                assert candidate_count == 0
+                folder_repository = TagFolderRepository(session)
+                folder = await folder_repository.save_folder(FolderCreate(name=f"폴더 {prefix}"))
+                await folder_repository.attach_tags(
+                    folder.id, FolderTagAttach(tag_ids=applied["topic_ids"])
+                )
+                article_id = UUID(applied["article_id"])
+                await ArticleWorkflow(session).override(
+                    article_id, DecisionWrite(decision="exclude", reason="별도 검토")
+                )
+                page = await CollectionReporting(session).articles(
+                    ArticleQuery(folder_id=folder.id)
+                )
+                assert page.total == 1
+                assert page.items[0].id == article_id
+                await session.rollback()
+                data = await report_data(registry, date(2026, 10, 26), folder_id=folder.id)
+                assert data["articles"][0]["reason"] == ""
+                assert data["articles"][0]["sentiment"] == "중립"
+                assert [issue["title"] for issue in data["issues"]] == [tag_name]
+        finally:
+            await engine.dispose()
+
+    asyncio.run(check())
+
+
+@pytest.mark.skipif(
+    "ANALYSIS_TEST_DATABASE_URL" not in os.environ,
+    reason="독립 PostgreSQL 테스트 데이터베이스 필요",
+)
 def test_candidate_promotion_backfills_prior_articles_and_preserves_override():
     async def check() -> None:
         engine = create_async_engine(os.environ["ANALYSIS_TEST_DATABASE_URL"])
@@ -160,8 +256,12 @@ def test_candidate_promotion_backfills_prior_articles_and_preserves_override():
                             )
                         )
                     )
-                assert [result.kind for result in results] == ["candidate", "candidate", "promoted"]
-                topic_id = results[2].topic_id
+                assert [result.kind for result in results] == [
+                    "promoted",
+                    "existing_topic",
+                    "existing_topic",
+                ]
+                topic_id = results[0].topic_id
                 assert topic_id is not None
                 for index in (1, 2, 3):
                     links = await registry.article_topics("bigkinds", f"{prefix}-{index}")

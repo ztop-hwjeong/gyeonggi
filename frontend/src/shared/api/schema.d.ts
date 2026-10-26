@@ -915,6 +915,198 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/materials/{material_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Material Tags */
+        get: operations["material_tags_materials__material_id__tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/materials/{material_id}/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Override Material Tag */
+        put: operations["override_material_tag_materials__material_id__tags__tag_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tags */
+        get: operations["tags_tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags/unfiled/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Unfiled Summary */
+        get: operations["unfiled_summary_tags_unfiled_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tag-folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Folders */
+        get: operations["folders_tag_folders_get"];
+        put?: never;
+        /** Create Folder */
+        post: operations["create_folder_tag_folders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tag-folders/tag-moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move Tag */
+        post: operations["move_tag_tag_folders_tag_moves_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tag-folders/{folder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Folder */
+        put: operations["update_folder_tag_folders__folder_id__put"];
+        post?: never;
+        /** Delete Folder */
+        delete: operations["delete_folder_tag_folders__folder_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tag-folders/{folder_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Attach Tags */
+        post: operations["attach_tags_tag_folders__folder_id__tags_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tag-folders/{folder_id}/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Detach Tag */
+        delete: operations["detach_tag_tag_folders__folder_id__tags__tag_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Events */
+        get: operations["events_events_get"];
+        put?: never;
+        /** Create Event */
+        post: operations["create_event_events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/{event_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Event */
+        get: operations["event_events__event_id__get"];
+        /** Update Event */
+        put: operations["update_event_events__event_id__put"];
+        post?: never;
+        /** Delete Event */
+        delete: operations["delete_event_events__event_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1328,6 +1520,77 @@ export interface components {
             /** Matched Rule Ids */
             matched_rule_ids: string[];
         };
+        /** EventCreate */
+        EventCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Tag Ids */
+            tag_ids?: string[];
+            /** Folder Ids */
+            folder_ids?: string[];
+        };
+        /** EventInfo */
+        EventInfo: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Version */
+            version: number;
+            /** Targets */
+            targets: components["schemas"]["EventTargetInfo"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** EventTargetInfo */
+        EventTargetInfo: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "tag" | "folder";
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** EventUpdate */
+        EventUpdate: {
+            /** Name */
+            name: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Tag Ids */
+            tag_ids?: string[];
+            /** Folder Ids */
+            folder_ids?: string[];
+            /** Version */
+            version: number;
+        };
         /** FilterConditions */
         FilterConditions: {
             /** All */
@@ -1406,6 +1669,64 @@ export interface components {
              */
             enabled: boolean;
         };
+        /** FolderCreate */
+        FolderCreate: {
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: string | null;
+        };
+        /** FolderInfo */
+        FolderInfo: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Parent Id */
+            parent_id: string | null;
+            /** Name */
+            name: string;
+            /** Version */
+            version: number;
+            /** Tag Count */
+            tag_count: number;
+            /** Material Count */
+            material_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** FolderTagAttach */
+        FolderTagAttach: {
+            /** Tag Ids */
+            tag_ids: string[];
+        };
+        /** FolderTagMove */
+        FolderTagMove: {
+            /** Tag Id */
+            tag_id: string;
+            /** Source Folder Id */
+            source_folder_id: string | null;
+            /** Target Folder Id */
+            target_folder_id: string | null;
+        };
+        /** FolderUpdate */
+        FolderUpdate: {
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Version */
+            version: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1431,6 +1752,21 @@ export interface components {
         JsonValue: unknown;
         /** @enum {string} */
         MaterialKind: "news" | "cafe" | "blog";
+        /** MaterialTagLink */
+        MaterialTagLink: {
+            /**
+             * Material Id
+             * Format: uuid
+             */
+            material_id: string;
+            /** Tag Id */
+            tag_id: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "ai" | "manual_include" | "manual_exclude" | "conflict";
+        };
         /** Overview */
         Overview: {
             /** Total Items */
@@ -1512,6 +1848,13 @@ export interface components {
             article_ids?: string[] | null;
             /** Target Id */
             target_id?: string | null;
+            /** Folder Id */
+            folder_id?: string | null;
+            /**
+             * Include Descendants
+             * @default true
+             */
+            include_descendants: boolean;
         };
         /** RequestInfo */
         RequestInfo: {
@@ -2079,6 +2422,33 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /** TagInfo */
+        TagInfo: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Synonyms */
+            synonyms: string[];
+            /** Version */
+            version: number;
+            /** Material Count */
+            material_count: number;
+            /** Folder Ids */
+            folder_ids: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** TargetInfo */
         TargetInfo: {
             kind: components["schemas"]["TargetKind"];
@@ -2195,7 +2565,10 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Description */
+            /**
+             * Description
+             * @default
+             */
             description: string;
             /** Synonyms */
             synonyms?: string[];
@@ -2238,6 +2611,13 @@ export interface components {
             description: string;
             /** Synonyms */
             synonyms?: string[];
+        };
+        /** UnfiledTagSummary */
+        UnfiledTagSummary: {
+            /** Tag Count */
+            tag_count: number;
+            /** Material Count */
+            material_count: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -2908,6 +3288,10 @@ export interface operations {
                 q?: string;
                 inclusion?: "all" | "included" | "excluded";
                 target_id?: string | null;
+                tag_id?: string | null;
+                folder_id?: string | null;
+                include_descendants?: boolean;
+                unfiled?: boolean;
             };
             header?: never;
             path?: never;
@@ -2944,6 +3328,10 @@ export interface operations {
                 group?: ("news" | "posts") | null;
                 source?: components["schemas"]["SourceCode"] | null;
                 q?: string;
+                tag_id?: string | null;
+                folder_id?: string | null;
+                include_descendants?: boolean;
+                unfiled?: boolean;
             };
             header?: never;
             path?: never;
@@ -4335,6 +4723,528 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["EvaluationResult"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    material_tags_materials__material_id__tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                material_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialTagLink"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    override_material_tag_materials__material_id__tags__tag_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                material_id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArticleTopicOverride"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tags_tags_get: {
+        parameters: {
+            query?: {
+                folder_id?: string | null;
+                include_descendants?: boolean;
+                unfiled?: boolean;
+                inclusion?: "all" | "included" | "excluded";
+                kind?: ("news" | "cafe" | "blog") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unfiled_summary_tags_unfiled_summary_get: {
+        parameters: {
+            query?: {
+                inclusion?: string;
+                kind?: components["schemas"]["MaterialKind"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnfiledTagSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    folders_tag_folders_get: {
+        parameters: {
+            query?: {
+                inclusion?: "all" | "included" | "excluded";
+                kind?: ("news" | "cafe" | "blog") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_folder_tag_folders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_tag_tag_folders_tag_moves_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolderTagMove"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_folder_tag_folders__folder_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_folder_tag_folders__folder_id__delete: {
+        parameters: {
+            query: {
+                version: number;
+            };
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_tags_tag_folders__folder_id__tags_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolderTagAttach"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_tag_tag_folders__folder_id__tags__tag_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    events_events_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                occurred_from?: string | null;
+                occurred_until?: string | null;
+                tag_id?: string | null;
+                folder_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_event_events_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    event_events__event_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_event_events__event_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_event_events__event_id__delete: {
+        parameters: {
+            query: {
+                version: number;
+            };
+            header?: never;
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

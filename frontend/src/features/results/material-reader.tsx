@@ -14,9 +14,9 @@ import type {
 } from "../articles/types";
 
 const kindLabels = {
-  news: { content: "기사 내용", name: "언론사" },
-  cafe: { content: "카페글 내용", name: "카페명" },
-  blog: { content: "블로그글 내용", name: "블로그명" },
+  news: { content: "자료 내용", name: "언론사" },
+  cafe: { content: "자료 내용", name: "카페명" },
+  blog: { content: "자료 내용", name: "블로그명" },
 };
 
 export function MaterialReader({

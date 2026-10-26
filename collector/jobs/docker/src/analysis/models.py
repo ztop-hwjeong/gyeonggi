@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,15 +18,6 @@ class AnalysisDispatchSettings(BaseSettings):
     deployment_name: str = "analyze-stored-article/stored-article-analysis"
 
 
-class Topic(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    id: str
-    name: str
-    description: str
-    synonyms: list[str]
-
-
 class Article(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -38,27 +29,16 @@ class Article(BaseModel):
     body: str
 
 
-class ArticleProposal(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    topic_ids: list[str] = Field(max_length=20)
-    keywords: list[str] = Field(max_length=20)
-    sentiment: Literal["", "긍정", "중립", "부정"]
-    quote: str = Field(min_length=1, max_length=500)
-    reason: str = Field(min_length=1, max_length=500)
-    review_required: bool
-
-
-class TopicCandidate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(min_length=1, max_length=80)
-    description: str = Field(min_length=1, max_length=400)
-    quote: str = Field(min_length=1, max_length=500)
-
-
 class ModelDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    article: ArticleProposal
-    topic_candidates: list[TopicCandidate] = Field(max_length=10)
+    tags: list[str] = Field(max_length=20)
+    sentiment: Literal["", "긍정", "중립", "부정"]
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, tags: list[str]) -> list[str]:
+        normalized = [" ".join(tag.split()) for tag in tags]
+        if any(not tag or len(tag) > 80 for tag in normalized):
+            raise ValueError("태그는 공백이 아닌 80자 이하 문구 필요")
+        return list(dict.fromkeys(normalized))

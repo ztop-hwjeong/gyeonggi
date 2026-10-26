@@ -16,10 +16,13 @@ from domain.analysis.registry import TopicRegistry
 from domain.article_workflow.repository import ArticleWorkflow
 from domain.collection.reporting import CollectionReporting
 from domain.collection.repository import CollectionRepository
+from domain.events.repository import EventRepository
 from domain.monitoring.config import MonitoringSettings
 from domain.monitoring.errors import MonitoringUnavailableError
 from domain.monitoring.prefect import PrefectMonitor
 from domain.monitoring.repository import MonitoringRepository
+from domain.tag_folders.material_tags import MaterialTags
+from domain.tag_folders.repository import TagFolderRepository
 from domain.templates.archive import TemplateArchive
 from domain.templates.catalog import TemplateCatalog
 from domain.templates.rendering import TemplateRenderer
@@ -86,6 +89,18 @@ class AnalysisProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def topic_registry(self, session: AsyncSession) -> TopicRegistry:
         return TopicRegistry(session)
+
+    @provide(scope=Scope.REQUEST)
+    def tag_folders(self, session: AsyncSession) -> TagFolderRepository:
+        return TagFolderRepository(session)
+
+    @provide(scope=Scope.REQUEST)
+    def material_tags(self, session: AsyncSession) -> MaterialTags:
+        return MaterialTags(session)
+
+    @provide(scope=Scope.REQUEST)
+    def events(self, session: AsyncSession) -> EventRepository:
+        return EventRepository(session)
 
     @provide(scope=Scope.REQUEST)
     def application(

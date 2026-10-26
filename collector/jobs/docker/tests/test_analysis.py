@@ -5,13 +5,13 @@ from uuid import UUID, uuid4
 
 import pytest
 from langchain_core.messages import AIMessage
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 from sqlalchemy.engine import Engine
 
 from analysis.cache import PostgresResponseCache
-from analysis.client import MODEL, OpenAIArticleAnalyzer
+from analysis.client import MODEL, AnalysisError, OpenAIArticleAnalyzer
 from analysis.container import create_analysis_container
-from analysis.models import Article, ArticleProposal, ModelDraft, Topic
+from analysis.models import Article, ModelDraft
 from analysis.repository import AnalysisRepository
 from flows import analysis
 
@@ -30,10 +30,6 @@ def article() -> Article:
 @pytest.fixture(autouse=True)
 def backend_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BACKEND_API_URL", "http://backend:8000")
-
-
-def topic() -> Topic:
-    return Topic(id="policy", name="정책", description="교육정책", synonyms=[])
 
 
 def task_container(monkeypatch: pytest.MonkeyPatch, repository: Mock, analyzer: Mock, cache: Mock):
@@ -64,58 +60,36 @@ def task_container(monkeypatch: pytest.MonkeyPatch, repository: Mock, analyzer: 
 def test_single_article_analysis_saves_raw_draft(monkeypatch: pytest.MonkeyPatch) -> None:
     repository = Mock()
     repository.article = AsyncMock(return_value=article())
-    repository.topics = AsyncMock(return_value=[topic()])
     repository.claim = AsyncMock(return_value=(uuid4(), 1))
     repository.complete = AsyncMock()
     repository.fail = AsyncMock()
-    draft = ModelDraft(
-        article=ArticleProposal(
-            topic_ids=["policy"],
-            keywords=["정책"],
-            sentiment="중립",
-            quote="정책을 발표했다",
-            reason="정책 발표 전달",
-            review_required=False,
-        ),
-        topic_candidates=[],
-    )
+    draft = ModelDraft(tags=["교육정책"], sentiment="중립")
 
     analyzer = Mock(analyze=AsyncMock(return_value=(draft, {"total_tokens": 10})))
     cache = Mock(acommit=AsyncMock())
     task_container(monkeypatch, repository, analyzer, cache)
     run_id = asyncio.run(analysis.analyze_article.fn("test", "article/1", "a" * 64))
     assert run_id == repository.claim.return_value[0]
-    analyzer.analyze.assert_awaited_once_with(article(), [topic()])
+    analyzer.analyze.assert_awaited_once_with(article())
     cache.acommit.assert_awaited_once()
     repository.complete.assert_awaited_once_with(
         run_id, 1, draft.model_dump(mode="json"), {"total_tokens": 10}
     )
     repository.fail.assert_not_awaited()
+    repository.topics.assert_not_called()
 
 
-def test_rejects_invalid_quote_and_marks_run_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_analysis_error_marks_run_failed(monkeypatch: pytest.MonkeyPatch) -> None:
     repository = Mock()
     repository.article = AsyncMock(return_value=article())
-    repository.topics = AsyncMock(return_value=[topic()])
     repository.claim = AsyncMock(return_value=(uuid4(), 1))
     repository.complete = AsyncMock()
     repository.fail = AsyncMock()
 
-    draft = ModelDraft(
-        article=ArticleProposal(
-            topic_ids=["policy"],
-            keywords=[],
-            sentiment="",
-            quote="없는 인용",
-            reason="근거 부족",
-            review_required=True,
-        ),
-        topic_candidates=[],
-    )
-    analyzer = Mock(analyze=AsyncMock(return_value=(draft, {})))
+    analyzer = Mock(analyze=AsyncMock(side_effect=AnalysisError("분석 미완료")))
     cache = Mock(acommit=AsyncMock())
     task_container(monkeypatch, repository, analyzer, cache)
-    with pytest.raises(analysis.AnalysisError, match="인용 근거"):
+    with pytest.raises(AnalysisError, match="분석 미완료"):
         asyncio.run(analysis.analyze_article.fn("test", "article/1", "a" * 64))
     repository.fail.assert_awaited_once()
     cache.acommit.assert_not_awaited()
@@ -124,17 +98,7 @@ def test_rejects_invalid_quote_and_marks_run_failed(monkeypatch: pytest.MonkeyPa
 def test_langchain_receives_one_article_and_structured_format(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    draft = ModelDraft(
-        article=ArticleProposal(
-            topic_ids=["policy"],
-            keywords=[],
-            sentiment="",
-            quote="정책 발표",
-            reason="근거 부족",
-            review_required=True,
-        ),
-        topic_candidates=[],
-    )
+    draft = ModelDraft(tags=["교육정책"], sentiment="")
     calls: list[dict] = []
 
     class Client:
@@ -154,13 +118,23 @@ def test_langchain_receives_one_article_and_structured_format(
     result, usage = asyncio.run(
         OpenAIArticleAnalyzer(
             SecretStr("test"), PostgresResponseCache(cast(Engine, Mock()))
-        ).analyze(article(), [topic()])
+        ).analyze(article())
     )
     assert result == draft and usage["total_tokens"] is None
     assert calls[0]["model"] == MODEL
     prompt = str(calls[1]["messages"][1].content)
-    assert '"article"' in prompt and '"articles"' not in prompt
+    assert '"title"' in prompt and '"body"' in prompt and '"topics"' not in prompt
     assert "article/1" not in prompt and "11111111" not in prompt
+
+
+def test_tags_are_cleaned_without_extra_model_fields() -> None:
+    draft = ModelDraft(tags=[" 정책  개선 ", "정책 개선", "학교폭력"], sentiment="")
+    assert draft.model_dump() == {"tags": ["정책 개선", "학교폭력"], "sentiment": ""}
+    with pytest.raises(ValidationError):
+        ModelDraft(tags=[" "], sentiment="")
+    with pytest.raises(ValidationError):
+        ModelDraft(tags=["x" * 81], sentiment="")
+    assert set(ModelDraft.model_json_schema()["properties"]) == {"tags", "sentiment"}
 
 
 def test_dishka_loads_database_secret_asynchronously(monkeypatch: pytest.MonkeyPatch) -> None:
