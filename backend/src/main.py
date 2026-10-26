@@ -6,14 +6,23 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from api.analysis_registry import router as analysis_registry_router
+from api.article_workflow import router as article_workflow_router
 from api.collection import router as collection_router
 from api.health import router as health_router
 from api.monitoring import router as monitoring_router
 from api.templates import router as templates_router
 from config import Settings
 from container import create_container
+from domain.analysis.registry import (
+    TopicRegistryConflictError,
+    TopicRegistryError,
+    TopicRegistryInvalidMaterialError,
+    TopicRegistryNotFoundError,
+)
 from domain.collection.errors import (
     CollectionConflictError,
+    CollectionInvalidMaterialError,
     CollectionNotFoundError,
     CollectionUnavailableError,
 )
@@ -44,10 +53,16 @@ def create_app(container: AsyncContainer | None = None) -> FastAPI:
     app.include_router(templates_router)
     app.include_router(monitoring_router)
     app.include_router(collection_router)
+    app.include_router(analysis_registry_router)
+    app.include_router(article_workflow_router)
 
     @app.exception_handler(CollectionNotFoundError)
     async def collection_not_found(request: Request, error: CollectionNotFoundError):
         return JSONResponse(status_code=404, content={"detail": str(error)})
+
+    @app.exception_handler(CollectionInvalidMaterialError)
+    async def collection_invalid_material(request: Request, error: CollectionInvalidMaterialError):
+        return JSONResponse(status_code=422, content={"detail": str(error)})
 
     @app.exception_handler(CollectionConflictError)
     async def collection_conflict(request: Request, error: CollectionConflictError):
@@ -64,6 +79,22 @@ def create_app(container: AsyncContainer | None = None) -> FastAPI:
     @app.exception_handler(RunNotFoundError)
     async def run_not_found(request: Request, error: RunNotFoundError):
         return JSONResponse(status_code=404, content={"detail": "수집 실행 없음"})
+
+    @app.exception_handler(TopicRegistryNotFoundError)
+    async def topic_not_found(request: Request, error: TopicRegistryNotFoundError):
+        return JSONResponse(status_code=404, content={"detail": str(error)})
+
+    @app.exception_handler(TopicRegistryConflictError)
+    async def topic_conflict(request: Request, error: TopicRegistryConflictError):
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
+    @app.exception_handler(TopicRegistryInvalidMaterialError)
+    async def topic_invalid_material(request: Request, error: TopicRegistryInvalidMaterialError):
+        return JSONResponse(status_code=422, content={"detail": str(error)})
+
+    @app.exception_handler(TopicRegistryError)
+    async def topic_unavailable(request: Request, error: TopicRegistryError):
+        return JSONResponse(status_code=503, content={"detail": str(error)})
 
     setup_dishka(container=container, app=app)
     return app

@@ -1,0 +1,121 @@
+{
+  "code": "education-audit-press",
+  "name": "경기도교육청 국정감사 언론보도 분석",
+  "version": "1.1.0",
+  "filename": "template.xlsx",
+  "sha256": "d08ce91c53e8f2e25c712872193dff350943d60440910fa4d48085430af01d0c",
+  "sheets": [
+    {
+      "code": "summary",
+      "name": "요약_통계"
+    },
+    {
+      "code": "articles",
+      "name": "보도기사별_분류상세"
+    }
+  ],
+  "variables": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "description": "경기도교육청 국정감사 언론보도 분석 보고서 입력 변수",
+    "properties": {
+      "analysis_date": {
+        "type": "string",
+        "format": "date",
+        "description": "분석 기준일. YYYY-MM-DD 형식의 날짜를 표시 문구에 삽입"
+      },
+      "issues": {
+        "type": "array",
+        "description": "주요 이슈 목록. 각 행에 주제와 쉼표로 구분한 키워드를 입력하며, 키워드 중 하나라도 기사 키워드에 포함되면 기사당 한 번 집계. 별도의 기타 분류 없음",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "주요 이슈 주제"
+            },
+            "keywords": {
+              "type": "string",
+              "description": "쉼표 구분 검색어. 예: a, b. 앞뒤 공백과 빈 항목은 무시하며 같은 기사의 중복 일치는 한 번만 집계"
+            }
+          },
+          "required": [
+            "title",
+            "keywords"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "articles": {
+        "type": "array",
+        "description": "기사 입력 목록. 제목이 있는 행을 통계 대상으로 집계",
+        "items": {
+          "type": "object",
+          "properties": {
+            "number": {
+              "type": "integer",
+              "description": "기사 순번",
+              "minimum": 1
+            },
+            "keywords": {
+              "type": "string",
+              "description": "기사의 주요 키워드"
+            },
+            "publisher": {
+              "type": "string",
+              "description": "언론사 또는 출처"
+            },
+            "title": {
+              "type": "string",
+              "description": "기사 제목. 통계 대상 행의 식별 기준"
+            },
+            "sentiment": {
+              "type": "string",
+              "description": "언론 논조. 미분류 상태는 빈칸으로 입력",
+              "enum": [
+                "",
+                "긍정",
+                "중립",
+                "부정"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "description": "분류 세부 사유"
+            }
+          },
+          "required": [
+            "number",
+            "keywords",
+            "publisher",
+            "title",
+            "sentiment",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "analysis_date",
+      "issues",
+      "articles"
+    ],
+    "additionalProperties": false
+  },
+  "engine": "templexl",
+  "tables": {
+    "issues": [
+      "title",
+      "keywords"
+    ],
+    "articles": [
+      "number",
+      "keywords",
+      "publisher",
+      "title",
+      "sentiment",
+      "reason"
+    ]
+  }
+}

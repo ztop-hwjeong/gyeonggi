@@ -117,3 +117,43 @@ deployments:
     schedules: null
     concurrency_limit: 1
     work_pool: *naver-pool
+  - name: stored-article-analysis
+    entrypoint: src/flows/analysis.py:analyze_stored_article
+    tags: [docker, analysis]
+    schedules: null
+    work_pool:
+      name: docker-collector
+      job_variables:
+        image: gyeonggi-collector:local
+        image_pull_policy: Never
+        networks: [gyeonggi-collector]
+        auto_remove: true
+        env:
+          PREFECT_API_URL: http://prefect-server:4200/api
+          DATABASE_HOST: postgres
+          DATABASE_PORT: "5432"
+          DATABASE_NAME: gyeonggi
+          DATABASE_USER: gyeonggi
+          DATABASE_PASSWORD_BLOCK: collector-postgres-password
+          OPENAI_API_KEY_BLOCK: openai-api-key
+          BACKEND_API_URL: http://backend:8000
+  - name: article-analysis-dispatch
+    entrypoint: src/flows/analysis_dispatch.py:dispatch_article_analysis
+    tags: [docker, analysis, dispatch]
+    schedules:
+      - interval: 60
+        active: true
+    work_pool:
+      name: docker-collector
+      job_variables:
+        image: gyeonggi-collector:local
+        image_pull_policy: Never
+        networks: [gyeonggi-collector]
+        auto_remove: true
+        env:
+          PREFECT_API_URL: http://prefect-server:4200/api
+          DATABASE_HOST: postgres
+          DATABASE_PORT: "5432"
+          DATABASE_NAME: gyeonggi
+          DATABASE_USER: gyeonggi
+          DATABASE_PASSWORD_BLOCK: collector-postgres-password

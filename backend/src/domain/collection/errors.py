@@ -2,6 +2,10 @@ class CollectionNotFoundError(Exception):
     pass
 
 
+class CollectionInvalidMaterialError(Exception):
+    pass
+
+
 class CollectionConflictError(Exception):
     pass
 

@@ -7,9 +7,14 @@ dependencies = [
     "collector-http",
     "collector-storage",
     "curl-cffi>=0.16.3",
+    "dishka>=1.10.1",
+    "httpx>=0.28.1",
+    "langchain-openai==1.7.2",
+    "openai==3.37.0",
     "prefect>=3.9.0",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.16.1",
+    "sqlalchemy[asyncio]>=2.1.6",
 ]
 
 [dependency-groups]

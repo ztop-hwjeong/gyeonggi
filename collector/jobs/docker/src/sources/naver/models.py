@@ -56,6 +56,8 @@ class Listing(BaseModel):
     published_at: datetime | None = None
     published_on: str | None = None
     container_name: str | None = None
+    blog_name: str | None = None
+    blog_url: HttpUrl | None = None
     content_kind: Literal["listing_excerpt"] = "listing_excerpt"
 
 

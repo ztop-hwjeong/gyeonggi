@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 type SourceCode = Literal["bigkinds", "naver_news", "naver_blog", "naver_cafearticle"]
+type MaterialKind = Literal["news", "cafe", "blog"]
 type RequestMode = Literal["preview", "incremental", "backfill"]
 
 
@@ -209,11 +210,69 @@ class ResultPage(BaseModel):
 class ArticleQuery(Pagination):
     source: SourceCode | None = None
     q: str = Field(default="", max_length=100)
+    inclusion: Literal["all", "included", "excluded"] = "all"
+    target_id: UUID | None = None
 
 
-class StoredArticle(ResultItem):
+class MaterialQuery(Pagination):
+    kind: MaterialKind | None = None
+    group: Literal["news", "posts"] | None = None
+    source: SourceCode | None = None
+    q: str = Field(default="", max_length=100)
+
+    @model_validator(mode="after")
+    def one_kind_scope(self) -> Self:
+        if self.kind is not None and self.group is not None:
+            raise ValueError("자료 유형 또는 자료 그룹 중 하나만 선택")
+        return self
+
+
+class ArticleSource(BaseModel):
     source: SourceCode
+    source_id: str
+    url: str | None
+    original_url: str | None
+    canonical_url: str | None
     first_seen_at: datetime
+
+
+class StoredMaterial(BaseModel):
+    id: UUID
+    kind: MaterialKind
+    title: str
+    summary: str
+    publisher: str | None
+    cafe_name: str | None
+    cafe_url: str | None
+    blog_name: str | None
+    blog_url: str | None
+    published_at: datetime | None
+    sources: list[ArticleSource]
+    content_preview: str
+    has_body: bool
+
+
+class StoredMaterialDetail(StoredMaterial):
+    body: str | None
+    content_hash: str | None
+    body_collected_at: datetime | None
+
+
+class StoredMaterialPage(BaseModel):
+    items: list[StoredMaterial]
+    total: int
+
+
+class StoredArticle(BaseModel):
+    id: UUID
+    title: str
+    summary: str
+    publisher: str | None
+    published_at: datetime | None
+    sources: list[ArticleSource]
+    inclusion: Literal["include", "exclude"]
+    inclusion_reason: str | None
+    content_preview: str
     has_body: bool
 
 
@@ -222,13 +281,9 @@ class StoredArticlePage(BaseModel):
     total: int
 
 
-class ArticleIdentity(BaseModel):
-    source: SourceCode
-    source_id: str = Field(min_length=1, max_length=2048)
-
-
 class StoredArticleDetail(StoredArticle):
     body: str | None
+    content_hash: str | None
     body_collected_at: datetime | None
 
 
@@ -239,6 +294,7 @@ class DailyCount(BaseModel):
 
 class Overview(BaseModel):
     total_items: int
+    kind_counts: dict[MaterialKind, int]
     active_rules: int
     total_rules: int
     queued_requests: int

@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from domain.collection.errors import CollectionConflictError, CollectionNotFoundError
 from domain.collection.models import (
-    ArticleIdentity,
     ArticleQuery,
     RequestQuery,
     RequestReview,
@@ -152,16 +151,22 @@ def test_rule_versions_request_snapshot_idempotency_and_cancellation():
                     assert before.partial_requests >= 1
                     assert len(after.daily_counts) == 7
                     results = await reporting.articles(ArticleQuery(source="bigkinds", q="100%"))
-                    assert any(item.source_id == article_id for item in results.items)
+                    assert any(
+                        source.source_id == article_id
+                        for item in results.items
+                        for source in item.sources
+                    )
                     assert all(
                         "100%" in item.title or "100%" in item.summary for item in results.items
                     )
-                    identity = ArticleIdentity(source="bigkinds", source_id=article_id)
+                    identity = next(
+                        item.id
+                        for item in results.items
+                        if any(source.source_id == article_id for source in item.sources)
+                    )
                     assert (await reporting.article(identity)).body is None
                     with pytest.raises(CollectionNotFoundError):
-                        await reporting.article(
-                            ArticleIdentity(source="naver_blog", source_id=article_id)
-                        )
+                        await reporting.article(uuid4())
                     detail_run = uuid4()
                     await session.execute(
                         text("INSERT INTO ops.article_detail_runs(id,summary) VALUES (:id,'{}')"),

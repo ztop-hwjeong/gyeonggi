@@ -17,8 +17,8 @@ from domain.templates.models import TemplateReference
 
 def test_template_lookup_and_exact_download(client: TestClient, template_directory: Path):
     templates = client.get("/templates").json()
-    assert len(templates) == 1
-    metadata = templates[0]
+    assert {item["version"] for item in templates} == {"1.0.0", "1.1.0"}
+    metadata = next(item for item in templates if item["version"] == "1.0.0")
     base = f"/templates/{metadata['code']}/versions"
     assert client.get(base).json() == templates
     assert client.get(f"{base}/1.0.0").json() == metadata
@@ -80,7 +80,7 @@ def test_versions_are_independent(template_directory: Path, tmp_path: Path):
     metadata["version"] = "2.0.0"
     manifest.write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
     catalog = TemplateCatalog(directory)
-    assert len(catalog.list_versions("education-audit-press")) == 2
+    assert len(catalog.list_versions("education-audit-press")) == 3
     assert catalog.get("education-audit-press", "1.0.0").version == "1.0.0"
     assert catalog.file("education-audit-press", "2.0.0") == second / "template.xlsx"
 
@@ -178,6 +178,18 @@ def test_report_template_has_blank_article_inputs_and_calculated_statistics(
         assert cells["B14"].findtext("{*}is/{*}t") == "#{{issues | noheader}}"
         assert cells["D14"].find("{*}f") is not None
         assert "{{analysis_date}}" in cells["B3"].findtext("{*}f", "")
+
+
+def test_new_template_counts_full_topic_names_without_wildcards(template_directory: Path):
+    formulas = []
+    for version in ("1.0.0", "1.1.0"):
+        file = template_directory / "education-audit-press" / version / "template.xlsx"
+        with ZipFile(file) as book:
+            sheet = ElementTree.fromstring(book.read("xl/worksheets/sheet1.xml"))
+        cell = next(item for item in sheet.findall(".//{*}c") if item.get("r") == "D14")
+        formulas.append(cell.findtext("{*}f", ""))
+    assert "SEARCH(_xlpm.terms,_xlpm.articles)" in formulas[0]
+    assert 'FIND(","&_xlpm.terms&",",","&SUBSTITUTE(_xlpm.articles,", ",",")&",")' in formulas[1]
 
 
 def test_variable_schema_accepts_arbitrary_issue_count(

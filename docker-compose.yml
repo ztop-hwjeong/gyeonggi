@@ -169,6 +169,21 @@ services:
         condition: service_healthy
     networks: [collector]
 
+  analysis-init:
+    profiles: [collector]
+    image: gyeonggi-prefect-init:local
+    build:
+      context: ./infra/prefect
+    command: [python, src/register_analysis.py]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_API_KEY_BLOCK: openai-api-key
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    networks: [collector]
+
   windows-worker:
     profiles: [collector]
     provider:
@@ -206,6 +221,8 @@ services:
       prefect-init:
         condition: service_completed_successfully
       naver-init:
+        condition: service_completed_successfully
+      analysis-init:
         condition: service_completed_successfully
       rustfs-init:
         condition: service_completed_successfully

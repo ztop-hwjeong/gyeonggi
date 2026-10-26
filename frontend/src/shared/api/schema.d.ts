@@ -310,7 +310,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/articles/detail": {
+    "/materials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Materials */
+        get: operations["materials_materials_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/materials/{material_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Material */
+        get: operations["material_materials__material_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/articles/{article_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -318,7 +352,7 @@ export interface paths {
             cookie?: never;
         };
         /** Article */
-        get: operations["article_articles_detail_get"];
+        get: operations["article_articles__article_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -500,10 +534,487 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/analysis/reports/education-audit-press/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render Analysis Report */
+        post: operations["render_analysis_report_analysis_reports_education_audit_press_render_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Topics */
+        get: operations["topics_analysis_topics_get"];
+        put?: never;
+        /** Create Topics */
+        post: operations["create_topics_analysis_topics_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis/topic-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Candidates */
+        get: operations["candidates_analysis_topic_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis/runs/{run_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Analysis */
+        post: operations["apply_analysis_analysis_runs__run_id__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run */
+        get: operations["run_analysis_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis/runs/{run_id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Analysis Attempts */
+        get: operations["analysis_attempts_analysis_runs__run_id__attempts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis/articles/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Article Analysis Runs */
+        get: operations["article_analysis_runs_analysis_articles_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis/topics/{topic_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Topic */
+        put: operations["update_topic_analysis_topics__topic_id__put"];
+        post?: never;
+        /** Archive Topic */
+        delete: operations["archive_topic_analysis_topics__topic_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis/topics/{topic_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Merge Topic */
+        post: operations["merge_topic_analysis_topics__topic_id__merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis/articles/{article_id}/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Article Topics */
+        get: operations["article_topics_analysis_articles__article_id__topics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis/articles/{article_id}/topics/{topic_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Override Article Topic */
+        put: operations["override_article_topic_analysis_articles__article_id__topics__topic_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Targets */
+        get: operations["targets_analysis_targets_get"];
+        put?: never;
+        /** Create Target */
+        post: operations["create_target_analysis_targets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis-targets/{target_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Target */
+        put: operations["update_target_analysis_targets__target_id__put"];
+        post?: never;
+        /** Archive Target */
+        delete: operations["archive_target_analysis_targets__target_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/article-filter-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Filter Rules */
+        get: operations["filter_rules_article_filter_rules_get"];
+        put?: never;
+        /** Create Filter Rule */
+        post: operations["create_filter_rule_article_filter_rules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/article-filter-rules/reapply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reapply Filter Rules */
+        post: operations["reapply_filter_rules_article_filter_rules_reapply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/article-filter-rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Filter Rule */
+        put: operations["update_filter_rule_article_filter_rules__rule_id__put"];
+        post?: never;
+        /** Delete Filter Rule */
+        delete: operations["delete_filter_rule_article_filter_rules__rule_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/article-filter-rules/{rule_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Filter Rule Versions */
+        get: operations["filter_rule_versions_article_filter_rules__rule_id__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/articles/{article_id}/inclusion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Article Inclusion */
+        get: operations["article_inclusion_articles__article_id__inclusion_get"];
+        /** Override Inclusion */
+        put: operations["override_inclusion_articles__article_id__inclusion_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/articles/{article_id}/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Article Targets */
+        get: operations["article_targets_articles__article_id__targets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/articles/{article_id}/targets/{target_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Override Target */
+        put: operations["override_target_articles__article_id__targets__target_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/articles/{article_id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Decision History */
+        get: operations["decision_history_articles__article_id__decisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/articles/{article_id}/filter-evaluation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Evaluate Filters */
+        post: operations["evaluate_filters_articles__article_id__filter_evaluation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnalysisAttemptInfo */
+        AnalysisAttemptInfo: {
+            /** Id */
+            id: number;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Prefect Flow Run Id */
+            prefect_flow_run_id: string | null;
+            /** Prefect Task Run Id */
+            prefect_task_run_id: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "completed" | "failed";
+            /** Error */
+            error: string | null;
+            /** Usage */
+            usage: {
+                [key: string]: unknown;
+            };
+            /** Model Draft */
+            model_draft: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+        };
+        /** AnalysisRunInfo */
+        AnalysisRunInfo: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Article Id
+             * Format: uuid
+             */
+            article_id: string;
+            /** Source */
+            source: string;
+            /** Source Id */
+            source_id: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Model */
+            model: string;
+            /** Prompt */
+            prompt: string | null;
+            /** Prompt Hash */
+            prompt_hash: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "completed" | "failed";
+            /** Catalog Snapshot */
+            catalog_snapshot: {
+                [key: string]: unknown;
+            };
+            /** Model Draft */
+            model_draft: {
+                [key: string]: unknown;
+            } | null;
+            /** Applied Result */
+            applied_result: {
+                [key: string]: unknown;
+            } | null;
+            /** Usage */
+            usage: {
+                [key: string]: unknown;
+            };
+            /** Error */
+            error: string | null;
+            /** Lease Expires At */
+            lease_expires_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** ArticlePage */
         ArticlePage: {
             /** Items */
@@ -514,6 +1025,23 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        };
+        /** ArticleSource */
+        ArticleSource: {
+            source: components["schemas"]["SourceCode"];
+            /** Source Id */
+            source_id: string;
+            /** Url */
+            url: string | null;
+            /** Original Url */
+            original_url: string | null;
+            /** Canonical Url */
+            canonical_url: string | null;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
         };
         /** ArticleStatus */
         ArticleStatus: {
@@ -530,6 +1058,14 @@ export interface components {
             status: "collected" | "failed";
             selected_stage: components["schemas"]["Stage"] | null;
         };
+        /** ArticleTopicOverride */
+        ArticleTopicOverride: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "include" | "exclude" | "release";
+        };
         /** AttemptCount */
         AttemptCount: {
             stage: components["schemas"]["Stage"];
@@ -540,6 +1076,49 @@ export interface components {
             status: "accepted" | "rejected" | "failed" | "skipped";
             /** Count */
             count: number;
+        };
+        /** CandidateInfo */
+        CandidateInfo: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Article Count */
+            article_count: number;
+            /** Publisher Count */
+            publisher_count: number;
+            /** Promoted Topic Id */
+            promoted_topic_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** CanonicalArticleTopicLink */
+        CanonicalArticleTopicLink: {
+            /**
+             * Article Id
+             * Format: uuid
+             */
+            article_id: string;
+            /** Topic Id */
+            topic_id: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "ai" | "manual_include" | "manual_exclude" | "conflict";
         };
         /** CollectionError */
         CollectionError: {
@@ -647,6 +1226,84 @@ export interface components {
             /** Count */
             count: number;
         };
+        /** @enum {string} */
+        Decision: "include" | "exclude";
+        /** DecisionHistory */
+        DecisionHistory: {
+            /** Id */
+            id: number;
+            /**
+             * Article Id
+             * Format: uuid
+             */
+            article_id: string;
+            /** Target Id */
+            target_id: string | null;
+            previous_decision: components["schemas"]["Decision"] | null;
+            decision: components["schemas"]["Decision"] | null;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "evaluate" | "override" | "release";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "auto" | "manual";
+            /** Reason */
+            reason: string;
+            /** Matched Terms */
+            matched_terms: string[];
+            /** Rule Id */
+            rule_id: string | null;
+            /** Rule Version */
+            rule_version: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** DecisionInfo */
+        DecisionInfo: {
+            /**
+             * Article Id
+             * Format: uuid
+             */
+            article_id: string;
+            /** Target Id */
+            target_id?: string | null;
+            decision: components["schemas"]["Decision"];
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "auto" | "manual";
+            /** Reason */
+            reason: string;
+            /** Matched Terms */
+            matched_terms?: string[];
+            /** Rule Id */
+            rule_id?: string | null;
+            /** Rule Version */
+            rule_version?: number | null;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** DecisionWrite */
+        DecisionWrite: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "include" | "exclude" | "release";
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
         /** ErrorPage */
         ErrorPage: {
             /** Items */
@@ -657,6 +1314,97 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        };
+        /** EvaluationResult */
+        EvaluationResult: {
+            /**
+             * Article Id
+             * Format: uuid
+             */
+            article_id: string;
+            inclusion: components["schemas"]["DecisionInfo"];
+            /** Targets */
+            targets: components["schemas"]["DecisionInfo"][];
+            /** Matched Rule Ids */
+            matched_rule_ids: string[];
+        };
+        /** FilterConditions */
+        FilterConditions: {
+            /** All */
+            all?: string[];
+            /** Any */
+            any?: string[];
+            /** None */
+            none?: string[];
+        };
+        /** FilterRuleInfo */
+        FilterRuleInfo: {
+            /** Name */
+            name: string;
+            /** Target Id */
+            target_id?: string | null;
+            /** Priority */
+            priority: number;
+            decision: components["schemas"]["Decision"];
+            conditions: components["schemas"]["FilterConditions"];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Version */
+            version: number;
+            /** Deleted At */
+            deleted_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** FilterRuleUpdate */
+        FilterRuleUpdate: {
+            /** Name */
+            name: string;
+            /** Target Id */
+            target_id?: string | null;
+            /** Priority */
+            priority: number;
+            decision: components["schemas"]["Decision"];
+            conditions: components["schemas"]["FilterConditions"];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Version */
+            version: number;
+        };
+        /** FilterRuleWrite */
+        FilterRuleWrite: {
+            /** Name */
+            name: string;
+            /** Target Id */
+            target_id?: string | null;
+            /** Priority */
+            priority: number;
+            decision: components["schemas"]["Decision"];
+            conditions: components["schemas"]["FilterConditions"];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -681,10 +1429,16 @@ export interface components {
             count: number;
         };
         JsonValue: unknown;
+        /** @enum {string} */
+        MaterialKind: "news" | "cafe" | "blog";
         /** Overview */
         Overview: {
             /** Total Items */
             total_items: number;
+            /** Kind Counts */
+            kind_counts: {
+                [key: string]: number;
+            };
             /** Active Rules */
             active_rules: number;
             /** Total Rules */
@@ -729,6 +1483,35 @@ export interface components {
             end_date: string;
             definition: components["schemas"]["RuleDefinition"];
             source: components["schemas"]["SourceCode"];
+        };
+        /** ReapplyRequest */
+        ReapplyRequest: {
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "all" | "target" | "selected";
+            /** Target Id */
+            target_id?: string | null;
+            /** Article Ids */
+            article_ids?: string[] | null;
+        };
+        /** ReapplyResult */
+        ReapplyResult: {
+            /** Processed Count */
+            processed_count: number;
+        };
+        /** ReportRequest */
+        ReportRequest: {
+            /**
+             * Analysis Date
+             * Format: date
+             */
+            analysis_date: string;
+            /** Article Ids */
+            article_ids?: string[] | null;
+            /** Target Id */
+            target_id?: string | null;
         };
         /** RequestInfo */
         RequestInfo: {
@@ -1141,59 +1924,65 @@ export interface components {
         Stage: "curl_cffi" | "browser_fetch" | "browser_rendered" | "bigkinds_api";
         /** StoredArticle */
         StoredArticle: {
-            /** Source Id */
-            source_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Title */
             title: string;
             /** Summary */
             summary: string;
             /** Publisher */
-            publisher?: string | null;
-            /** Url */
-            url?: string | null;
-            /** Original Url */
-            original_url?: string | null;
+            publisher: string | null;
             /** Published At */
-            published_at?: string | null;
-            /** Published On */
-            published_on?: string | null;
-            source: components["schemas"]["SourceCode"];
+            published_at: string | null;
+            /** Sources */
+            sources: components["schemas"]["ArticleSource"][];
             /**
-             * First Seen At
-             * Format: date-time
+             * Inclusion
+             * @enum {string}
              */
-            first_seen_at: string;
+            inclusion: "include" | "exclude";
+            /** Inclusion Reason */
+            inclusion_reason: string | null;
+            /** Content Preview */
+            content_preview: string;
             /** Has Body */
             has_body: boolean;
         };
         /** StoredArticleDetail */
         StoredArticleDetail: {
-            /** Source Id */
-            source_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Title */
             title: string;
             /** Summary */
             summary: string;
             /** Publisher */
-            publisher?: string | null;
-            /** Url */
-            url?: string | null;
-            /** Original Url */
-            original_url?: string | null;
+            publisher: string | null;
             /** Published At */
-            published_at?: string | null;
-            /** Published On */
-            published_on?: string | null;
-            source: components["schemas"]["SourceCode"];
+            published_at: string | null;
+            /** Sources */
+            sources: components["schemas"]["ArticleSource"][];
             /**
-             * First Seen At
-             * Format: date-time
+             * Inclusion
+             * @enum {string}
              */
-            first_seen_at: string;
+            inclusion: "include" | "exclude";
+            /** Inclusion Reason */
+            inclusion_reason: string | null;
+            /** Content Preview */
+            content_preview: string;
             /** Has Body */
             has_body: boolean;
             /** Body */
             body: string | null;
+            /** Content Hash */
+            content_hash: string | null;
             /** Body Collected At */
             body_collected_at: string | null;
         };
@@ -1201,6 +1990,81 @@ export interface components {
         StoredArticlePage: {
             /** Items */
             items: components["schemas"]["StoredArticle"][];
+            /** Total */
+            total: number;
+        };
+        /** StoredMaterial */
+        StoredMaterial: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["MaterialKind"];
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+            /** Publisher */
+            publisher: string | null;
+            /** Cafe Name */
+            cafe_name: string | null;
+            /** Cafe Url */
+            cafe_url: string | null;
+            /** Blog Name */
+            blog_name: string | null;
+            /** Blog Url */
+            blog_url: string | null;
+            /** Published At */
+            published_at: string | null;
+            /** Sources */
+            sources: components["schemas"]["ArticleSource"][];
+            /** Content Preview */
+            content_preview: string;
+            /** Has Body */
+            has_body: boolean;
+        };
+        /** StoredMaterialDetail */
+        StoredMaterialDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["MaterialKind"];
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+            /** Publisher */
+            publisher: string | null;
+            /** Cafe Name */
+            cafe_name: string | null;
+            /** Cafe Url */
+            cafe_url: string | null;
+            /** Blog Name */
+            blog_name: string | null;
+            /** Blog Url */
+            blog_url: string | null;
+            /** Published At */
+            published_at: string | null;
+            /** Sources */
+            sources: components["schemas"]["ArticleSource"][];
+            /** Content Preview */
+            content_preview: string;
+            /** Has Body */
+            has_body: boolean;
+            /** Body */
+            body: string | null;
+            /** Content Hash */
+            content_hash: string | null;
+            /** Body Collected At */
+            body_collected_at: string | null;
+        };
+        /** StoredMaterialPage */
+        StoredMaterialPage: {
+            /** Items */
+            items: components["schemas"]["StoredMaterial"][];
             /** Total */
             total: number;
         };
@@ -1214,6 +2078,62 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        };
+        /** TargetInfo */
+        TargetInfo: {
+            kind: components["schemas"]["TargetKind"];
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Version */
+            version: number;
+            /** Archived At */
+            archived_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** @enum {string} */
+        TargetKind: "policy" | "regular" | "current_issue" | "leader_message";
+        /** TargetUpdate */
+        TargetUpdate: {
+            kind: components["schemas"]["TargetKind"];
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Version */
+            version: number;
+        };
+        /** TargetWrite */
+        TargetWrite: {
+            kind: components["schemas"]["TargetKind"];
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
         };
         /** TemplateArchiveRequest */
         TemplateArchiveRequest: {
@@ -1268,6 +2188,56 @@ export interface components {
             tables: {
                 [key: string]: string[];
             };
+        };
+        /** Topic */
+        Topic: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Synonyms */
+            synonyms?: string[];
+        };
+        /** TopicInfo */
+        TopicInfo: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Synonyms */
+            synonyms: string[];
+            /** Version */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** TopicMerge */
+        TopicMerge: {
+            /** Target Id */
+            target_id: string;
+        };
+        /** TopicUpdate */
+        TopicUpdate: {
+            /** Version */
+            version: number;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Synonyms */
+            synonyms?: string[];
         };
         /** ValidationError */
         ValidationError: {
@@ -1936,6 +2906,8 @@ export interface operations {
                 offset?: number;
                 source?: components["schemas"]["SourceCode"] | null;
                 q?: string;
+                inclusion?: "all" | "included" | "excluded";
+                target_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -1963,14 +2935,80 @@ export interface operations {
             };
         };
     };
-    article_articles_detail_get: {
+    materials_materials_get: {
         parameters: {
-            query: {
-                source: components["schemas"]["SourceCode"];
-                source_id: string;
+            query?: {
+                limit?: number;
+                offset?: number;
+                kind?: components["schemas"]["MaterialKind"] | null;
+                group?: ("news" | "posts") | null;
+                source?: components["schemas"]["SourceCode"] | null;
+                q?: string;
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredMaterialPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    material_materials__material_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                material_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredMaterialDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    article_articles__article_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2403,6 +3441,899 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    render_analysis_report_analysis_reports_education_audit_press_render_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    topics_analysis_topics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicInfo"][];
+                };
+            };
+        };
+    };
+    create_topics_analysis_topics_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Topic"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    candidates_analysis_topic_candidates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateInfo"][];
+                };
+            };
+        };
+    };
+    apply_analysis_analysis_runs__run_id__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_analysis_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisRunInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analysis_attempts_analysis_runs__run_id__attempts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisAttemptInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    article_analysis_runs_analysis_articles_runs_get: {
+        parameters: {
+            query: {
+                article_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisRunInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_topic_analysis_topics__topic_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopicUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_topic_analysis_topics__topic_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    merge_topic_analysis_topics__topic_id__merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopicMerge"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    article_topics_analysis_articles__article_id__topics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CanonicalArticleTopicLink"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    override_article_topic_analysis_articles__article_id__topics__topic_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArticleTopicOverride"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    targets_analysis_targets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetInfo"][];
+                };
+            };
+        };
+    };
+    create_target_analysis_targets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TargetWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_target_analysis_targets__target_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TargetUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_target_analysis_targets__target_id__delete: {
+        parameters: {
+            query: {
+                version: number;
+            };
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    filter_rules_article_filter_rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterRuleInfo"][];
+                };
+            };
+        };
+    };
+    create_filter_rule_article_filter_rules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FilterRuleWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterRuleInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reapply_filter_rules_article_filter_rules_reapply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReapplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReapplyResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_filter_rule_article_filter_rules__rule_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FilterRuleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterRuleInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_filter_rule_article_filter_rules__rule_id__delete: {
+        parameters: {
+            query: {
+                version: number;
+            };
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    filter_rule_versions_article_filter_rules__rule_id__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    article_inclusion_articles__article_id__inclusion_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    override_inclusion_articles__article_id__inclusion_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    article_targets_articles__article_id__targets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    override_target_articles__article_id__targets__target_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decision_history_articles__article_id__decisions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionHistory"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    evaluate_filters_articles__article_id__filter_evaluation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationResult"];
                 };
             };
             /** @description Validation Error */

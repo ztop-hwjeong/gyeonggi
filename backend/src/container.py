@@ -11,6 +11,9 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from config import Settings
+from domain.analysis.application import AnalysisApplication
+from domain.analysis.registry import TopicRegistry
+from domain.article_workflow.repository import ArticleWorkflow
 from domain.collection.reporting import CollectionReporting
 from domain.collection.repository import CollectionRepository
 from domain.monitoring.config import MonitoringSettings
@@ -75,6 +78,22 @@ class CollectionProvider(Provider):
         return CollectionRepository(session)
 
 
+class AnalysisProvider(Provider):
+    @provide(scope=Scope.REQUEST)
+    def article_workflow(self, session: AsyncSession) -> ArticleWorkflow:
+        return ArticleWorkflow(session)
+
+    @provide(scope=Scope.REQUEST)
+    def topic_registry(self, session: AsyncSession) -> TopicRegistry:
+        return TopicRegistry(session)
+
+    @provide(scope=Scope.REQUEST)
+    def application(
+        self, registry: TopicRegistry, workflow: ArticleWorkflow
+    ) -> AnalysisApplication:
+        return AnalysisApplication(registry, workflow)
+
+
 class MonitoringProvider(Provider):
     @provide(scope=Scope.APP)
     def settings(self) -> MonitoringSettings:
@@ -102,6 +121,7 @@ def create_container(settings: Settings) -> AsyncContainer:
         DatabaseProvider(),
         TemplateProvider(),
         CollectionProvider(),
+        AnalysisProvider(),
         MonitoringProvider(),
         context={Settings: settings},
     )

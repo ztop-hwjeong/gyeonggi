@@ -172,8 +172,10 @@ async function mockApi(
           total: currentRun.mode === "preview" ? 1 : 0,
         },
       });
-    if (path === "/articles")
+    if (path === "/articles" || path === "/materials")
       return route.fulfill({ json: { items: [], total: 0 } });
+    if (path === "/analysis-targets") return route.fulfill({ json: [] });
+    if (path.endsWith("/targets")) return route.fulfill({ json: [] });
     if (path === "/monitoring/workers")
       return route.fulfill({ json: { observed_at: now, pools: [] } });
     return route.fulfill({
@@ -336,14 +338,17 @@ test("미리보기 뒤 키워드를 바꾸면 이전 조건의 결과임을 알�
   await expect(page.getByText(/아래는 이전 조건의 결과/)).toBeVisible();
 });
 
-test("수집 자료의 공유 링크 조건을 복원한다", async ({ page }) => {
+test("기사 수집 자료의 검색 조건을 복원한다", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/results?q=교육&source=naver_blog&offset=20");
-  await expect(page.getByLabel("수집 채널")).toHaveValue("naver_blog");
-  await expect(page.getByLabel("제목·요약 검색")).toHaveValue("교육");
+  await page.goto("/results?kind=news&q=교육&inclusion=excluded&offset=20");
+  await expect(page.getByLabel("분석 포함 상태")).toHaveValue("excluded");
+  await expect(page.getByLabel("자료 검색")).toHaveValue("교육");
   await page.getByRole("link", { name: "조건 초기화" }).click();
-  await expect(page.getByLabel("수집 채널")).toHaveValue("");
-  await expect(page.getByLabel("제목·요약 검색")).toHaveValue("");
+  await expect(page.getByRole("tab", { name: "전체" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByLabel("자료 검색")).toHaveValue("");
 });
 
 test("수집 현황에서 확인이 필요한 요청으로 이동한다", async ({ page }) => {
@@ -375,32 +380,196 @@ test("검토한 일부 수집을 확인 완료로 표시하고 되돌린다", as
 test("자료 본문을 읽고 검색하던 위치로 돌아간다", async ({ page }) => {
   await mockApi(page);
   const article = {
-    source: "naver_blog",
-    source_id: "saved-item",
+    id: "0c0a49b8-0ff5-455b-a17a-5609efafc9cb",
     title: "교육 정책 안내",
     summary: "검색 요약 내용",
     publisher: "교육 소식",
-    url: "https://example.com/article",
-    first_seen_at: now,
+    published_at: now,
+    sources: [
+      {
+        source: "naver_news",
+        source_id: "saved-item",
+        url: "https://example.com/article",
+        original_url: null,
+      },
+    ],
+    inclusion: "include",
+    inclusion_reason: null,
     has_body: true,
     body: "확보한 본문 첫 문단\n다음 문단",
     body_collected_at: now,
+    content_hash: "hash",
+    targets: [],
   };
-  await page.route("**/api/articles?**", (route) =>
-    route.fulfill({ json: { items: [article], total: 21 } }),
+  const material = {
+    ...article,
+    kind: "news",
+    cafe_name: null,
+    cafe_url: null,
+    blog_name: null,
+    blog_url: null,
+    content_preview: "확보한 본문 첫 문단",
+  };
+  await page.route("**/api/materials?**", (route) =>
+    route.fulfill({ json: { items: [material], total: 21 } }),
   );
-  await page.route("**/api/articles/detail?**", (route) =>
-    route.fulfill({ json: article }),
+  await page.route(`**/api/materials/${article.id}`, (route) =>
+    route.fulfill({ json: material }),
   );
-  await page.goto("/results?q=교육&source=naver_blog&offset=20");
+  await page.goto("/results?q=교육&offset=20");
   await page.getByRole("link", { name: "교육 정책 안내", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "수집한 본문" }),
-  ).toBeVisible();
-  await expect(page.getByText(/확보한 본문 첫 문단/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "본문" })).toBeVisible();
+  await expect(page.locator(".article-body")).toContainText(
+    "확보한 본문 첫 문단",
+  );
   await page.getByRole("link", { name: "수집 자료로 돌아가기" }).click();
   await expect(page).toHaveURL(/offset=20/);
-  await expect(page.getByLabel("제목·요약 검색")).toHaveValue("교육");
+  await expect(page.getByLabel("자료 검색")).toHaveValue("교육");
+});
+
+test("기사의 분석 대상 판단을 저장한 뒤 바로 표시한다", async ({ page }) => {
+  const articleId = "0c0a49b8-0ff5-455b-a17a-5609efafc9cb";
+  let decision = "exclude";
+  const article = {
+    id: articleId,
+    title: "교육 정책 안내",
+    summary: "검색 요약 내용",
+    publisher: "교육 소식",
+    published_at: now,
+    sources: [],
+    inclusion: "include",
+    inclusion_reason: null,
+    content_preview: "검색 요약 내용",
+    has_body: true,
+    body: "본문",
+    content_hash: "hash",
+    body_collected_at: now,
+  };
+  const material = {
+    ...article,
+    kind: "news",
+    cafe_name: null,
+    cafe_url: null,
+    blog_name: null,
+    blog_url: null,
+  };
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname.replace("/api", "");
+    if (path === `/materials/${articleId}`)
+      return route.fulfill({ json: material });
+    if (path === "/analysis-targets")
+      return route.fulfill({
+        json: [
+          {
+            id: "target",
+            kind: "policy",
+            name: "교권 보호",
+            description: "",
+            version: 1,
+            archived_at: null,
+            created_at: now,
+          },
+        ],
+      });
+    if (path === `/articles/${articleId}/targets` && request.method() === "GET")
+      return route.fulfill({
+        json: [
+          {
+            article_id: articleId,
+            target_id: "target",
+            decision,
+            origin: "manual",
+            reason: "판단",
+            updated_at: now,
+          },
+        ],
+      });
+    if (
+      path === `/articles/${articleId}/targets/target` &&
+      request.method() === "PUT"
+    ) {
+      decision = request.postDataJSON().decision;
+      return route.fulfill({ json: [] });
+    }
+    return route.fulfill({
+      status: 500,
+      json: { detail: `예상하지 않은 API: ${path}` },
+    });
+  });
+  await page.goto(`/results/read?material_id=${articleId}`);
+  const targetState = page.locator(".target-list > div > .button-row > span");
+  await expect(targetState).toHaveText("제외");
+  await page.getByRole("button", { name: "포함", exact: true }).last().click();
+  await expect(targetState).toHaveText("포함");
+});
+
+test("통합 자료에서 유형별 목록을 구분한다", async ({ page }) => {
+  await mockApi(page);
+  const items = [
+    {
+      id: "11111111-1111-4111-8111-111111111111",
+      kind: "news",
+      title: "기사 제목",
+      summary: "기사 요약",
+      publisher: "경기일보",
+      cafe_name: null,
+      cafe_url: null,
+      blog_name: null,
+      blog_url: null,
+      published_at: now,
+      sources: [],
+      content_preview: "기사 본문 일부",
+      has_body: true,
+    },
+    {
+      id: "22222222-2222-4222-8222-222222222222",
+      kind: "cafe",
+      title: "카페글 제목",
+      summary: "카페글 요약",
+      publisher: null,
+      cafe_name: "교육 카페",
+      cafe_url: "https://example.com/cafe",
+      blog_name: null,
+      blog_url: null,
+      published_at: now,
+      sources: [],
+      content_preview: "",
+      has_body: false,
+    },
+    {
+      id: "33333333-3333-4333-8333-333333333333",
+      kind: "blog",
+      title: "블로그글 제목",
+      summary: "블로그글 요약",
+      publisher: null,
+      cafe_name: null,
+      cafe_url: null,
+      blog_name: "교육 블로그",
+      blog_url: "https://example.com/blog",
+      published_at: now,
+      sources: [],
+      content_preview: "블로그 본문 일부",
+      has_body: true,
+    },
+  ];
+  await page.route("**/api/materials?**", (route) => {
+    const kind = new URL(route.request().url()).searchParams.get("kind");
+    return route.fulfill({
+      json: {
+        items: kind ? items.filter((item) => item.kind === kind) : items,
+        total: kind ? 1 : 3,
+      },
+    });
+  });
+  await page.goto("/results");
+  await expect(page.getByRole("columnheader", { name: "구분" })).toBeVisible();
+  await expect(page.getByText("경기일보")).toBeVisible();
+  await page.getByRole("tab", { name: "카페글" }).click();
+  await expect(page.getByText("교육 카페")).toBeVisible();
+  await expect(page.getByText("기사 제목")).toHaveCount(0);
+  await page.getByRole("tab", { name: "블로그글" }).click();
+  await expect(page.getByText("교육 블로그")).toBeVisible();
 });
 
 test("저장 전 다른 메뉴로 이동하면 변경 내용 유실을 확인한다", async ({

@@ -1,15 +1,34 @@
-from sqlalchemy import text
+from datetime import UTC, datetime, timedelta
+from uuid import UUID
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import Date, cast, func, literal, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from domain.collection.errors import CollectionNotFoundError, CollectionUnavailableError
+from domain.article_workflow.tables import article_inclusions, article_target_links
+from domain.collection.errors import (
+    CollectionInvalidMaterialError,
+    CollectionNotFoundError,
+    CollectionUnavailableError,
+)
 from domain.collection.models import (
-    ArticleIdentity,
     ArticleQuery,
+    MaterialQuery,
     Overview,
     StoredArticle,
     StoredArticleDetail,
     StoredArticlePage,
+    StoredMaterial,
+    StoredMaterialDetail,
+    StoredMaterialPage,
+)
+from domain.collection.tables import (
+    article_contents,
+    collection_requests,
+    collection_rules,
+    material_sources,
+    materials,
 )
 
 
@@ -17,94 +36,272 @@ class CollectionReporting:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def rows(self, sql: str, parameters: dict | None = None):
+    async def rows(self, statement) -> list[dict]:
         try:
-            return (await self._session.execute(text(sql), parameters or {})).mappings().all()
+            result = await self._session.execute(statement)
+            return [dict(row) for row in result.mappings().all()]
         except SQLAlchemyError as error:
             raise CollectionUnavailableError("수집 결과 저장소 연결 실패") from error
 
-    def items_sql(self) -> str:
-        return (
-            "SELECT source,source_id,data,first_seen_at FROM dw.news_items UNION ALL "
-            "SELECT 'naver_'||channel AS source,source_id,data,first_seen_at FROM dw.search_items"
+    def material_query(self, include_review: bool = False):
+        latest = (
+            select(
+                article_contents.c.body,
+                article_contents.c.content_hash,
+                article_contents.c.created_at,
+            )
+            .where(article_contents.c.material_id == materials.c.id)
+            .order_by(article_contents.c.created_at.desc(), article_contents.c.id.desc())
+            .limit(1)
+            .lateral("latest_content")
         )
+        source = materials.outerjoin(latest, literal(True))
+        fields = [
+            materials.c.id,
+            materials.c.kind,
+            materials.c.title,
+            func.coalesce(materials.c.summary, "").label("summary"),
+            materials.c.publisher,
+            materials.c.cafe_name,
+            materials.c.cafe_url,
+            materials.c.blog_name,
+            materials.c.blog_url,
+            materials.c.published_at,
+            materials.c.updated_at,
+            func.coalesce(func.substr(latest.c.body, 1, 240), "").label("content_preview"),
+            latest.c.body.is_not(None).label("has_body"),
+            latest.c.body,
+            latest.c.content_hash,
+            latest.c.created_at.label("body_collected_at"),
+        ]
+        if include_review:
+            source = source.outerjoin(
+                article_inclusions, article_inclusions.c.article_id == materials.c.id
+            )
+            fields.extend(
+                [
+                    func.coalesce(article_inclusions.c.decision, "include").label("inclusion"),
+                    article_inclusions.c.reason.label("inclusion_reason"),
+                ]
+            )
+        return select(*fields).select_from(source)
 
-    async def article(self, identity: ArticleIdentity) -> StoredArticleDetail:
+    async def sources(self, material_ids: list[UUID]) -> dict[UUID, list[dict]]:
+        result: dict[UUID, list[dict]] = {material_id: [] for material_id in material_ids}
+        if material_ids:
+            rows = await self.rows(
+                select(material_sources)
+                .where(material_sources.c.material_id.in_(material_ids))
+                .order_by(
+                    material_sources.c.first_seen_at,
+                    material_sources.c.source,
+                    material_sources.c.source_id,
+                )
+            )
+            for row in rows:
+                result[row["material_id"]].append(row)
+        return result
+
+    async def article(self, article_id: UUID) -> StoredArticleDetail:
         rows = await self.rows(
-            "SELECT i.*,c.body,c.created_at AS body_collected_at,"
-            "(c.body IS NOT NULL) AS has_body FROM (" + self.items_sql() + ") i "
-            "LEFT JOIN LATERAL (SELECT body,created_at FROM dw.article_contents "
-            "WHERE source=i.source AND source_id=i.source_id "
-            "ORDER BY created_at DESC,id DESC LIMIT 1) c ON true "
-            "WHERE i.source=:source AND i.source_id=:source_id",
-            identity.model_dump(),
+            self.material_query(include_review=True).where(
+                materials.c.id == article_id, materials.c.kind == "news"
+            )
         )
         if not rows:
+            exists = await self.rows(select(materials.c.kind).where(materials.c.id == article_id))
+            if exists and exists[0]["kind"] != "news":
+                raise CollectionInvalidMaterialError("뉴스 기사에만 적용 가능")
             raise CollectionNotFoundError(
                 "저장된 자료가 없어요. 수집 자료 목록에서 다시 선택해 주세요."
             )
-        row = rows[0]
-        return StoredArticleDetail.model_validate({**row["data"], **row})
+        source_map = await self.sources([article_id])
+        return StoredArticleDetail.model_validate({**rows[0], "sources": source_map[article_id]})
+
+    async def material(self, material_id: UUID) -> StoredMaterialDetail:
+        rows = await self.rows(self.material_query().where(materials.c.id == material_id))
+        if not rows:
+            raise CollectionNotFoundError("저장된 자료 없음")
+        source_map = await self.sources([material_id])
+        return StoredMaterialDetail.model_validate({**rows[0], "sources": source_map[material_id]})
+
+    async def materials(self, query: MaterialQuery) -> StoredMaterialPage:
+        criteria = []
+        if query.kind is not None:
+            criteria.append(materials.c.kind == query.kind)
+        elif query.group == "news":
+            criteria.append(materials.c.kind == "news")
+        elif query.group == "posts":
+            criteria.append(materials.c.kind.in_(("cafe", "blog")))
+        if query.source is not None:
+            criteria.append(
+                select(material_sources.c.source_id)
+                .where(
+                    material_sources.c.material_id == materials.c.id,
+                    material_sources.c.source == query.source,
+                )
+                .exists()
+            )
+        if query.q:
+            escaped = query.q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
+            criteria.append(
+                or_(
+                    materials.c.title.ilike(pattern, escape="\\"),
+                    materials.c.summary.ilike(pattern, escape="\\"),
+                )
+            )
+        total = (
+            await self.rows(
+                select(func.count().label("count")).select_from(materials).where(*criteria)
+            )
+        )[0]["count"]
+        rows = await self.rows(
+            self.material_query()
+            .where(*criteria)
+            .order_by(materials.c.updated_at.desc(), materials.c.id)
+            .limit(query.limit)
+            .offset(query.offset)
+        )
+        source_map = await self.sources([row["id"] for row in rows])
+        return StoredMaterialPage(
+            items=[
+                StoredMaterial.model_validate({**row, "sources": source_map[row["id"]]})
+                for row in rows
+            ],
+            total=total,
+        )
 
     async def overview(self) -> Overview:
-        sources = await self.rows(
-            "SELECT source,count(*) AS count FROM (" + self.items_sql() + ") items GROUP BY source"
+        source_rows = await self.rows(
+            select(material_sources.c.source, func.count().label("count")).group_by(
+                material_sources.c.source
+            )
         )
-        counts = await self.rows(
-            "SELECT (SELECT count(*) FROM ops.collection_rules "
-            "WHERE definition->>'enabled'='true') AS active_rules, "
-            "(SELECT count(*) FROM ops.collection_rules) AS total_rules, "
-            "count(*) FILTER (WHERE status IN ('queued','submitted','running','cancelling')) "
-            "AS queued_requests, count(*) FILTER (WHERE status='failed' "
-            "AND updated_at>=now()-interval '24 hours') AS failed_requests "
-            ", count(*) FILTER (WHERE status='partial' "
-            "AND updated_at>=now()-interval '24 hours') AS partial_requests "
-            "FROM ops.collection_requests"
+        threshold = datetime.now(UTC) - timedelta(days=1)
+        counts = (
+            await self.rows(
+                select(
+                    func.count()
+                    .filter(
+                        collection_requests.c.status.in_(
+                            ("queued", "submitted", "running", "cancelling")
+                        )
+                    )
+                    .label("queued_requests"),
+                    func.count()
+                    .filter(
+                        collection_requests.c.status == "failed",
+                        collection_requests.c.updated_at >= threshold,
+                    )
+                    .label("failed_requests"),
+                    func.count()
+                    .filter(
+                        collection_requests.c.status == "partial",
+                        collection_requests.c.updated_at >= threshold,
+                    )
+                    .label("partial_requests"),
+                )
+            )
+        )[0]
+        rule_counts = (
+            await self.rows(
+                select(
+                    func.count().label("total_rules"),
+                    func.count()
+                    .filter(collection_rules.c.definition["enabled"].astext == "true")
+                    .label("active_rules"),
+                )
+            )
+        )[0]
+        today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+        first_day = today - timedelta(days=6)
+        day = cast(func.timezone("Asia/Seoul", materials.c.created_at), Date).label("day")
+        daily_rows = await self.rows(
+            select(day, func.count().label("count"))
+            .where(materials.c.created_at >= datetime.now(UTC) - timedelta(days=7))
+            .group_by(day)
         )
-        days = await self.rows(
-            "WITH items AS (" + self.items_sql() + "), daily AS ("
-            "SELECT (first_seen_at AT TIME ZONE 'Asia/Seoul')::date AS day,count(*) AS count "
-            "FROM items WHERE first_seen_at>=now()-interval '7 days' GROUP BY 1) "
-            "SELECT day::date,coalesce(daily.count,0) AS count FROM generate_series("
-            "(now() AT TIME ZONE 'Asia/Seoul')::date-6,"
-            "(now() AT TIME ZONE 'Asia/Seoul')::date,interval '1 day') AS days(day) "
-            "LEFT JOIN daily USING(day) ORDER BY day"
+        daily = {row["day"]: row["count"] for row in daily_rows}
+        total = (await self.rows(select(func.count().label("count")).select_from(materials)))[0]
+        kinds = await self.rows(
+            select(materials.c.kind, func.count().label("count")).group_by(materials.c.kind)
         )
         return Overview.model_validate(
             {
-                **counts[0],
-                "total_items": sum(row["count"] for row in sources),
-                "source_counts": {row["source"]: row["count"] for row in sources},
-                "daily_counts": days,
+                **counts,
+                **rule_counts,
+                "total_items": total["count"],
+                "kind_counts": {
+                    "news": next((row["count"] for row in kinds if row["kind"] == "news"), 0),
+                    "cafe": next((row["count"] for row in kinds if row["kind"] == "cafe"), 0),
+                    "blog": next((row["count"] for row in kinds if row["kind"] == "blog"), 0),
+                },
+                "source_counts": {row["source"]: row["count"] for row in source_rows},
+                "daily_counts": [
+                    {
+                        "day": first_day + timedelta(days=offset),
+                        "count": daily.get(first_day + timedelta(days=offset), 0),
+                    }
+                    for offset in range(7)
+                ],
             }
         )
 
     async def articles(self, query: ArticleQuery) -> StoredArticlePage:
-        criteria = (
-            " WHERE (CAST(:source AS text) IS NULL OR i.source=:source) "
-            "AND (:q='' OR i.data->>'title' ILIKE :pattern OR i.data->>'summary' ILIKE :pattern)"
+        criteria = []
+        criteria.append(materials.c.kind == "news")
+        if query.source is not None:
+            criteria.append(
+                select(material_sources.c.source_id)
+                .where(
+                    material_sources.c.material_id == materials.c.id,
+                    material_sources.c.source == query.source,
+                )
+                .exists()
+            )
+        if query.q:
+            escaped = query.q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
+            criteria.append(
+                or_(
+                    materials.c.title.ilike(pattern, escape="\\"),
+                    materials.c.summary.ilike(pattern, escape="\\"),
+                )
+            )
+        inclusion = func.coalesce(article_inclusions.c.decision, "include")
+        if query.inclusion == "included":
+            criteria.append(inclusion == "include")
+        elif query.inclusion == "excluded":
+            criteria.append(inclusion == "exclude")
+        if query.target_id is not None:
+            criteria.append(
+                select(article_target_links.c.article_id)
+                .where(
+                    article_target_links.c.article_id == materials.c.id,
+                    article_target_links.c.target_id == query.target_id,
+                    article_target_links.c.decision == "include",
+                )
+                .exists()
+            )
+        base = materials.outerjoin(
+            article_inclusions, article_inclusions.c.article_id == materials.c.id
         )
-        params = {
-            **query.model_dump(),
-            "pattern": "%"
-            + query.q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            + "%",
-        }
-        base = "(" + self.items_sql() + ") i"
-        total = (await self.rows("SELECT count(*) AS count FROM " + base + criteria, params))[0][
-            "count"
-        ]
+        total = (
+            await self.rows(select(func.count().label("count")).select_from(base).where(*criteria))
+        )[0]["count"]
         rows = await self.rows(
-            "SELECT i.source,i.source_id,i.data,i.first_seen_at,EXISTS("
-            "SELECT 1 FROM dw.article_contents c "
-            "WHERE c.source=i.source AND c.source_id=i.source_id"
-            ") AS has_body FROM "
-            + base
-            + criteria
-            + " ORDER BY i.first_seen_at DESC,i.source,i.source_id LIMIT :limit OFFSET :offset",
-            params,
+            self.material_query(include_review=True)
+            .where(*criteria)
+            .order_by(materials.c.updated_at.desc(), materials.c.id)
+            .limit(query.limit)
+            .offset(query.offset)
         )
+        source_map = await self.sources([row["id"] for row in rows])
         return StoredArticlePage(
-            items=[StoredArticle.model_validate({**row["data"], **row}) for row in rows],
+            items=[
+                StoredArticle.model_validate({**row, "sources": source_map[row["id"]]})
+                for row in rows
+            ],
             total=total,
         )

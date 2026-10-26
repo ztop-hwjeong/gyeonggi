@@ -31,6 +31,7 @@ export async function api<T>(
           : "서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
     );
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -51,6 +52,14 @@ export function post<T>(path: string, body: unknown, key?: string) {
     body: JSON.stringify(body),
     headers: key ? { "Idempotency-Key": key } : {},
   });
+}
+
+export function put<T>(path: string, body: unknown) {
+  return api<T>(path, { method: "PUT", body: JSON.stringify(body) });
+}
+
+export function remove<T>(path: string) {
+  return api<T>(path, { method: "DELETE" });
 }
 
 export function useIdempotentPost<T>() {

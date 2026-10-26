@@ -6,8 +6,8 @@ from fastapi import APIRouter, Header, Query
 
 from domain.collection.models import (
     SOURCES,
-    ArticleIdentity,
     ArticleQuery,
+    MaterialQuery,
     Overview,
     Pagination,
     PreviewCreate,
@@ -26,6 +26,8 @@ from domain.collection.models import (
     SourceInfo,
     StoredArticleDetail,
     StoredArticlePage,
+    StoredMaterialDetail,
+    StoredMaterialPage,
 )
 from domain.collection.reporting import CollectionReporting
 from domain.collection.repository import CollectionRepository
@@ -45,11 +47,25 @@ async def articles(
     return await reporting.articles(query)
 
 
-@router.get("/articles/detail")
+@router.get("/materials")
+async def materials(
+    reporting: FromDishka[CollectionReporting], query: Annotated[MaterialQuery, Query()]
+) -> StoredMaterialPage:
+    return await reporting.materials(query)
+
+
+@router.get("/materials/{material_id}")
+async def material(
+    material_id: UUID, reporting: FromDishka[CollectionReporting]
+) -> StoredMaterialDetail:
+    return await reporting.material(material_id)
+
+
+@router.get("/articles/{article_id}")
 async def article(
-    reporting: FromDishka[CollectionReporting], identity: Annotated[ArticleIdentity, Query()]
+    article_id: UUID, reporting: FromDishka[CollectionReporting]
 ) -> StoredArticleDetail:
-    return await reporting.article(identity)
+    return await reporting.article(article_id)
 
 
 @router.get("/sources")

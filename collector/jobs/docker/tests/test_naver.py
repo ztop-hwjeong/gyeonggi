@@ -20,7 +20,11 @@ def item(number: int, channel: Channel = "cafearticle"):
     if channel == "news":
         value.update(pubDate="Fri, 23 Oct 2026 10:00:00 +0900", originallink=value["link"])
     elif channel == "blog":
-        value.update(postdate="20261023", bloggername="개인 식별 이름")
+        value.update(
+            postdate="20261023",
+            bloggername="교육 블로그",
+            bloggerlink="https://blog.naver.com/education",
+        )
     return normalize_item(channel, value)
 
 
@@ -101,13 +105,14 @@ def test_repeated_and_unexpected_empty_pages_are_not_success():
     )
 
 
-def test_cafe_has_no_fabricated_publication_date_and_blog_omits_author():
+def test_cafe_has_no_fabricated_publication_date_and_blog_keeps_channel_name():
     cafe = item(1)
     assert cafe.published_at is None and cafe.published_on is None
     assert cafe.title == "교육 정책 & 소식"
     blog = item(2, "blog")
     assert blog.published_on == "2026-10-23"
-    assert "개인 식별 이름" not in blog.model_dump_json()
+    assert blog.blog_name == "교육 블로그"
+    assert str(blog.blog_url) == "https://blog.naver.com/education"
     published = item(3, "news").published_at
     assert published is not None and published.tzinfo is not None
 

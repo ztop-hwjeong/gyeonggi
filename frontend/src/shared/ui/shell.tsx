@@ -19,6 +19,8 @@ const navigation = [
   { href: "/keywords", label: "키워드 관리", icon: MagnifyingGlassIcon },
   { href: "/runs", label: "수집 이력", icon: ClockCounterClockwiseIcon },
   { href: "/results", label: "수집 자료", icon: DatabaseIcon },
+  { href: "/analysis-targets", label: "기사 분석 대상", icon: ChartLineUpIcon },
+  { href: "/filter-rules", label: "기사 분석 규칙", icon: GearSixIcon },
   { href: "/workers", label: "수집 환경", icon: GearSixIcon },
 ];
 

@@ -88,6 +88,29 @@ Prefect REST 계약은 [공식 API 문서](https://docs.prefect.io/v3/api-ref/re
 대상 flow·pool은 `MONITORING_FLOW_NAMES`, `MONITORING_POOL_NAMES`의 JSON 배열로,
 요청 제한 시간은 `MONITORING_TIMEOUT_SECONDS`로 설정할 수 있다.
 
+## 분석 결과 관리
+
+수집기의 Prefect 작업이 저장 기사 한 건의 분석 원제안을 `ops.analysis_runs`에 기록한다.
+백엔드는 실행 결과와 표준 주제·후보를 조회하고, 검토한 원제안을 적용하거나 기사와 주제의
+연결을 수정한다. 수동 포함·제외는 재분석으로 덮어쓰지 않는다.
+
+| API | 용도 |
+| --- | --- |
+| `GET /analysis/runs/{id}`, `GET /analysis/runs/{id}/attempts` | 기사별 원제안·적용 결과·실패 시도 조회 |
+| `GET /analysis/articles/runs` | `source`·`source_id`별 분석 실행 목록 |
+| `POST /analysis/runs/{id}/apply` | 원문 인용·주제 ID 검증 후 매핑 적용 |
+| `GET /analysis/topics`, `POST /analysis/topics` | 현재 표준 주제 조회·초기 등록 |
+| `PUT /analysis/topics/{id}`, `DELETE /analysis/topics/{id}` | 표준명 수정·보관 |
+| `POST /analysis/topics/{id}/merge` | 주제 병합 |
+| `GET /analysis/topic-candidates` | 새 주제 후보와 독립 기사 근거 수 조회 |
+| `GET /analysis/articles/topics`, `PUT /analysis/articles/topics/{topic_id}` | `source`·`source_id`로 기사 연결 조회·수동 포함·제외·해제 |
+| `POST /analysis/reports/education-audit-press/render` | 적용한 실행 ID 목록의 Excel 보고서 생성 |
+
+`apply`는 수집기가 보존한 모델 원제안을 변경하지 않고 적용 결과를 별도 저장한다.
+수동 제외·포함은 기사 재분석 뒤에도 유지하며 `release`는 다음 적용 때 AI 연결을 다시 따른다.
+보고서 요청은 `{"analysis_date":"2026-10-26","run_ids":["UUID"]}` 형식이다.
+기존 1.0.0 양식은 유지하고 1.1.0의 이슈 집계는 쉼표로 구분한 전체 주제명만 일치시킨다.
+
 ## Excel 템플릿
 
 `templates/{code}/{version}/`에 `template.xlsx`와 `manifest.json`을 함께 Git으로 관리한다.
