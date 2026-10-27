@@ -57,10 +57,28 @@ services:
     image: dbeaver/cloudbeaver:26.2.3
     restart: unless-stopped
     environment:
+      CB_SERVER_NAME: 경기교육 정책 홍보 분석
+      CB_SERVER_URL: /cloudbeaver/
+      CB_ADMIN_NAME: gyeonggi
+      CB_ADMIN_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 설정 필요}
       CLOUDBEAVER_ROOT_URI: /cloudbeaver/
       CLOUDBEAVER_WORKSPACE_LOCATION: /opt/cloudbeaver/workspace
+      CLOUDBEAVER_APP_ANONYMOUS_ACCESS_ENABLED: "false"
     volumes:
       - ./.docker/cloudbeaver:/opt/cloudbeaver/workspace
+    depends_on:
+      cloudbeaver-init:
+        condition: service_completed_successfully
+
+  cloudbeaver-init:
+    image: python:3.13-slim
+    user: "0:0"
+    command: [python, /bootstrap.py]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 설정 필요}
+    volumes:
+      - ./.docker/cloudbeaver:/workspace
+      - ./infra/cloudbeaver/bootstrap.py:/bootstrap.py:ro
 
   rustfs:
     image: rustfs/rustfs:1.0.3
