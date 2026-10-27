@@ -1,7 +1,55 @@
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, Integer, MetaData, String, Table
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    MetaData,
+    String,
+    Table,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 metadata = MetaData()
+
+article_sentiments = Table(
+    "article_sentiments",
+    metadata,
+    Column("article_id", UUID(as_uuid=True), primary_key=True),
+    Column("sentiment", String),
+    Column("mixed_sentiment", Boolean),
+    Column("sentiment_reason", String),
+    Column("origin", String),
+    Column("run_id", UUID(as_uuid=True)),
+    Column("updated_at", DateTime(timezone=True)),
+    schema="ops",
+)
+article_sentiment_history = Table(
+    "article_sentiment_history",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column("article_id", UUID(as_uuid=True)),
+    Column("sentiment", String),
+    Column("mixed_sentiment", Boolean),
+    Column("sentiment_reason", String),
+    Column("origin", String),
+    Column("run_id", UUID(as_uuid=True)),
+    Column("created_at", DateTime(timezone=True)),
+    schema="ops",
+)
+article_reprints = Table(
+    "article_reprints",
+    metadata,
+    Column("article_a_id", UUID(as_uuid=True), primary_key=True),
+    Column("article_b_id", UUID(as_uuid=True), primary_key=True),
+    Column("article_a_content_hash", String, primary_key=True),
+    Column("article_b_content_hash", String, primary_key=True),
+    Column("body_similarity", Float),
+    Column("matching_basis", String),
+    Column("checked_at", DateTime(timezone=True)),
+    schema="ops",
+)
 
 analysis_targets = Table(
     "analysis_targets",

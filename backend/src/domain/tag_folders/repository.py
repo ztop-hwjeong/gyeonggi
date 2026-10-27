@@ -2,15 +2,14 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
-from sqlalchemy import ColumnElement, and_, delete, exists, func, insert, literal, select, update
+from sqlalchemy import ColumnElement, delete, exists, func, insert, literal, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from domain.analysis.membership import tagged_materials
-from domain.analysis.tables import article_topics, topics
+from domain.analysis.tables import topics
 from domain.article_workflow.tables import article_inclusions
-from domain.collection.tables import material_sources, materials
+from domain.collection.tables import materials
 from domain.events.tables import event_targets
 from domain.tag_folders.models import (
     FolderCreate,
@@ -23,7 +22,7 @@ from domain.tag_folders.models import (
     TagQuery,
     UnfiledTagSummary,
 )
-from domain.tag_folders.tables import folder_tags, folders
+from domain.tag_folders.tables import folder_tags, folders, material_tags
 
 
 class TagFolderError(RuntimeError):
@@ -106,23 +105,25 @@ class TagFolderRepository:
                 )
             )
             .where(
-                tagged_materials(tag_ids, kind=kind),
+                materials.c.kind.in_(("news", "blog")),
+                exists(
+                    select(material_tags.c.material_id).where(
+                        material_tags.c.material_id == materials.c.id,
+                        material_tags.c.topic_id.in_(tag_ids),
+                        material_tags.c.origin != "manual_exclude",
+                    )
+                ),
                 self._inclusion_condition(inclusion),
             )
         )
+        if kind is not None:
+            statement = statement.where(materials.c.kind == kind)
         return int((await self._session.scalar(statement)) or 0)
 
     async def _material_ids_by_tag(self, inclusion: str, kind: str | None) -> dict[str, set[UUID]]:
         linked = (
-            article_topics.join(
-                material_sources,
-                and_(
-                    article_topics.c.source == material_sources.c.source,
-                    article_topics.c.source_id == material_sources.c.source_id,
-                ),
-            )
-            .join(materials, materials.c.id == material_sources.c.material_id)
-            .join(topics, topics.c.id == article_topics.c.topic_id)
+            material_tags.join(materials, materials.c.id == material_tags.c.material_id)
+            .join(topics, topics.c.id == material_tags.c.topic_id)
             .outerjoin(article_inclusions, article_inclusions.c.article_id == materials.c.id)
         )
         criteria = [
@@ -135,14 +136,10 @@ class TagFolderRepository:
             criteria.append(materials.c.kind == kind)
         rows = (
             await self._session.execute(
-                select(article_topics.c.topic_id, material_sources.c.material_id)
+                select(material_tags.c.topic_id, material_tags.c.material_id)
                 .select_from(linked)
                 .where(*criteria)
-                .group_by(article_topics.c.topic_id, material_sources.c.material_id)
-                .having(
-                    func.bool_or(article_topics.c.origin == "manual_exclude").is_(False),
-                    func.bool_or(article_topics.c.origin.in_(("ai", "manual_include"))).is_(True),
-                )
+                .where(material_tags.c.origin != "manual_exclude")
             )
         ).all()
         result: dict[str, set[UUID]] = {}

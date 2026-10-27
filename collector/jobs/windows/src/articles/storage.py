@@ -3,11 +3,10 @@ from hashlib import sha256
 from typing import Any
 from uuid import UUID, uuid4
 
-import psycopg
-from collector_storage.config import DatabaseSettings
 from collector_storage.objects import RawObject, RawObjectStore
-from psycopg.types.json import Jsonb
-from pydantic import SecretStr
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.engine import Engine
 
 from articles.models import (
     ArticleDetail,
@@ -17,32 +16,32 @@ from articles.models import (
     DetailStage,
     FetchSnapshot,
 )
+from articles.tables import (
+    adaptive_history,
+    adaptive_profiles,
+    article_contents,
+    attempts,
+    detail_results,
+    detail_runs,
+    responses,
+)
 
 
 class DetailRepository:
-    def __init__(
-        self, settings: DatabaseSettings, password: SecretStr, objects: RawObjectStore
-    ) -> None:
-        self._settings = settings
-        self._password = password
+    def __init__(self, engine: Engine, objects: RawObjectStore) -> None:
+        self._engine = engine
         self._objects = objects
 
-    def connect(self) -> psycopg.Connection:
-        return psycopg.connect(
-            host=self._settings.database_host,
-            port=self._settings.database_port,
-            dbname=self._settings.database_name,
-            user=self._settings.database_user,
-            password=self._password.get_secret_value(),
-            connect_timeout=5,
-        )
-
     def save_run(self, summary: DetailRunSummary) -> None:
-        with self.connect() as connection:
+        statement = insert(detail_runs).values(
+            id=UUID(summary.run_id), summary=summary.model_dump(mode="json")
+        )
+        with self._engine.begin() as connection:
             connection.execute(
-                "INSERT INTO ops.article_detail_runs (id, summary) VALUES (%s, %s) "
-                "ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary",
-                (UUID(summary.run_id), Jsonb(summary.model_dump(mode="json"))),
+                statement.on_conflict_do_update(
+                    index_elements=[detail_runs.c.id],
+                    set_={"summary": statement.excluded.summary},
+                )
             )
 
     def save_response(
@@ -68,97 +67,148 @@ class DetailRepository:
         reference = self._objects.put(
             f"articles/{run_id}/{stage}/{snapshot.response_id}", body, content_type
         )
-        with self.connect() as connection:
+        with self._engine.begin() as connection:
             connection.execute(
-                "INSERT INTO st.article_responses "
-                "(id, run_id, source_id, stage, seed, metadata, raw_object) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                (
-                    snapshot.response_id,
-                    run_id,
-                    seed.source_id,
-                    stage,
-                    Jsonb(seed.model_dump(mode="json")),
-                    Jsonb(snapshot.model_dump(mode="json")),
-                    Jsonb(reference.model_dump(mode="json")),
-                ),
+                insert(responses).values(
+                    id=snapshot.response_id,
+                    run_id=run_id,
+                    source_id=seed.source_id,
+                    stage=stage,
+                    seed=seed.model_dump(mode="json"),
+                    metadata=snapshot.model_dump(mode="json"),
+                    raw_object=reference.model_dump(mode="json"),
+                )
             )
         return snapshot
 
     def read_body(self, snapshot: FetchSnapshot) -> bytes:
-        with self.connect() as connection:
+        with self._engine.connect() as connection:
             row = connection.execute(
-                "SELECT raw_object FROM st.article_responses WHERE id = %s",
-                (snapshot.response_id,),
-            ).fetchone()
+                select(responses.c.raw_object).where(responses.c.id == snapshot.response_id)
+            ).scalar_one_or_none()
         if row is None:
             raise LookupError("수집 원본 응답 없음")
-        reference = RawObject.model_validate(row[0])
+        reference = RawObject.model_validate(row)
         if reference.sha256 != snapshot.sha256:
             raise RuntimeError("수집 원본 메타데이터 해시 불일치")
         return self._objects.read(reference)
 
     def save_attempt(self, run_id: UUID, seed: ArticleSeed, attempt: DetailAttempt) -> None:
-        with self.connect() as connection:
+        statement = insert(attempts).values(
+            run_id=run_id,
+            source_id=seed.source_id,
+            stage=attempt.stage,
+            result=attempt.model_dump(mode="json"),
+        )
+        with self._engine.begin() as connection:
             connection.execute(
-                "INSERT INTO st.article_detail_attempts (run_id, source_id, stage, result) "
-                "VALUES (%s,%s,%s,%s) ON CONFLICT (run_id, source_id, stage) "
-                "DO UPDATE SET result = EXCLUDED.result",
-                (run_id, seed.source_id, attempt.stage, Jsonb(attempt.model_dump(mode="json"))),
+                statement.on_conflict_do_update(
+                    index_elements=[attempts.c.run_id, attempts.c.source_id, attempts.c.stage],
+                    set_={"result": statement.excluded.result},
+                )
             )
 
     def save_detail(self, run_id: UUID, result: ArticleDetail) -> None:
-        with self.connect() as connection:
+        result_statement = insert(detail_results).values(
+            run_id=run_id,
+            source_id=result.seed.source_id,
+            result=result.model_dump(mode="json"),
+        )
+        with self._engine.begin() as connection:
             connection.execute(
-                "INSERT INTO st.article_detail_results (run_id, source_id, result) "
-                "VALUES (%s,%s,%s) "
-                "ON CONFLICT (run_id, source_id) DO UPDATE SET result = EXCLUDED.result",
-                (run_id, result.seed.source_id, Jsonb(result.model_dump(mode="json"))),
+                result_statement.on_conflict_do_update(
+                    index_elements=[detail_results.c.run_id, detail_results.c.source_id],
+                    set_={"result": result_statement.excluded.result},
+                )
             )
             selected = next((item for item in result.attempts if item.status == "accepted"), None)
             if selected is not None and selected.extraction is not None:
                 content = selected.extraction
                 digest = sha256(content.text.encode()).hexdigest()
+                content_statement = insert(article_contents).values(
+                    source=result.seed.source,
+                    source_id=result.seed.source_id,
+                    content_hash=digest,
+                    title=content.title,
+                    body=content.text,
+                    stage=selected.stage,
+                    run_id=run_id,
+                    provenance=selected.model_dump(mode="json"),
+                    original_published_on=content.original_published_on,
+                    original_published_at=content.original_published_at,
+                    original_modified_on=content.original_modified_on,
+                    original_modified_at=content.original_modified_at,
+                    collected_at=datetime.now(UTC),
+                )
                 connection.execute(
-                    "INSERT INTO dw.article_contents "
-                    "(source, source_id, content_hash, title, body, stage, run_id, provenance) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) "
-                    "ON CONFLICT (source, source_id, content_hash) DO NOTHING",
-                    (
-                        result.seed.source,
-                        result.seed.source_id,
-                        digest,
-                        content.title,
-                        content.text,
-                        selected.stage,
-                        run_id,
-                        Jsonb(selected.model_dump(mode="json")),
-                    ),
+                    content_statement.on_conflict_do_update(
+                        index_elements=[
+                            article_contents.c.source,
+                            article_contents.c.source_id,
+                            article_contents.c.content_hash,
+                        ],
+                        set_={
+                            "original_published_on": (
+                                func.coalesce(
+                                    content_statement.excluded.original_published_on,
+                                    article_contents.c.original_published_on,
+                                )
+                            ),
+                            "original_published_at": (
+                                func.coalesce(
+                                    content_statement.excluded.original_published_at,
+                                    article_contents.c.original_published_at,
+                                )
+                            ),
+                            "original_modified_on": (
+                                func.coalesce(
+                                    content_statement.excluded.original_modified_on,
+                                    article_contents.c.original_modified_on,
+                                )
+                            ),
+                            "original_modified_at": (
+                                func.coalesce(
+                                    content_statement.excluded.original_modified_at,
+                                    article_contents.c.original_modified_at,
+                                )
+                            ),
+                            "collected_at": content_statement.excluded.collected_at,
+                            "provenance": content_statement.excluded.provenance,
+                        },
+                    )
                 )
 
     def read_profile(self, scope: str, identifier: str) -> dict[str, Any] | None:
-        with self.connect() as connection:
-            row = connection.execute(
-                "SELECT properties FROM ops.publisher_adaptive_profiles "
-                "WHERE scope = %s AND identifier = %s",
-                (scope, identifier),
-            ).fetchone()
-        return row[0] if row is not None else None
+        with self._engine.connect() as connection:
+            return connection.execute(
+                select(adaptive_profiles.c.properties).where(
+                    adaptive_profiles.c.scope == scope,
+                    adaptive_profiles.c.identifier == identifier,
+                )
+            ).scalar_one_or_none()
 
     def save_profile(self, scope: str, identifier: str, properties: dict, context: dict) -> None:
-        with self.connect() as connection:
+        statement = insert(adaptive_profiles).values(
+            scope=scope, identifier=identifier, properties=properties, context=context
+        )
+        with self._engine.begin() as connection:
             connection.execute(
-                "INSERT INTO ops.publisher_adaptive_profiles "
-                "(scope, identifier, properties, context) "
-                "VALUES (%s,%s,%s,%s) ON CONFLICT (scope, identifier) DO UPDATE "
-                "SET properties=EXCLUDED.properties, context=EXCLUDED.context, updated_at=now()",
-                (scope, identifier, Jsonb(properties), Jsonb(context)),
+                statement.on_conflict_do_update(
+                    index_elements=[adaptive_profiles.c.scope, adaptive_profiles.c.identifier],
+                    set_={
+                        "properties": statement.excluded.properties,
+                        "context": statement.excluded.context,
+                    },
+                )
             )
             connection.execute(
-                "INSERT INTO ops.publisher_adaptive_history "
-                "(id, scope, identifier, properties, context) "
-                "VALUES (%s,%s,%s,%s,%s)",
-                (uuid4(), scope, identifier, Jsonb(properties), Jsonb(context)),
+                insert(adaptive_history).values(
+                    id=uuid4(),
+                    scope=scope,
+                    identifier=identifier,
+                    properties=properties,
+                    context=context,
+                )
             )
 
 

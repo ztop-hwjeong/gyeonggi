@@ -14,3 +14,6 @@ export type MaterialPage = components["schemas"]["StoredMaterialPage"];
 export type TagFolder = components["schemas"]["FolderInfo"];
 export type Tag = components["schemas"]["TagInfo"];
 export type UnfiledTagSummary = components["schemas"]["UnfiledTagSummary"];
+export type SentimentInfo = components["schemas"]["SentimentInfo"];
+export type SentimentWrite = components["schemas"]["SentimentWrite"];
+export type ReprintInfo = components["schemas"]["ReprintInfo"];

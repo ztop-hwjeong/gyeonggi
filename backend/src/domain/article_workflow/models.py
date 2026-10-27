@@ -8,6 +8,32 @@ type Decision = Literal["include", "exclude"]
 type TargetKind = Literal["policy", "regular", "current_issue", "leader_message"]
 
 
+class SentimentWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    sentiment: Literal["긍정", "중립", "부정"]
+    mixed_sentiment: bool
+    sentiment_reason: str = Field(default="", max_length=500)
+
+
+class SentimentInfo(BaseModel):
+    article_id: UUID
+    sentiment: Literal["긍정", "중립", "부정"] | None
+    mixed_sentiment: bool | None
+    sentiment_reason: str | None
+    origin: Literal["ai", "manual"] | None
+    updated_at: datetime | None
+
+
+class ReprintInfo(BaseModel):
+    article_id: UUID
+    title: str
+    publisher: str | None
+    body_similarity: float
+    matching_basis: str
+    checked_at: datetime
+
+
 class TargetWrite(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

@@ -81,4 +81,26 @@ CREATE TABLE ops.article_decision_history (
 CREATE INDEX article_decision_history_article_idx
     ON ops.article_decision_history(article_id,created_at DESC,id DESC);
 
+CREATE TABLE ops.article_sentiments (
+    article_id uuid PRIMARY KEY REFERENCES dw.articles(id),
+    sentiment text NOT NULL CHECK (sentiment IN ('긍정', '중립', '부정')),
+    mixed_sentiment boolean NOT NULL,
+    sentiment_reason text NOT NULL DEFAULT '',
+    origin text NOT NULL CHECK (origin IN ('ai', 'manual')),
+    run_id uuid REFERENCES ops.analysis_runs(id),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE ops.article_sentiment_history (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    article_id uuid NOT NULL REFERENCES dw.articles(id),
+    sentiment text NOT NULL CHECK (sentiment IN ('긍정', '중립', '부정')),
+    mixed_sentiment boolean NOT NULL,
+    sentiment_reason text NOT NULL DEFAULT '',
+    origin text NOT NULL CHECK (origin IN ('ai', 'manual')),
+    run_id uuid REFERENCES ops.analysis_runs(id),
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX article_sentiment_history_article_idx
+    ON ops.article_sentiment_history(article_id, created_at DESC, id DESC);
+
 COMMIT;

@@ -31,7 +31,7 @@ export function KeywordList() {
     <>
       <PageHeading
         title="키워드 관리"
-        description="함께 검색할 키워드와 채널을 등록하고 수집 주기를 관리해요."
+        description="함께 검색할 키워드와 채널을 등록하고 자동 수집 사용 여부를 관리해요."
         action={
           <Link className="button" href="/keywords/new">
             <PlusIcon size={18} />
@@ -130,9 +130,7 @@ export function KeywordList() {
                           .join(", ")}
                       </td>
                       <td className="nowrap">
-                        {rule.definition.enabled
-                          ? `${rule.definition.interval_minutes}분마다`
-                          : "꺼짐"}
+                        {rule.definition.enabled ? "켜짐" : "꺼짐"}
                       </td>
                       <td className="nowrap">{dateTime(rule.updated_at)}</td>
                       <td>

@@ -63,7 +63,12 @@ def test_single_article_analysis_saves_raw_draft(monkeypatch: pytest.MonkeyPatch
     repository.claim = AsyncMock(return_value=(uuid4(), 1))
     repository.complete = AsyncMock()
     repository.fail = AsyncMock()
-    draft = ModelDraft(tags=["교육정책"], sentiment="중립")
+    draft = ModelDraft(
+        tags=["교육정책"],
+        sentiment="중립",
+        mixed_sentiment=False,
+        sentiment_reason="정책 발표 전달",
+    )
 
     analyzer = Mock(analyze=AsyncMock(return_value=(draft, {"total_tokens": 10})))
     cache = Mock(acommit=AsyncMock())
@@ -98,7 +103,12 @@ def test_analysis_error_marks_run_failed(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_langchain_receives_one_article_and_structured_format(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    draft = ModelDraft(tags=["교육정책"], sentiment="")
+    draft = ModelDraft(
+        tags=["교육정책"],
+        sentiment="부정",
+        mixed_sentiment=True,
+        sentiment_reason="비판이 주된 평가",
+    )
     calls: list[dict] = []
 
     class Client:
@@ -128,13 +138,36 @@ def test_langchain_receives_one_article_and_structured_format(
 
 
 def test_tags_are_cleaned_without_extra_model_fields() -> None:
-    draft = ModelDraft(tags=[" 정책  개선 ", "정책 개선", "학교폭력"], sentiment="")
-    assert draft.model_dump() == {"tags": ["정책 개선", "학교폭력"], "sentiment": ""}
+    draft = ModelDraft(
+        tags=[" 정책  개선 ", "정책 개선", "학교폭력"],
+        sentiment="중립",
+        mixed_sentiment=False,
+        sentiment_reason="평가 방향 없음",
+    )
+    assert draft.model_dump() == {
+        "tags": ["정책 개선", "학교폭력"],
+        "sentiment": "중립",
+        "mixed_sentiment": False,
+        "sentiment_reason": "평가 방향 없음",
+    }
     with pytest.raises(ValidationError):
-        ModelDraft(tags=[" "], sentiment="")
+        ModelDraft(tags=[" "], sentiment="중립", mixed_sentiment=False, sentiment_reason="판단")
     with pytest.raises(ValidationError):
-        ModelDraft(tags=["x" * 81], sentiment="")
-    assert set(ModelDraft.model_json_schema()["properties"]) == {"tags", "sentiment"}
+        ModelDraft(
+            tags=["x" * 81], sentiment="중립", mixed_sentiment=False, sentiment_reason="판단"
+        )
+    with pytest.raises(ValidationError):
+        ModelDraft.model_validate(
+            {"tags": [], "sentiment": "", "mixed_sentiment": False, "sentiment_reason": "판단"}
+        )
+    with pytest.raises(ValidationError):
+        ModelDraft(tags=[], sentiment="중립", mixed_sentiment=False, sentiment_reason="  ")
+    assert set(ModelDraft.model_json_schema()["properties"]) == {
+        "tags",
+        "sentiment",
+        "mixed_sentiment",
+        "sentiment_reason",
+    }
 
 
 def test_dishka_loads_database_secret_asynchronously(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -188,14 +221,37 @@ def test_completed_analysis_still_applies_in_separate_task(
         assert value == run_id
         calls.append("apply")
 
+    async def reprints(source, source_id, content_hash):
+        calls.append("reprints")
+        return 0
+
     monkeypatch.setattr(analysis, "analyze_article", completed)
     monkeypatch.setattr(analysis, "apply_article_analysis", apply)
+    monkeypatch.setattr(analysis, "detect_article_reprints", reprints)
     monkeypatch.setattr(analysis, "get_run_logger", Mock(return_value=Mock()))
 
     assert asyncio.run(analysis.analyze_stored_article.fn("test", "article/1", "a" * 64)) == str(
         run_id
     )
-    assert calls == ["analysis", "apply"]
+    assert calls == ["reprints", "analysis", "apply"]
+
+
+def test_reprints_finish_before_model_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    async def reprints(source, source_id, content_hash):
+        calls.append("reprints")
+        return 1
+
+    async def failed(source, source_id, content_hash):
+        calls.append("analysis")
+        raise AnalysisError("모델 실패")
+
+    monkeypatch.setattr(analysis, "detect_article_reprints", reprints)
+    monkeypatch.setattr(analysis, "analyze_article", failed)
+    with pytest.raises(AnalysisError, match="모델 실패"):
+        asyncio.run(analysis.analyze_stored_article.fn("test", "article/1", "a" * 64))
+    assert calls == ["reprints", "analysis"]
 
 
 def test_apply_task_posts_to_backend_without_model_call(monkeypatch: pytest.MonkeyPatch) -> None:

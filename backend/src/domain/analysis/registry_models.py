@@ -25,48 +25,12 @@ class Topic(BaseModel):
         return value.strip()
 
 
-class TopicEvidenceCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(min_length=1, max_length=80)
-    description: str = Field(default="", max_length=400)
-    source: str = Field(min_length=1, max_length=80)
-    source_id: str = Field(min_length=1, max_length=2048)
-    publisher: str = Field(min_length=1, max_length=200)
-    quote: str = Field(min_length=1, max_length=500)
-
-    @field_validator("name", "publisher", "quote")
-    @classmethod
-    def no_blank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("공백만 입력 불가")
-        return value.strip()
-
-    @field_validator("name")
-    @classmethod
-    def no_comma_name(cls, value: str) -> str:
-        if "," in value:
-            raise ValueError("주제명 쉼표 사용 불가")
-        return value
-
-
 class TopicInfo(BaseModel):
     id: str
     name: str
     description: str
     synonyms: list[str]
     version: int
-    created_at: datetime
-    updated_at: datetime
-
-
-class CandidateInfo(BaseModel):
-    id: UUID
-    name: str
-    description: str
-    article_count: int
-    publisher_count: int
-    promoted_topic_id: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -97,13 +61,6 @@ class ArticleTopicOverride(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     decision: Literal["include", "exclude", "release"]
-
-
-class ArticleTopicLink(BaseModel):
-    source: str
-    source_id: str
-    topic_id: str
-    origin: Literal["ai", "manual_include", "manual_exclude"]
 
 
 class CanonicalArticleTopicLink(BaseModel):
@@ -143,11 +100,3 @@ class AnalysisAttemptInfo(BaseModel):
     model_draft: dict | None
     started_at: datetime
     finished_at: datetime | None
-
-
-class RegistryEvidenceResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    kind: Literal["existing_topic", "candidate", "promoted"]
-    topic_id: str | None = None
-    candidate: CandidateInfo | None = None

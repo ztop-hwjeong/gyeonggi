@@ -18,7 +18,6 @@ from domain.analysis.registry_models import (
     AnalysisAttemptInfo,
     AnalysisRunInfo,
     ArticleTopicOverride,
-    CandidateInfo,
     CanonicalArticleTopicLink,
     Topic,
     TopicInfo,
@@ -85,11 +84,6 @@ async def topics(registry: FromDishka[TopicRegistry]) -> list[TopicInfo]:
     return await registry.topics()
 
 
-@router.get("/topic-candidates")
-async def candidates(registry: FromDishka[TopicRegistry]) -> list[CandidateInfo]:
-    return await registry.candidates()
-
-
 @router.post("/topics")
 async def create_topics(body: list[Topic], registry: FromDishka[TopicRegistry]) -> list[TopicInfo]:
     try:
@@ -139,7 +133,7 @@ async def article_analysis_runs(
     registry: FromDishka[TopicRegistry],
     article_id: UUID,
 ) -> list[AnalysisRunInfo]:
-    return await registry.runs_for_canonical_article(article_id)
+    return await registry.runs_for_canonical(article_id)
 
 
 @router.put("/topics/{topic_id}")

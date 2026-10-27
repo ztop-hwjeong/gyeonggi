@@ -48,7 +48,6 @@ class RuleDefinition(BaseModel):
     )
     sources: tuple[SourceCode, ...] = Field(min_length=1, max_length=3)
     enabled: bool = False
-    interval_minutes: int = Field(default=15, ge=15, le=1440)
 
     @field_validator("terms")
     @classmethod
@@ -243,6 +242,7 @@ class ArticleSource(BaseModel):
     url: str | None
     original_url: str | None
     canonical_url: str | None
+    published_at: datetime | None = None
     first_seen_at: datetime
 
 
@@ -254,16 +254,25 @@ class StoredMaterial(BaseModel):
     publisher: str | None
     blog_name: str | None
     blog_url: str | None
+    published_on: date | None
     published_at: datetime | None
     sources: list[ArticleSource]
     content_preview: str
     has_body: bool
+    sentiment: Literal["긍정", "중립", "부정"] | None = None
+    mixed_sentiment: bool | None = None
+    sentiment_reason: str | None = None
+    sentiment_origin: Literal["ai", "manual"] | None = None
 
 
 class StoredMaterialDetail(StoredMaterial):
     body: str | None
     content_hash: str | None
     body_collected_at: datetime | None
+    original_published_on: date | None = None
+    original_published_at: datetime | None = None
+    original_modified_on: date | None = None
+    original_modified_at: datetime | None = None
 
 
 class StoredMaterialPage(BaseModel):
@@ -276,12 +285,17 @@ class StoredArticle(BaseModel):
     title: str
     summary: str
     publisher: str | None
+    published_on: date | None
     published_at: datetime | None
     sources: list[ArticleSource]
     inclusion: Literal["include", "exclude"]
     inclusion_reason: str | None
     content_preview: str
     has_body: bool
+    sentiment: Literal["긍정", "중립", "부정"] | None = None
+    mixed_sentiment: bool | None = None
+    sentiment_reason: str | None = None
+    sentiment_origin: Literal["ai", "manual"] | None = None
 
 
 class StoredArticlePage(BaseModel):
@@ -293,6 +307,10 @@ class StoredArticleDetail(StoredArticle):
     body: str | None
     content_hash: str | None
     body_collected_at: datetime | None
+    original_published_on: date | None = None
+    original_published_at: datetime | None = None
+    original_modified_on: date | None = None
+    original_modified_at: datetime | None = None
 
 
 class DailyCount(BaseModel):

@@ -1,18 +1,20 @@
 import asyncio
 import json
 import os
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import select, text
+from sqlalchemy import delete, insert, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from domain.analysis.registry import TopicRegistry
-from domain.analysis.registry_models import ArticleTopicOverride, Topic, TopicMerge
+from domain.analysis.registry_models import ArticleTopicOverride, Topic
 from domain.collection.models import MaterialKind, MaterialQuery
 from domain.collection.reporting import CollectionReporting
 from domain.collection.tables import materials
+from domain.events.tables import event_targets, events
 from domain.tag_folders.material_tags import MaterialTags
 from domain.tag_folders.models import (
     FolderCreate,
@@ -27,6 +29,7 @@ from domain.tag_folders.repository import (
     TagFolderNotFoundError,
     TagFolderRepository,
 )
+from domain.tag_folders.tables import material_tags
 
 
 @pytest.mark.skipif(
@@ -79,9 +82,35 @@ def test_folder_counts_unfiled_and_manual_membership() -> None:
                         Topic(id=gamma, name=f"감마 {marker}", description=""),
                     ]
                 )
-                await registry.sync_article_topics("bigkinds", source_ids[0], [alpha, beta])
-                await registry.sync_article_topics("bigkinds", source_ids[1], [alpha, gamma])
-                await registry.override_canonical_article_topic(
+                async with session.begin():
+                    await session.execute(
+                        insert(material_tags).values(
+                            [
+                                {
+                                    "material_id": material_ids[0],
+                                    "topic_id": alpha,
+                                    "origin": "ai",
+                                },
+                                {
+                                    "material_id": material_ids[0],
+                                    "topic_id": beta,
+                                    "origin": "ai",
+                                },
+                                {
+                                    "material_id": material_ids[1],
+                                    "topic_id": alpha,
+                                    "origin": "ai",
+                                },
+                                {
+                                    "material_id": material_ids[1],
+                                    "topic_id": gamma,
+                                    "origin": "ai",
+                                },
+                            ]
+                        )
+                    )
+                tag_service = MaterialTags(session)
+                await tag_service.override(
                     material_ids[0], alpha, ArticleTopicOverride(decision="exclude")
                 )
                 folders = TagFolderRepository(session)
@@ -105,16 +134,17 @@ def test_folder_counts_unfiled_and_manual_membership() -> None:
                         FolderUpdate(name=root.name, parent_id=child.id, version=root.version),
                         root.id,
                     )
-                await registry.merge(alpha, TopicMerge(target_id=beta))
-                assert await folders.folder_tag_ids(root.id, include_descendants=False) == {beta}
+                await folders.detach_tag(root.id, alpha)
+                assert await folders.folder_tag_ids(root.id, include_descendants=False) == set()
                 await session.rollback()
                 assert {
                     tag.id
                     for tag in await folders.tags(TagQuery(unfiled=True))
                     if tag.id in {alpha, beta, gamma}
-                } == {gamma}
+                } == {alpha, gamma}
                 summary = await folders.unfiled_summary("all")
-                assert summary == summary_before_merge
+                assert summary.tag_count == summary_before_merge.tag_count + 1
+                assert summary.material_count == summary_before_merge.material_count
         finally:
             await engine.dispose()
 
@@ -350,6 +380,25 @@ def test_delete_folder_subtree_preserves_tags_and_other_memberships() -> None:
                 await repository.attach_tags(child.id, FolderTagAttach(tag_ids=[released, shared]))
                 await repository.attach_tags(leaf.id, FolderTagAttach(tag_ids=[released]))
                 await repository.attach_tags(other.id, FolderTagAttach(tag_ids=[shared]))
+                event_id = uuid4()
+                async with session.begin():
+                    await session.execute(
+                        insert(events).values(
+                            id=event_id,
+                            name=f"참조 {marker}",
+                            occurred_at=datetime.now(UTC),
+                        )
+                    )
+                    await session.execute(
+                        insert(event_targets).values(event_id=event_id, folder_id=leaf.id)
+                    )
+                with pytest.raises(TagFolderConflictError):
+                    await repository.delete_folder(root.id, root.version)
+                async with session.begin():
+                    await session.execute(
+                        delete(event_targets).where(event_targets.c.event_id == event_id)
+                    )
+                    await session.execute(delete(events).where(events.c.id == event_id))
                 with pytest.raises(TagFolderConflictError):
                     await repository.delete_folder(root.id, root.version + 1)
                 await repository.delete_folder(root.id, root.version)

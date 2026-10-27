@@ -9,13 +9,12 @@ from control.models import ControlSettings
 from control.repository import ControlRepository
 
 
-def schedule_due(repository: ControlRepository, limit: int) -> int:
+def enqueue_enabled(repository: ControlRepository) -> int:
     created = 0
     with repository.connect() as conn, conn.transaction():
         rules = conn.execute(
             "SELECT * FROM ops.collection_rules WHERE definition->>'enabled'='true' "
-            "AND next_run_at<=now() ORDER BY next_run_at LIMIT %s FOR UPDATE SKIP LOCKED",
-            (limit,),
+            "ORDER BY updated_at, id FOR UPDATE SKIP LOCKED",
         ).fetchall()
         for rule in rules:
             for source in rule["definition"]["sources"]:
@@ -36,11 +35,6 @@ def schedule_due(repository: ControlRepository, limit: int) -> int:
                     (uuid4(), rule["id"], rule["version"], source, Jsonb(rule["definition"])),
                 )
                 created += 1
-            conn.execute(
-                "UPDATE ops.collection_rules SET next_run_at=now()+make_interval(mins=>%s) "
-                "WHERE id=%s",
-                (rule["definition"]["interval_minutes"], rule["id"]),
-            )
     return created
 
 

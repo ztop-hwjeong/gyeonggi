@@ -158,6 +158,11 @@ def test_terms_preserve_phrases_and_deduplicate(definition):
         RuleDefinition.model_validate({**definition, "terms": ['"경기" | "교육"']})
 
 
+def test_rule_interval_is_rejected(definition):
+    with pytest.raises(ValidationError):
+        RuleDefinition.model_validate({**definition, "interval_minutes": 15})
+
+
 def test_period_rejects_reverse_dates_and_allows_long_history():
     base = {"rule_id": uuid4(), "version": 1, "source": "bigkinds", "mode": "backfill"}
     with pytest.raises(ValidationError):

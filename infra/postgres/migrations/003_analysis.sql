@@ -16,24 +16,6 @@ CREATE TABLE ops.analysis_topic_labels (
     normalized_name text PRIMARY KEY,
     is_canonical boolean NOT NULL
 );
-CREATE TABLE ops.analysis_topic_candidates (
-    id uuid PRIMARY KEY,
-    normalized_name text NOT NULL UNIQUE,
-    name text NOT NULL,
-    description text NOT NULL,
-    promoted_topic_id text REFERENCES ops.analysis_topics(id),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE ops.analysis_topic_evidence (
-    candidate_id uuid NOT NULL REFERENCES ops.analysis_topic_candidates(id),
-    source text NOT NULL,
-    source_id text NOT NULL,
-    publisher text NOT NULL,
-    quote text NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (candidate_id, source, source_id)
-);
 CREATE TABLE ops.analysis_topic_history (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     topic_id text NOT NULL REFERENCES ops.analysis_topics(id),
@@ -41,26 +23,24 @@ CREATE TABLE ops.analysis_topic_history (
     detail jsonb NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE TABLE ops.analysis_article_topics (
-    source text NOT NULL,
-    source_id text NOT NULL,
+CREATE TABLE ops.material_tags (
+    material_id uuid NOT NULL REFERENCES dw.material_keys(id),
     topic_id text NOT NULL REFERENCES ops.analysis_topics(id),
     origin text NOT NULL CHECK (origin IN ('ai','manual_include','manual_exclude')),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (source, source_id, topic_id)
+    PRIMARY KEY (material_id, topic_id)
 );
+CREATE INDEX material_tags_topic_idx ON ops.material_tags(topic_id, material_id);
 CREATE TABLE ops.analysis_article_versions (
-    source text NOT NULL,
-    source_id text NOT NULL,
+    article_id uuid NOT NULL REFERENCES dw.articles(id),
     content_hash text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (source, source_id, content_hash)
+    PRIMARY KEY (article_id, content_hash)
 );
 CREATE TABLE ops.analysis_article_topic_history (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    source text NOT NULL,
-    source_id text NOT NULL,
+    article_id uuid NOT NULL REFERENCES dw.articles(id),
     content_hash text,
     original_topic_id text NOT NULL,
     resulting_topic_id text,
@@ -71,6 +51,7 @@ CREATE TABLE ops.analysis_article_topic_history (
 );
 CREATE TABLE ops.analysis_runs (
     id uuid PRIMARY KEY,
+    article_id uuid NOT NULL REFERENCES dw.articles(id),
     source text NOT NULL,
     source_id text NOT NULL,
     content_hash text NOT NULL,
@@ -87,6 +68,13 @@ CREATE TABLE ops.analysis_runs (
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE TABLE ops.analysis_response_cache (
+    cache_key text PRIMARY KEY,
+    prompt text NOT NULL,
+    llm_string text NOT NULL,
+    generations jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE ops.analysis_attempts (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     run_id uuid NOT NULL REFERENCES ops.analysis_runs(id),
@@ -102,4 +90,42 @@ CREATE TABLE ops.analysis_attempts (
     started_at timestamptz NOT NULL DEFAULT now(),
     finished_at timestamptz
 );
+
+CREATE TABLE ops.analysis_queue (
+    article_id uuid NOT NULL REFERENCES dw.articles(id),
+    source text NOT NULL,
+    source_id text NOT NULL,
+    content_hash text NOT NULL,
+    status text NOT NULL DEFAULT 'queued'
+        CHECK (status IN ('queued','submitted','running','completed','failed')),
+    flow_run_id uuid,
+    error text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source,source_id,content_hash)
+);
+CREATE TABLE ops.analysis_queue_keys (
+    article_id uuid NOT NULL REFERENCES dw.articles(id),
+    content_hash text NOT NULL,
+    source text NOT NULL,
+    source_id text NOT NULL,
+    PRIMARY KEY (article_id, content_hash)
+);
+CREATE FUNCTION ops.enqueue_article_analysis() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO ops.analysis_queue_keys(article_id,content_hash,source,source_id)
+    VALUES (NEW.article_id,NEW.content_hash,NEW.source,NEW.source_id)
+    ON CONFLICT DO NOTHING;
+    IF FOUND THEN
+        INSERT INTO ops.analysis_queue(article_id,source,source_id,content_hash)
+        VALUES (NEW.article_id,NEW.source,NEW.source_id,NEW.content_hash)
+        ON CONFLICT DO NOTHING;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER enqueue_article_analysis
+AFTER INSERT ON dw.article_contents
+FOR EACH ROW EXECUTE FUNCTION ops.enqueue_article_analysis();
+
 COMMIT;

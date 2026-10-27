@@ -1,16 +1,12 @@
 from datetime import UTC, datetime
-from typing import cast
 from uuid import UUID
 
 from collector_http.config import HttpSettings
-from collector_storage.config import DatabaseSettings, ObjectStorageSettings
-from collector_storage.objects import ObjectCredentials, RawObjectStore
 from prefect import flow, get_run_logger, task
-from prefect.blocks.system import Secret
 from prefect.cache_policies import NO_CACHE
 from prefect.context import FlowRunContext
-from pydantic import SecretStr
 
+from articles.container import create_detail_container
 from articles.models import ArticleDetail, ArticleSeed, DetailAttempt, DetailRunSummary, DetailStage
 from articles.pipeline import ArticleDetailCollector, browser_allowed
 from articles.storage import DetailRepository
@@ -65,15 +61,13 @@ def collect_article_details(
     if len(set(identifiers)) != len(identifiers):
         raise ValueError("중복된 상세 수집 대상")
     settings = DetailSettings.model_validate({})
-    database = DatabaseSettings.model_validate({})
-    block = cast(Secret, Secret.load(database.database_password_block))
-    storage_settings = ObjectStorageSettings.model_validate({})
-    credentials = cast(Secret, Secret.load(storage_settings.credentials_block))
-    with RawObjectStore(
-        storage_settings, ObjectCredentials.model_validate(credentials.get())
-    ) as objects:
-        repository = DetailRepository(database, SecretStr(cast(str, block.get())), objects)
-        return run_collection(articles, settings, repository, allow_bigkinds_fallback)
+    container = create_detail_container()
+    try:
+        with container() as scoped:
+            repository = scoped.get(DetailRepository)
+            return run_collection(articles, settings, repository, allow_bigkinds_fallback)
+    finally:
+        container.close()
 
 
 def run_collection(

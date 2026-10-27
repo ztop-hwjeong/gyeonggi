@@ -16,11 +16,14 @@ docker compose up -d postgres
 ```
 
 새 DB에는 `infra/postgres/migrations`의 SQL을 번호순으로 최초 한 번 적용한다.
-기존 DB에는 아직 적용하지 않은 마이그레이션만 적용한다. 예를 들어 다음 명령으로 파일 하나를 적용한다.
 
 ```powershell
-docker compose cp infra/postgres/migrations/001_article_collection.sql postgres:/tmp/migration.sql
-docker compose exec -T postgres psql -U gyeonggi -d gyeonggi -v ON_ERROR_STOP=1 -f /tmp/migration.sql
+Get-ChildItem infra/postgres/migrations/*.sql | Sort-Object Name | ForEach-Object {
+    docker compose cp $_.FullName postgres:/tmp/migration.sql
+    if ($LASTEXITCODE -ne 0) { throw "SQL 파일 복사 실패" }
+    docker compose exec -T postgres psql -U gyeonggi -d gyeonggi -v ON_ERROR_STOP=1 -f /tmp/migration.sql
+    if ($LASTEXITCODE -ne 0) { throw "DB 초기 구성 실패" }
+}
 ```
 
 웹과 API는 nginx를 통해 한 주소로 제공한다.
@@ -31,8 +34,7 @@ docker compose up -d --build nginx
 
 운영 화면은 `http://localhost:8080`, API 문서는 `http://localhost:8080/api/docs`다.
 호스트 포트는 `APP_PORT`로 변경한다. 웹 실행은 수집 Worker를 시작하지 않는다.
-CloudBeaver는 `http://localhost:8080/cloudbeaver/`에서 최초 관리자 설정 후 사용한다. 설정과 연결 정보는 `.docker/cloudbeaver`에 유지한다.
-PostgreSQL 연결은 호스트 `postgres`, 포트 `5432`, 데이터베이스·사용자 `gyeonggi`, 기존 DB 암호로 설정한다.
+CloudBeaver는 `http://localhost:8080/cloudbeaver/`에서 `gyeonggi`와 기존 DB 암호로 로그인해 사용한다. PostgreSQL 연결은 처음부터 준비되며 설정과 연결 정보는 `.docker/cloudbeaver`에 유지한다.
 수집 요청의 실제 실행과 원본 저장소 초기화는 [수집 운영 안내](collector/README.md)를 따른다.
 
 각 앱의 개발·검증 명령은 [프론트엔드](frontend/README.md), [백엔드](backend/README.md)에 정리한다.

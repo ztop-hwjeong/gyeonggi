@@ -36,7 +36,10 @@ class ExtractedArticle(BaseModel):
     method: Literal["adaptive", "trafilatura", "snippet_dom", "bigkinds_api"]
     evidence: Evidence
     adaptive_scope: str | None = None
-    published_at: datetime | None = None
+    original_published_on: date | None = None
+    original_published_at: datetime | None = None
+    original_modified_on: date | None = None
+    original_modified_at: datetime | None = None
 
 
 class FetchSnapshot(BaseModel):

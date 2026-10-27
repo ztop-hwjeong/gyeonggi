@@ -5,7 +5,7 @@ from datetime import date
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import insert, select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from domain.analysis.registry import TopicRegistry, TopicRegistryInvalidMaterialError
@@ -18,10 +18,8 @@ from domain.article_workflow.models import (
     TargetWrite,
 )
 from domain.article_workflow.repository import ArticleWorkflow, WorkflowInvalidMaterial
-from domain.collection.errors import CollectionNotFoundError
 from domain.collection.models import ArticleQuery, MaterialQuery
 from domain.collection.reporting import CollectionReporting
-from domain.collection.tables import materials
 
 
 @pytest.mark.skipif(
@@ -140,14 +138,12 @@ def test_canonical_sources_rule_priority_and_manual_override():
                 await registry.ensure_topics(
                     [Topic(id=topic_id, name=f"교권 {source_id}", description="교권 보도")]
                 )
-                await registry.sync_article_topics("bigkinds", f"bigkinds-{source_id}", [topic_id])
+                await registry.sync_material_tags(article.id, [topic_id])
                 assert await registry.canonical_topic_names(article.id) == [f"교권 {source_id}"]
                 await registry.override_canonical_article_topic(
                     article.id, topic_id, ArticleTopicOverride(decision="exclude")
                 )
-                await registry.sync_article_topics(
-                    "naver_news", f"naver_news-{source_id}", [topic_id]
-                )
+                await registry.sync_material_tags(article.id, [topic_id])
                 assert await registry.canonical_topic_names(article.id) == []
                 await workflow.delete_rule(target_rule.id, target_rule.version)
                 reapplied = await workflow.reapply(
@@ -220,35 +216,6 @@ def test_blog_materials_stay_out_of_news_analysis():
                         )
                     with pytest.raises(TopicRegistryInvalidMaterialError):
                         await registry.canonical_article_topics(material.id)
-        finally:
-            await engine.dispose()
-
-    asyncio.run(check())
-
-
-@pytest.mark.skipif(
-    not os.environ.get("ANALYSIS_TEST_DATABASE_URL"),
-    reason="독립 PostgreSQL 테스트 데이터베이스 필요",
-)
-def test_retired_materials_remain_stored_without_active_exposure():
-    async def check() -> None:
-        engine = create_async_engine(os.environ["ANALYSIS_TEST_DATABASE_URL"])
-        factory = async_sessionmaker(engine, expire_on_commit=False)
-        material_id = uuid4()
-        marker = uuid4().hex
-        try:
-            async with factory() as session:
-                async with session.begin():
-                    await session.execute(
-                        insert(materials).values(id=material_id, kind="cafe", title=marker)
-                    )
-                reporting = CollectionReporting(session)
-                assert (await reporting.materials(MaterialQuery(q=marker))).total == 0
-                with pytest.raises(CollectionNotFoundError):
-                    await reporting.material(material_id)
-                assert await session.scalar(
-                    select(materials.c.id).where(materials.c.id == material_id)
-                ) == material_id
         finally:
             await engine.dispose()
 

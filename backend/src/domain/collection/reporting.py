@@ -7,7 +7,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.analysis.membership import tagged_materials
-from domain.article_workflow.tables import article_inclusions, article_target_links
+from domain.article_workflow.tables import (
+    article_inclusions,
+    article_sentiments,
+    article_target_links,
+)
 from domain.collection.errors import (
     CollectionInvalidMaterialError,
     CollectionNotFoundError,
@@ -51,13 +55,19 @@ class CollectionReporting:
                 article_contents.c.body,
                 article_contents.c.content_hash,
                 article_contents.c.created_at,
+                article_contents.c.original_published_on,
+                article_contents.c.original_published_at,
+                article_contents.c.original_modified_on,
+                article_contents.c.original_modified_at,
             )
-            .where(article_contents.c.material_id == materials.c.id)
+            .where(article_contents.c.article_id == materials.c.id)
             .order_by(article_contents.c.created_at.desc(), article_contents.c.id.desc())
             .limit(1)
             .lateral("latest_content")
         )
-        source = materials.outerjoin(latest, literal(True))
+        source = materials.outerjoin(latest, literal(True)).outerjoin(
+            article_sentiments, article_sentiments.c.article_id == materials.c.id
+        )
         fields = [
             materials.c.id,
             materials.c.kind,
@@ -66,6 +76,7 @@ class CollectionReporting:
             materials.c.publisher,
             materials.c.blog_name,
             materials.c.blog_url,
+            materials.c.published_on,
             materials.c.published_at,
             materials.c.updated_at,
             func.coalesce(func.substr(latest.c.body, 1, 240), "").label("content_preview"),
@@ -73,6 +84,14 @@ class CollectionReporting:
             latest.c.body,
             latest.c.content_hash,
             latest.c.created_at.label("body_collected_at"),
+            latest.c.original_published_on,
+            latest.c.original_published_at,
+            latest.c.original_modified_on,
+            latest.c.original_modified_at,
+            article_sentiments.c.sentiment,
+            article_sentiments.c.mixed_sentiment,
+            article_sentiments.c.sentiment_reason,
+            article_sentiments.c.origin.label("sentiment_origin"),
         ]
         if include_review:
             source = source.outerjoin(

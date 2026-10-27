@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from sqlalchemy import Text, and_, delete, exists, func, literal, or_, select, update
+from sqlalchemy import and_, delete, exists, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,13 +12,9 @@ from domain.analysis.membership import tagged_materials
 from domain.analysis.registry_models import (
     AnalysisAttemptInfo,
     AnalysisRunInfo,
-    ArticleTopicLink,
     ArticleTopicOverride,
-    CandidateInfo,
     CanonicalArticleTopicLink,
-    RegistryEvidenceResult,
     Topic,
-    TopicEvidenceCreate,
     TopicInfo,
     TopicMerge,
     TopicUpdate,
@@ -27,21 +23,16 @@ from domain.analysis.registry_models import (
 from domain.analysis.tables import (
     analysis_attempts,
     analysis_runs,
+    article_sentiment_history,
+    article_sentiments,
     article_topic_history,
-    article_topics,
-    article_versions,
-    candidates,
+    material_tags,
     topic_history,
     topic_labels,
 )
-from domain.analysis.tables import (
-    evidence as evidence_table,
-)
-from domain.analysis.tables import (
-    topics as analysis_topics_table,
-)
+from domain.analysis.tables import topics as analysis_topics_table
 from domain.article_workflow.tables import article_inclusions, article_target_links
-from domain.collection.tables import article_contents, material_sources, materials
+from domain.collection.tables import article_contents, materials
 from domain.tag_folders.repository import TagFolderRepository
 from domain.tag_folders.tables import folder_tags
 
@@ -83,27 +74,6 @@ class TopicRegistry:
             raise TopicRegistryNotFoundError("기사 없음")
         if kind != "news":
             raise TopicRegistryInvalidMaterialError("뉴스 기사에만 적용 가능")
-
-    @staticmethod
-    def _candidate_statement():
-        article_key = func.coalesce(
-            evidence_table.c.article_id.cast(Text),
-            evidence_table.c.source + literal(":") + evidence_table.c.source_id,
-        )
-        return (
-            select(
-                candidates.c.id,
-                candidates.c.name,
-                candidates.c.description,
-                func.count(func.distinct(article_key)).label("article_count"),
-                func.count(func.distinct(evidence_table.c.publisher)).label("publisher_count"),
-                candidates.c.promoted_topic_id,
-                candidates.c.created_at,
-                candidates.c.updated_at,
-            )
-            .outerjoin(evidence_table, evidence_table.c.candidate_id == candidates.c.id)
-            .group_by(candidates.c.id)
-        )
 
     async def topics(self) -> list[TopicInfo]:
         async with self._transaction():
@@ -166,19 +136,6 @@ class TopicRegistry:
             )
             return [TopicInfo.model_validate(row) for row in rows]
 
-    async def candidates(self) -> list[CandidateInfo]:
-        async with self._transaction():
-            rows = (
-                (
-                    await self._session.execute(
-                        self._candidate_statement().order_by(candidates.c.updated_at.desc())
-                    )
-                )
-                .mappings()
-                .all()
-            )
-            return [CandidateInfo.model_validate(row) for row in rows]
-
     async def archived_labels(self) -> list[str]:
         async with self._transaction():
             statement = (
@@ -218,7 +175,7 @@ class TopicRegistry:
             rows = (await self._session.execute(statement)).mappings().all()
             return [AnalysisRunInfo.model_validate(row) for row in rows]
 
-    async def runs_for_canonical_article(self, article_id: UUID) -> list[AnalysisRunInfo]:
+    async def runs_for_canonical(self, article_id: UUID) -> list[AnalysisRunInfo]:
         async with self._transaction():
             await self._require_news(article_id)
             statement = (
@@ -239,7 +196,7 @@ class TopicRegistry:
         async with self._transaction():
             content = (
                 select(article_contents.c.content_hash, article_contents.c.body)
-                .where(article_contents.c.material_id == materials.c.id)
+                .where(article_contents.c.article_id == materials.c.id)
                 .order_by(article_contents.c.created_at.desc(), article_contents.c.id.desc())
                 .limit(1)
                 .lateral("content")
@@ -285,10 +242,14 @@ class TopicRegistry:
                     content.c.content_hash,
                     content.c.body,
                     applied.c.applied_result,
+                    article_sentiments.c.sentiment,
+                    article_sentiments.c.mixed_sentiment,
+                    article_sentiments.c.sentiment_reason,
                 )
                 .outerjoin(article_inclusions, article_inclusions.c.article_id == materials.c.id)
                 .outerjoin(content, literal(True))
                 .outerjoin(applied, literal(True))
+                .outerjoin(article_sentiments, article_sentiments.c.article_id == materials.c.id)
                 .where(
                     materials.c.kind == "news",
                     *inclusion_scope,
@@ -307,42 +268,17 @@ class TopicRegistry:
         async with self._transaction():
             await self._require_news(article_id)
             statement = (
-                select(
-                    analysis_topics_table.c.name,
-                    func.bool_or(article_topics.c.origin == "manual_include").label(
-                        "manual_include"
-                    ),
-                    func.bool_or(article_topics.c.origin == "manual_exclude").label(
-                        "manual_exclude"
-                    ),
-                    func.bool_or(article_topics.c.origin == "ai").label("ai_include"),
-                )
-                .join(
-                    material_sources,
-                    and_(
-                        material_sources.c.source == article_topics.c.source,
-                        material_sources.c.source_id == article_topics.c.source_id,
-                    ),
-                )
-                .join(
-                    analysis_topics_table, analysis_topics_table.c.id == article_topics.c.topic_id
-                )
+                select(analysis_topics_table.c.name, material_tags.c.origin)
+                .join(analysis_topics_table, analysis_topics_table.c.id == material_tags.c.topic_id)
                 .where(
-                    material_sources.c.material_id == article_id,
+                    material_tags.c.material_id == article_id,
                     analysis_topics_table.c.merged_into.is_(None),
                     analysis_topics_table.c.archived_at.is_(None),
                 )
-                .group_by(analysis_topics_table.c.id, analysis_topics_table.c.name)
                 .order_by(analysis_topics_table.c.name)
             )
             rows = (await self._session.execute(statement)).mappings().all()
-            if any(row["manual_include"] and row["manual_exclude"] for row in rows):
-                raise TopicRegistryConflictError("수집처 간 상충된 수동 주제 판단")
-            return [
-                row["name"]
-                for row in rows
-                if row["manual_include"] or (row["ai_include"] and not row["manual_exclude"])
-            ]
+            return [row["name"] for row in rows if row["origin"] != "manual_exclude"]
 
     async def attempts(self, run_id: UUID) -> list[AnalysisAttemptInfo]:
         async with self._transaction():
@@ -417,101 +353,6 @@ class TopicRegistry:
             if not rows:
                 raise TopicRegistryNotFoundError("완료된 분석 실행 없음")
 
-    async def record(self, evidence: TopicEvidenceCreate) -> RegistryEvidenceResult:
-        normalized = normalize_label(evidence.name)
-        async with self._transaction():
-            statement = (
-                select(topic_labels.c.id, analysis_topics_table.c.archived_at)
-                .join(analysis_topics_table, analysis_topics_table.c.id == topic_labels.c.id)
-                .where(topic_labels.c.normalized_name == normalized)
-                .order_by(topic_labels.c.is_canonical.desc())
-                .limit(1)
-                .with_for_update(read=True)
-            )
-            matches = (await self._session.execute(statement)).mappings().all()
-            if matches:
-                if matches[0]["archived_at"] is not None:
-                    raise TopicRegistryConflictError("보관된 주제명·별칭 재사용 불가")
-                await self._insert_ai_link(evidence.source, evidence.source_id, matches[0]["id"])
-                return RegistryEvidenceResult(kind="existing_topic", topic_id=matches[0]["id"])
-            candidate_id = uuid5(NAMESPACE_URL, f"gyeonggi-topic:{normalized}")
-            await self._session.execute(
-                insert(candidates)
-                .values(
-                    id=candidate_id,
-                    normalized_name=normalized,
-                    name=evidence.name,
-                    description=evidence.description,
-                )
-                .on_conflict_do_update(
-                    index_elements=[candidates.c.normalized_name], set_={"updated_at": func.now()}
-                )
-            )
-            article_id = (
-                select(material_sources.c.material_id)
-                .where(
-                    material_sources.c.source == evidence.source,
-                    material_sources.c.source_id == evidence.source_id,
-                )
-                .scalar_subquery()
-            )
-            await self._session.execute(
-                insert(evidence_table)
-                .values(
-                    candidate_id=candidate_id,
-                    source=evidence.source,
-                    source_id=evidence.source_id,
-                    article_id=article_id,
-                    publisher=evidence.publisher,
-                    quote=evidence.quote,
-                )
-                .on_conflict_do_nothing()
-            )
-            candidate = await self._candidate(candidate_id)
-            if candidate.promoted_topic_id:
-                await self._insert_ai_link(
-                    evidence.source, evidence.source_id, candidate.promoted_topic_id
-                )
-                return RegistryEvidenceResult(
-                    kind="promoted", topic_id=candidate.promoted_topic_id, candidate=candidate
-                )
-            topic_id = "topic-" + uuid5(NAMESPACE_URL, f"gyeonggi-topic-id:{normalized}").hex[:12]
-            await self._session.execute(
-                insert(analysis_topics_table)
-                .values(
-                    id=topic_id,
-                    name=candidate.name,
-                    description=candidate.description,
-                    synonyms=[],
-                )
-                .on_conflict_do_nothing(index_elements=[analysis_topics_table.c.id])
-            )
-            await self._session.execute(
-                insert(topic_labels)
-                .values(id=topic_id, normalized_name=normalized, is_canonical=True)
-                .on_conflict_do_nothing(index_elements=[topic_labels.c.normalized_name])
-            )
-            await self._session.execute(
-                update(candidates)
-                .where(candidates.c.id == candidate_id)
-                .values(promoted_topic_id=topic_id)
-            )
-            evidence_rows = (
-                (
-                    await self._session.execute(
-                        select(evidence_table.c.source, evidence_table.c.source_id).where(
-                            evidence_table.c.candidate_id == candidate_id
-                        )
-                    )
-                )
-                .mappings()
-                .all()
-            )
-            for row in evidence_rows:
-                await self._insert_ai_link(row["source"], row["source_id"], topic_id)
-            candidate = await self._candidate(candidate_id)
-            return RegistryEvidenceResult(kind="promoted", topic_id=topic_id, candidate=candidate)
-
     async def ensure_ai_tag(self, name: str) -> str | None:
         normalized = normalize_label(name)
         async with self._transaction():
@@ -544,63 +385,6 @@ class TopicRegistry:
             return await self._session.scalar(
                 select(topic_labels.c.id).where(topic_labels.c.normalized_name == normalized)
             )
-
-    async def _candidate(self, candidate_id: UUID) -> CandidateInfo:
-        rows = (
-            (
-                await self._session.execute(
-                    self._candidate_statement().where(candidates.c.id == candidate_id)
-                )
-            )
-            .mappings()
-            .all()
-        )
-        return CandidateInfo.model_validate(rows[0])
-
-    async def _insert_ai_link(self, source: str, source_id: str, topic_id: str) -> None:
-        article_id = (
-            select(material_sources.c.material_id)
-            .where(material_sources.c.source == source, material_sources.c.source_id == source_id)
-            .scalar_subquery()
-        )
-        await self._session.execute(
-            insert(article_topics)
-            .values(
-                source=source,
-                source_id=source_id,
-                article_id=article_id,
-                topic_id=topic_id,
-                origin="ai",
-            )
-            .on_conflict_do_nothing(
-                index_elements=[
-                    article_topics.c.source,
-                    article_topics.c.source_id,
-                    article_topics.c.topic_id,
-                ]
-            )
-        )
-
-    async def _canonical_topic_rows(self, article_id: UUID):
-        statement = (
-            select(
-                article_topics.c.topic_id,
-                func.bool_or(article_topics.c.origin == "manual_include").label("manual_include"),
-                func.bool_or(article_topics.c.origin == "manual_exclude").label("manual_exclude"),
-                func.bool_or(article_topics.c.origin == "ai").label("ai_include"),
-            )
-            .join(
-                material_sources,
-                and_(
-                    material_sources.c.source == article_topics.c.source,
-                    material_sources.c.source_id == article_topics.c.source_id,
-                ),
-            )
-            .where(material_sources.c.material_id == article_id)
-            .group_by(article_topics.c.topic_id)
-            .order_by(article_topics.c.topic_id)
-        )
-        return (await self._session.execute(statement)).mappings().all()
 
     async def update(self, topic_id: str, body: TopicUpdate) -> TopicInfo:
         async with self._transaction():
@@ -647,91 +431,53 @@ class TopicRegistry:
         if topic_id == body.target_id:
             raise TopicRegistryConflictError("같은 주제 병합 불가")
         async with self._transaction():
-            old, target = article_topics.alias("old"), article_topics.alias("target")
-            old_source, target_source = (
-                material_sources.alias("old_source"),
-                material_sources.alias("target_source"),
-            )
-            same_article = or_(
-                and_(old.c.source == target.c.source, old.c.source_id == target.c.source_id),
-                and_(
-                    old_source.c.material_id.is_not(None),
-                    old_source.c.material_id == target_source.c.material_id,
-                ),
-            )
-            conflicts = (
+            old_links = (
                 (
                     await self._session.execute(
-                        select(old.c.topic_id)
-                        .select_from(
-                            old.outerjoin(
-                                old_source,
-                                and_(
-                                    old_source.c.source == old.c.source,
-                                    old_source.c.source_id == old.c.source_id,
-                                ),
-                            )
-                            .join(target, target.c.topic_id == body.target_id)
-                            .outerjoin(
-                                target_source,
-                                and_(
-                                    target_source.c.source == target.c.source,
-                                    target_source.c.source_id == target.c.source_id,
-                                ),
-                            )
-                        )
-                        .where(
-                            old.c.topic_id == topic_id,
-                            same_article,
-                            or_(
-                                and_(
-                                    old.c.origin == "manual_include",
-                                    target.c.origin == "manual_exclude",
-                                ),
-                                and_(
-                                    old.c.origin == "manual_exclude",
-                                    target.c.origin == "manual_include",
-                                ),
-                            ),
-                        )
-                        .limit(1)
+                        select(material_tags.c.material_id, material_tags.c.origin)
+                        .where(material_tags.c.topic_id == topic_id)
+                        .with_for_update()
                     )
                 )
                 .mappings()
                 .all()
             )
-            if conflicts:
-                raise TopicRegistryConflictError("사람의 상충된 기사 주제 판단")
-            rows = (
-                (
-                    await self._session.execute(
-                        update(analysis_topics_table)
-                        .where(
-                            analysis_topics_table.c.id == topic_id,
-                            analysis_topics_table.c.merged_into.is_(None),
-                            analysis_topics_table.c.archived_at.is_(None),
-                        )
-                        .values(merged_into=body.target_id, updated_at=func.now())
-                        .returning(analysis_topics_table.c.id)
-                    )
-                )
-                .mappings()
-                .all()
-            )
-            target_rows = (
-                (
-                    await self._session.execute(
-                        select(analysis_topics_table.c.id).where(
-                            analysis_topics_table.c.id == body.target_id,
-                            analysis_topics_table.c.merged_into.is_(None),
-                            analysis_topics_table.c.archived_at.is_(None),
+            target_origins = {
+                row["material_id"]: row["origin"]
+                for row in (
+                    (
+                        await self._session.execute(
+                            select(material_tags.c.material_id, material_tags.c.origin)
+                            .where(material_tags.c.topic_id == body.target_id)
+                            .with_for_update()
                         )
                     )
+                    .mappings()
+                    .all()
                 )
-                .mappings()
-                .all()
+            }
+            for link in old_links:
+                target_origin = target_origins.get(link["material_id"])
+                if {link["origin"], target_origin} == {"manual_include", "manual_exclude"}:
+                    raise TopicRegistryConflictError("사람의 상충된 기사 주제 판단")
+            target_exists = await self._session.scalar(
+                select(analysis_topics_table.c.id).where(
+                    analysis_topics_table.c.id == body.target_id,
+                    analysis_topics_table.c.merged_into.is_(None),
+                    analysis_topics_table.c.archived_at.is_(None),
+                )
             )
-            if not rows or not target_rows:
+            updated = await self._session.scalar(
+                update(analysis_topics_table)
+                .where(
+                    analysis_topics_table.c.id == topic_id,
+                    analysis_topics_table.c.merged_into.is_(None),
+                    analysis_topics_table.c.archived_at.is_(None),
+                )
+                .values(merged_into=body.target_id, updated_at=func.now())
+                .returning(analysis_topics_table.c.id)
+            )
+            if updated is None or target_exists is None:
                 raise TopicRegistryNotFoundError("병합할 주제 없음")
             await self._session.execute(
                 insert(folder_tags)
@@ -745,73 +491,33 @@ class TopicRegistry:
                     index_elements=[folder_tags.c.folder_id, folder_tags.c.tag_id]
                 )
             )
-            links = (
-                (
-                    await self._session.execute(
-                        select(
-                            article_topics.c.source,
-                            article_topics.c.source_id,
-                            article_topics.c.origin,
-                        ).where(article_topics.c.topic_id == topic_id)
+            for link in old_links:
+                target_origin = target_origins.get(link["material_id"])
+                next_origin = (
+                    link["origin"]
+                    if target_origin == "ai" and link["origin"] != "ai"
+                    else target_origin or link["origin"]
+                )
+                await self._session.execute(
+                    insert(material_tags)
+                    .values(
+                        material_id=link["material_id"],
+                        topic_id=body.target_id,
+                        origin=next_origin,
+                    )
+                    .on_conflict_do_update(
+                        index_elements=[material_tags.c.material_id, material_tags.c.topic_id],
+                        set_={"origin": next_origin, "updated_at": func.now()},
                     )
                 )
-                .mappings()
-                .all()
-            )
-            for link in links:
-                target_link = (
-                    (
-                        await self._session.execute(
-                            select(article_topics.c.origin).where(
-                                article_topics.c.source == link["source"],
-                                article_topics.c.source_id == link["source_id"],
-                                article_topics.c.topic_id == body.target_id,
-                            )
-                        )
+                await self._session.execute(
+                    delete(material_tags).where(
+                        material_tags.c.material_id == link["material_id"],
+                        material_tags.c.topic_id == topic_id,
                     )
-                    .mappings()
-                    .all()
                 )
-                if target_link:
-                    if (
-                        link["origin"] in {"manual_include", "manual_exclude"}
-                        and target_link[0]["origin"] == "ai"
-                    ):
-                        await self._session.execute(
-                            update(article_topics)
-                            .where(
-                                article_topics.c.source == link["source"],
-                                article_topics.c.source_id == link["source_id"],
-                                article_topics.c.topic_id == body.target_id,
-                            )
-                            .values(origin=link["origin"], updated_at=func.now())
-                        )
-                    await self._session.execute(
-                        delete(article_topics).where(
-                            article_topics.c.source == link["source"],
-                            article_topics.c.source_id == link["source_id"],
-                            article_topics.c.topic_id == topic_id,
-                        )
-                    )
-                else:
-                    await self._session.execute(
-                        update(article_topics)
-                        .where(
-                            article_topics.c.source == link["source"],
-                            article_topics.c.source_id == link["source_id"],
-                            article_topics.c.topic_id == topic_id,
-                        )
-                        .values(topic_id=body.target_id, updated_at=func.now())
-                    )
-            for link in links:
-                await self._link_history(
-                    link["source"],
-                    link["source_id"],
-                    topic_id,
-                    body.target_id,
-                    link["origin"],
-                    link["origin"],
-                    "merge",
+                await self._record_tag_history(
+                    link["material_id"], topic_id, link["origin"], next_origin, "merge"
                 )
             await self._session.execute(
                 update(topic_labels).where(topic_labels.c.id == topic_id).values(id=body.target_id)
@@ -821,190 +527,164 @@ class TopicRegistry:
                     topic_id=topic_id, action="merge", detail={"target_id": body.target_id}
                 )
             )
+            return
 
-    async def sync_article_topics(
-        self, source: str, source_id: str, topic_ids: list[str], content_hash: str | None = None
-    ) -> list[ArticleTopicLink]:
-        """AI 연결은 수동 결정을 보존하며, 이전 AI 연결만 동기화."""
-        if len(topic_ids) != len(set(topic_ids)):
-            raise TopicRegistryConflictError("기사 주제 중복")
+    async def canonical_article_topics(self, article_id: UUID) -> list[CanonicalArticleTopicLink]:
         async with self._transaction():
-            article_rows = (
+            await self._require_news(article_id)
+            rows = (
                 (
                     await self._session.execute(
-                        select(material_sources.c.material_id).where(
-                            material_sources.c.source == source,
-                            material_sources.c.source_id == source_id,
-                        )
+                        select(material_tags.c.topic_id, material_tags.c.origin)
+                        .where(material_tags.c.material_id == article_id)
+                        .order_by(material_tags.c.topic_id)
                     )
                 )
                 .mappings()
                 .all()
             )
-            if not article_rows:
-                raise TopicRegistryNotFoundError("기사 없음")
-            article_id = article_rows[0]["material_id"]
-            await self._require_news(article_id)
-            if content_hash:
-                await self._session.execute(
-                    insert(article_versions)
-                    .values(
-                        source=source,
-                        source_id=source_id,
-                        article_id=article_id,
-                        content_hash=content_hash,
-                    )
-                    .on_conflict_do_nothing()
+            return [
+                CanonicalArticleTopicLink(
+                    article_id=article_id,
+                    topic_id=row["topic_id"],
+                    origin=row["origin"],
                 )
+                for row in rows
+            ]
+
+    async def sync_material_tags(
+        self, material_id: UUID, tag_ids: list[str]
+    ) -> list[CanonicalArticleTopicLink]:
+        if len(tag_ids) != len(set(tag_ids)):
+            raise TopicRegistryConflictError("태그 중복")
+        async with self._transaction():
+            await self._require_news(material_id)
             existing = (
                 (
                     await self._session.execute(
-                        select(article_topics.c.topic_id, article_topics.c.origin)
-                        .join(
-                            material_sources,
-                            and_(
-                                material_sources.c.source == article_topics.c.source,
-                                material_sources.c.source_id == article_topics.c.source_id,
-                            ),
-                        )
-                        .where(material_sources.c.material_id == article_id)
-                        .with_for_update(of=article_topics)
+                        select(material_tags.c.topic_id, material_tags.c.origin)
+                        .where(material_tags.c.material_id == material_id)
+                        .with_for_update()
                     )
                 )
                 .mappings()
                 .all()
             )
             manual = {row["topic_id"] for row in existing if row["origin"] != "ai"}
-            if any(
-                {row["origin"] for row in existing if row["topic_id"] == topic_id}
-                >= {"manual_include", "manual_exclude"}
-                for topic_id in manual
-            ):
-                raise TopicRegistryConflictError("수집처 간 상충된 수동 주제 판단")
-            source_match = exists(
-                select(material_sources.c.source).where(
-                    material_sources.c.source == article_topics.c.source,
-                    material_sources.c.source_id == article_topics.c.source_id,
-                    material_sources.c.material_id == article_id,
-                )
-            )
             await self._session.execute(
-                delete(article_topics).where(
-                    article_topics.c.origin == "ai",
-                    source_match,
-                    article_topics.c.topic_id.not_in(topic_ids or ["__none__"]),
+                delete(material_tags).where(
+                    material_tags.c.material_id == material_id,
+                    material_tags.c.origin == "ai",
+                    material_tags.c.topic_id.not_in(tag_ids or ["__none__"]),
                 )
             )
-            for topic_id in set(topic_ids) - manual:
-                available = (
-                    (
-                        await self._session.execute(
-                            select(analysis_topics_table.c.id).where(
-                                analysis_topics_table.c.id == topic_id,
-                                analysis_topics_table.c.merged_into.is_(None),
-                                analysis_topics_table.c.archived_at.is_(None),
-                            )
+            for tag_id in set(tag_ids) - manual:
+                active = await self._session.scalar(
+                    select(analysis_topics_table.c.id).where(
+                        analysis_topics_table.c.id == tag_id,
+                        analysis_topics_table.c.merged_into.is_(None),
+                        analysis_topics_table.c.archived_at.is_(None),
+                    )
+                )
+                if active is not None:
+                    await self._session.execute(
+                        insert(material_tags)
+                        .values(material_id=material_id, topic_id=tag_id, origin="ai")
+                        .on_conflict_do_nothing(
+                            index_elements=[material_tags.c.material_id, material_tags.c.topic_id]
                         )
                     )
-                    .mappings()
-                    .all()
-                )
-                if not available:
-                    continue
-                source_rows = (
-                    (
-                        await self._session.execute(
-                            select(material_sources.c.source, material_sources.c.source_id).where(
-                                material_sources.c.material_id == article_id
-                            )
-                        )
-                    )
-                    .mappings()
-                    .all()
-                )
-                for source_row in source_rows:
-                    await self._insert_ai_link(
-                        source_row["source"], source_row["source_id"], topic_id
-                    )
-            rows = await self._canonical_topic_rows(article_id)
-            return [
-                ArticleTopicLink(
-                    source=source,
-                    source_id=source_id,
-                    topic_id=row["topic_id"],
-                    origin=(
-                        "manual_exclude"
-                        if row["manual_exclude"]
-                        else "manual_include"
-                        if row["manual_include"]
-                        else "ai"
-                    ),
-                )
-                for row in rows
-            ]
-
-    async def article_topics(self, source: str, source_id: str) -> list[ArticleTopicLink]:
-        async with self._transaction():
             rows = (
                 (
                     await self._session.execute(
-                        select(
-                            article_topics.c.source,
-                            article_topics.c.source_id,
-                            article_topics.c.topic_id,
-                            article_topics.c.origin,
-                        )
-                        .where(
-                            article_topics.c.source == source,
-                            article_topics.c.source_id == source_id,
-                        )
-                        .order_by(article_topics.c.topic_id)
+                        select(material_tags.c.topic_id, material_tags.c.origin)
+                        .where(material_tags.c.material_id == material_id)
+                        .order_by(material_tags.c.topic_id)
                     )
                 )
                 .mappings()
                 .all()
             )
-            return [ArticleTopicLink.model_validate(row) for row in rows]
-
-    async def canonical_article_topics(self, article_id: UUID) -> list[CanonicalArticleTopicLink]:
-        async with self._transaction():
-            await self._require_news(article_id)
-            rows = await self._canonical_topic_rows(article_id)
             return [
                 CanonicalArticleTopicLink(
-                    article_id=article_id,
-                    topic_id=row["topic_id"],
-                    origin=(
-                        "conflict"
-                        if row["manual_include"] and row["manual_exclude"]
-                        else "manual_exclude"
-                        if row["manual_exclude"]
-                        else "manual_include"
-                        if row["manual_include"]
-                        else "ai"
-                    ),
+                    article_id=material_id, topic_id=row["topic_id"], origin=row["origin"]
                 )
                 for row in rows
             ]
+
+    async def save_ai_sentiment(
+        self,
+        material_id: UUID,
+        run_id: UUID,
+        sentiment: str,
+        mixed_sentiment: bool,
+        sentiment_reason: str,
+    ) -> None:
+        async with self._transaction():
+            await self._require_news(material_id)
+            current = await self._session.scalar(
+                select(article_sentiments.c.origin).where(
+                    article_sentiments.c.article_id == material_id
+                )
+            )
+            if current == "manual":
+                return
+            statement = insert(article_sentiments).values(
+                article_id=material_id,
+                sentiment=sentiment,
+                mixed_sentiment=mixed_sentiment,
+                sentiment_reason=sentiment_reason,
+                origin="ai",
+                run_id=run_id,
+            )
+            await self._session.execute(
+                statement.on_conflict_do_update(
+                    index_elements=[article_sentiments.c.article_id],
+                    set_={
+                        "sentiment": statement.excluded.sentiment,
+                        "mixed_sentiment": statement.excluded.mixed_sentiment,
+                        "sentiment_reason": statement.excluded.sentiment_reason,
+                        "origin": "ai",
+                        "run_id": statement.excluded.run_id,
+                        "updated_at": func.now(),
+                    },
+                )
+            )
+            await self._session.execute(
+                insert(article_sentiment_history).values(
+                    article_id=material_id,
+                    sentiment=sentiment,
+                    mixed_sentiment=mixed_sentiment,
+                    sentiment_reason=sentiment_reason,
+                    origin="ai",
+                    run_id=run_id,
+                )
+            )
+
+    async def _record_tag_history(
+        self,
+        material_id: UUID,
+        topic_id: str,
+        previous: str | None,
+        current: str | None,
+        action: str = "override",
+    ) -> None:
+        await self._session.execute(
+            insert(article_topic_history).values(
+                article_id=material_id,
+                original_topic_id=topic_id,
+                resulting_topic_id=topic_id,
+                previous_origin=previous,
+                resulting_origin=current,
+                action="release" if current is None else action,
+            )
+        )
 
     async def override_canonical_article_topic(
         self, article_id: UUID, topic_id: str, body: ArticleTopicOverride
     ) -> None:
         async with self._transaction():
             await self._require_news(article_id)
-            source_rows = (
-                (
-                    await self._session.execute(
-                        select(material_sources.c.source, material_sources.c.source_id)
-                        .where(material_sources.c.material_id == article_id)
-                        .order_by(material_sources.c.source, material_sources.c.source_id)
-                    )
-                )
-                .mappings()
-                .all()
-            )
-            if not source_rows:
-                raise TopicRegistryNotFoundError("기사 없음")
             topic = (
                 (
                     await self._session.execute(
@@ -1020,161 +700,34 @@ class TopicRegistry:
             )
             if not topic:
                 raise TopicRegistryNotFoundError("주제 없음")
-            for source in source_rows:
-                previous = (
-                    (
-                        await self._session.execute(
-                            select(article_topics.c.origin).where(
-                                article_topics.c.topic_id == topic_id,
-                                article_topics.c.source == source["source"],
-                                article_topics.c.source_id == source["source_id"],
-                            )
-                        )
-                    )
-                    .mappings()
-                    .all()
+            previous = await self._session.scalar(
+                select(material_tags.c.origin).where(
+                    material_tags.c.material_id == article_id,
+                    material_tags.c.topic_id == topic_id,
                 )
-                prior = previous[0]["origin"] if previous else None
-                if body.decision == "release":
-                    await self._session.execute(
-                        delete(article_topics).where(
-                            article_topics.c.topic_id == topic_id,
-                            article_topics.c.source == source["source"],
-                            article_topics.c.source_id == source["source_id"],
-                            article_topics.c.origin.in_(("manual_include", "manual_exclude")),
-                        )
-                    )
-                    next_origin = None
-                else:
-                    next_origin = "manual_" + body.decision
-                    statement = insert(article_topics).values(
-                        source=source["source"],
-                        source_id=source["source_id"],
-                        article_id=article_id,
-                        topic_id=topic_id,
-                        origin=next_origin,
-                    )
-                    await self._session.execute(
-                        statement.on_conflict_do_update(
-                            index_elements=[
-                                article_topics.c.source,
-                                article_topics.c.source_id,
-                                article_topics.c.topic_id,
-                            ],
-                            set_={
-                                "origin": statement.excluded.origin,
-                                "article_id": statement.excluded.article_id,
-                                "updated_at": func.now(),
-                            },
-                        )
-                    )
-                if prior != next_origin:
-                    await self._link_history(
-                        source["source"],
-                        source["source_id"],
-                        topic_id,
-                        topic_id,
-                        prior,
-                        next_origin,
-                        "release" if body.decision == "release" else "override",
-                    )
-
-    async def override_article_topic(
-        self, source: str, source_id: str, topic_id: str, body: ArticleTopicOverride
-    ) -> None:
-        async with self._transaction():
-            previous = (
-                (
-                    await self._session.execute(
-                        select(article_topics.c.origin).where(
-                            article_topics.c.source == source,
-                            article_topics.c.source_id == source_id,
-                            article_topics.c.topic_id == topic_id,
-                        )
-                    )
-                )
-                .mappings()
-                .all()
             )
-            previous_origin = previous[0]["origin"] if previous else None
             if body.decision == "release":
                 await self._session.execute(
-                    delete(article_topics).where(
-                        article_topics.c.source == source,
-                        article_topics.c.source_id == source_id,
-                        article_topics.c.topic_id == topic_id,
-                        article_topics.c.origin.in_(("manual_include", "manual_exclude")),
+                    delete(material_tags).where(
+                        material_tags.c.material_id == article_id,
+                        material_tags.c.topic_id == topic_id,
+                        material_tags.c.origin.in_(("manual_include", "manual_exclude")),
                     )
                 )
-                await self._link_history(
-                    source, source_id, topic_id, topic_id, previous_origin, None, "release"
+                origin = None
+            else:
+                origin = "manual_" + body.decision
+                statement = insert(material_tags).values(
+                    material_id=article_id, topic_id=topic_id, origin=origin
                 )
-                return
-            exists_topic = (
-                (
-                    await self._session.execute(
-                        select(analysis_topics_table.c.id).where(
-                            analysis_topics_table.c.id == topic_id,
-                            analysis_topics_table.c.merged_into.is_(None),
-                            analysis_topics_table.c.archived_at.is_(None),
-                        )
+                await self._session.execute(
+                    statement.on_conflict_do_update(
+                        index_elements=[material_tags.c.material_id, material_tags.c.topic_id],
+                        set_={"origin": statement.excluded.origin, "updated_at": func.now()},
                     )
                 )
-                .mappings()
-                .all()
-            )
-            if not exists_topic:
-                raise TopicRegistryNotFoundError("주제 없음")
-            origin = "manual_" + body.decision
-            article_id = (
-                select(material_sources.c.material_id)
-                .where(
-                    material_sources.c.source == source, material_sources.c.source_id == source_id
-                )
-                .scalar_subquery()
-            )
-            statement = insert(article_topics).values(
-                source=source,
-                source_id=source_id,
-                article_id=article_id,
-                topic_id=topic_id,
-                origin=origin,
-            )
-            await self._session.execute(
-                statement.on_conflict_do_update(
-                    index_elements=[
-                        article_topics.c.source,
-                        article_topics.c.source_id,
-                        article_topics.c.topic_id,
-                    ],
-                    set_={"origin": statement.excluded.origin, "updated_at": func.now()},
-                )
-            )
-            await self._link_history(
-                source, source_id, topic_id, topic_id, previous_origin, origin, "override"
-            )
-
-    async def _link_history(
-        self,
-        source: str,
-        source_id: str,
-        original: str,
-        resulting: str | None,
-        previous: str | None,
-        current: str | None,
-        action: str,
-    ) -> None:
-        await self._session.execute(
-            insert(article_topic_history).values(
-                source=source,
-                source_id=source_id,
-                original_topic_id=original,
-                resulting_topic_id=resulting,
-                previous_origin=previous,
-                resulting_origin=current,
-                action=action,
-            )
-        )
+            if previous != origin:
+                await self._record_tag_history(article_id, topic_id, previous, origin)
 
     async def archive(self, topic_id: str) -> None:
         async with self._transaction():

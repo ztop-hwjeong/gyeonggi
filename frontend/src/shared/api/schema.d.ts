@@ -569,23 +569,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/analysis/topic-candidates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Candidates */
-        get: operations["candidates_analysis_topic_candidates_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/analysis/runs/{run_id}/apply": {
         parameters: {
             query?: never;
@@ -716,6 +699,41 @@ export interface paths {
         get?: never;
         /** Override Article Topic */
         put: operations["override_article_topic_analysis_articles__article_id__topics__topic_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/articles/{article_id}/sentiment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Article Sentiment */
+        get: operations["article_sentiment_articles__article_id__sentiment_get"];
+        /** Override Article Sentiment */
+        put: operations["override_article_sentiment_articles__article_id__sentiment_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/articles/{article_id}/reprints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Article Reprints */
+        get: operations["article_reprints_articles__article_id__reprints_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1229,6 +1247,8 @@ export interface components {
             original_url: string | null;
             /** Canonical Url */
             canonical_url: string | null;
+            /** Published At */
+            published_at?: string | null;
             /**
              * First Seen At
              * Format: date-time
@@ -1268,34 +1288,6 @@ export interface components {
             status: "accepted" | "rejected" | "failed" | "skipped";
             /** Count */
             count: number;
-        };
-        /** CandidateInfo */
-        CandidateInfo: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string;
-            /** Article Count */
-            article_count: number;
-            /** Publisher Count */
-            publisher_count: number;
-            /** Promoted Topic Id */
-            promoted_topic_id: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
         };
         /** CanonicalArticleTopicLink */
         CanonicalArticleTopicLink: {
@@ -1765,7 +1757,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "ai" | "manual_include" | "manual_exclude" | "conflict";
+            origin: "ai" | "manual_include" | "manual_exclude";
         };
         /** Overview */
         Overview: {
@@ -1855,6 +1847,27 @@ export interface components {
              * @default true
              */
             include_descendants: boolean;
+        };
+        /** ReprintInfo */
+        ReprintInfo: {
+            /**
+             * Article Id
+             * Format: uuid
+             */
+            article_id: string;
+            /** Title */
+            title: string;
+            /** Publisher */
+            publisher: string | null;
+            /** Body Similarity */
+            body_similarity: number;
+            /** Matching Basis */
+            matching_basis: string;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
         };
         /** RequestInfo */
         RequestInfo: {
@@ -1961,11 +1974,6 @@ export interface components {
              * @default false
              */
             enabled: boolean;
-            /**
-             * Interval Minutes
-             * @default 15
-             */
-            interval_minutes: number;
         };
         /** RuleInfo */
         RuleInfo: {
@@ -2013,11 +2021,6 @@ export interface components {
              * @default false
              */
             enabled: boolean;
-            /**
-             * Interval Minutes
-             * @default 15
-             */
-            interval_minutes: number;
             /** Version */
             version: number;
         };
@@ -2251,6 +2254,39 @@ export interface components {
             cursor: components["schemas"]["SearchCursor"] | null;
             last_run: components["schemas"]["SearchProgress"] | null;
         };
+        /** SentimentInfo */
+        SentimentInfo: {
+            /**
+             * Article Id
+             * Format: uuid
+             */
+            article_id: string;
+            /** Sentiment */
+            sentiment: ("긍정" | "중립" | "부정") | null;
+            /** Mixed Sentiment */
+            mixed_sentiment: boolean | null;
+            /** Sentiment Reason */
+            sentiment_reason: string | null;
+            /** Origin */
+            origin: ("ai" | "manual") | null;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** SentimentWrite */
+        SentimentWrite: {
+            /**
+             * Sentiment
+             * @enum {string}
+             */
+            sentiment: "긍정" | "중립" | "부정";
+            /** Mixed Sentiment */
+            mixed_sentiment: boolean;
+            /**
+             * Sentiment Reason
+             * @default
+             */
+            sentiment_reason: string;
+        };
         /** @enum {string} */
         SourceCode: "bigkinds" | "naver_news" | "naver_blog";
         /** SourceInfo */
@@ -2278,6 +2314,8 @@ export interface components {
             summary: string;
             /** Publisher */
             publisher: string | null;
+            /** Published On */
+            published_on: string | null;
             /** Published At */
             published_at: string | null;
             /** Sources */
@@ -2293,6 +2331,14 @@ export interface components {
             content_preview: string;
             /** Has Body */
             has_body: boolean;
+            /** Sentiment */
+            sentiment?: ("긍정" | "중립" | "부정") | null;
+            /** Mixed Sentiment */
+            mixed_sentiment?: boolean | null;
+            /** Sentiment Reason */
+            sentiment_reason?: string | null;
+            /** Sentiment Origin */
+            sentiment_origin?: ("ai" | "manual") | null;
         };
         /** StoredArticleDetail */
         StoredArticleDetail: {
@@ -2307,6 +2353,8 @@ export interface components {
             summary: string;
             /** Publisher */
             publisher: string | null;
+            /** Published On */
+            published_on: string | null;
             /** Published At */
             published_at: string | null;
             /** Sources */
@@ -2322,12 +2370,28 @@ export interface components {
             content_preview: string;
             /** Has Body */
             has_body: boolean;
+            /** Sentiment */
+            sentiment?: ("긍정" | "중립" | "부정") | null;
+            /** Mixed Sentiment */
+            mixed_sentiment?: boolean | null;
+            /** Sentiment Reason */
+            sentiment_reason?: string | null;
+            /** Sentiment Origin */
+            sentiment_origin?: ("ai" | "manual") | null;
             /** Body */
             body: string | null;
             /** Content Hash */
             content_hash: string | null;
             /** Body Collected At */
             body_collected_at: string | null;
+            /** Original Published On */
+            original_published_on?: string | null;
+            /** Original Published At */
+            original_published_at?: string | null;
+            /** Original Modified On */
+            original_modified_on?: string | null;
+            /** Original Modified At */
+            original_modified_at?: string | null;
         };
         /** StoredArticlePage */
         StoredArticlePage: {
@@ -2354,6 +2418,8 @@ export interface components {
             blog_name: string | null;
             /** Blog Url */
             blog_url: string | null;
+            /** Published On */
+            published_on: string | null;
             /** Published At */
             published_at: string | null;
             /** Sources */
@@ -2362,6 +2428,14 @@ export interface components {
             content_preview: string;
             /** Has Body */
             has_body: boolean;
+            /** Sentiment */
+            sentiment?: ("긍정" | "중립" | "부정") | null;
+            /** Mixed Sentiment */
+            mixed_sentiment?: boolean | null;
+            /** Sentiment Reason */
+            sentiment_reason?: string | null;
+            /** Sentiment Origin */
+            sentiment_origin?: ("ai" | "manual") | null;
         };
         /** StoredMaterialDetail */
         StoredMaterialDetail: {
@@ -2381,6 +2455,8 @@ export interface components {
             blog_name: string | null;
             /** Blog Url */
             blog_url: string | null;
+            /** Published On */
+            published_on: string | null;
             /** Published At */
             published_at: string | null;
             /** Sources */
@@ -2389,12 +2465,28 @@ export interface components {
             content_preview: string;
             /** Has Body */
             has_body: boolean;
+            /** Sentiment */
+            sentiment?: ("긍정" | "중립" | "부정") | null;
+            /** Mixed Sentiment */
+            mixed_sentiment?: boolean | null;
+            /** Sentiment Reason */
+            sentiment_reason?: string | null;
+            /** Sentiment Origin */
+            sentiment_origin?: ("ai" | "manual") | null;
             /** Body */
             body: string | null;
             /** Content Hash */
             content_hash: string | null;
             /** Body Collected At */
             body_collected_at: string | null;
+            /** Original Published On */
+            original_published_on?: string | null;
+            /** Original Published At */
+            original_published_at?: string | null;
+            /** Original Modified On */
+            original_modified_on?: string | null;
+            /** Original Modified At */
+            original_modified_at?: string | null;
         };
         /** StoredMaterialPage */
         StoredMaterialPage: {
@@ -3920,26 +4012,6 @@ export interface operations {
             };
         };
     };
-    candidates_analysis_topic_candidates_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CandidateInfo"][];
-                };
-            };
-        };
-    };
     apply_analysis_analysis_runs__run_id__apply_post: {
         parameters: {
             query?: never;
@@ -4216,6 +4288,103 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    article_sentiment_articles__article_id__sentiment_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SentimentInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    override_article_sentiment_articles__article_id__sentiment_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SentimentWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SentimentInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    article_reprints_articles__article_id__reprints_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReprintInfo"][];
+                };
             };
             /** @description Validation Error */
             422: {

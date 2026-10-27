@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import (
 from config import Settings
 from domain.analysis.application import AnalysisApplication
 from domain.analysis.registry import TopicRegistry
+from domain.article_workflow.relations import ArticleRelations
 from domain.article_workflow.repository import ArticleWorkflow
 from domain.collection.reporting import CollectionReporting
 from domain.collection.repository import CollectionRepository
@@ -82,6 +83,10 @@ class CollectionProvider(Provider):
 
 
 class AnalysisProvider(Provider):
+    @provide(scope=Scope.REQUEST)
+    def article_relations(self, session: AsyncSession) -> ArticleRelations:
+        return ArticleRelations(session)
+
     @provide(scope=Scope.REQUEST)
     def article_workflow(self, session: AsyncSession) -> ArticleWorkflow:
         return ArticleWorkflow(session)

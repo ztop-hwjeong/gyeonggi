@@ -19,7 +19,6 @@ class Definition(BaseModel):
     terms: tuple[str, ...]
     sources: tuple[str, ...]
     enabled: bool
-    interval_minutes: int
 
 
 class ManagedRequest(BaseModel):

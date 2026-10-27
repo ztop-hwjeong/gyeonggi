@@ -10,6 +10,7 @@ from trafilatura.settings import Document
 from w3lib.encoding import html_to_unicode
 
 from articles.adaptive import PostgresAdaptiveStorage, ProfileContext
+from articles.dates import extract_source_dates
 from articles.matching import normalized_text, verify_article
 from articles.models import ArticleSeed, Evidence, ExtractedArticle
 from articles.storage import DetailRepository
@@ -54,6 +55,9 @@ class ArticleExtractor:
             Document | None,
             bare_extraction(decoded, url=url, with_metadata=True, include_comments=False),
         )
+        original_published_on, original_published_at, original_modified_on, original_modified_at = (
+            extract_source_dates(decoded, document.date if document is not None else None)
+        )
         title = document.title if document is not None and document.title else ""
         headings = [str(node.get_all_text(strip=True)) for node in page.css("h1")]
         title = max(
@@ -78,6 +82,10 @@ class ArticleExtractor:
                         method="adaptive",
                         evidence=evidence,
                         adaptive_scope=scope,
+                        original_published_on=original_published_on,
+                        original_published_at=original_published_at,
+                        original_modified_on=original_modified_on,
+                        original_modified_at=original_modified_at,
                     )
         candidates = page.css("article,main,section,div,td")[: self._settings.max_dom_candidates]
         text = document.text if document is not None and document.text else ""
@@ -105,6 +113,10 @@ class ArticleExtractor:
                 method="trafilatura",
                 evidence=evidence,
                 adaptive_scope=scope if page.retrieve("article-body") else None,
+                original_published_on=original_published_on,
+                original_published_at=original_published_at,
+                original_modified_on=original_modified_on,
+                original_modified_at=original_modified_at,
             )
         matching = []
         for candidate in candidates:
@@ -122,6 +134,10 @@ class ArticleExtractor:
                 method="snippet_dom",
                 evidence=evidence,
                 adaptive_scope=scope,
+                original_published_on=original_published_on,
+                original_published_at=original_published_at,
+                original_modified_on=original_modified_on,
+                original_modified_at=original_modified_at,
             )
         raise ExtractionRejectedError(evidence.reason)
 

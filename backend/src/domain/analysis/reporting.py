@@ -30,7 +30,6 @@ async def report_data(
         topics = [topic for topic in topics if topic.id in selected_tags]
     articles: list[dict] = []
     for number, row in enumerate(rows, 1):
-        applied = row["applied_result"]
         if folder_id is None:
             names = await registry.canonical_topic_names(row["id"])
         else:
@@ -45,8 +44,8 @@ async def report_data(
                 "keywords": ", ".join(names),
                 "publisher": row["publisher"] or "",
                 "title": row["title"],
-                "sentiment": applied.get("sentiment", "") if applied else "",
-                "reason": "",
+                "sentiment": row["sentiment"] or "",
+                "reason": row["sentiment_reason"] or "",
             }
         )
     return {

@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from unittest.mock import Mock
 
 import pytest
@@ -92,6 +93,69 @@ def test_rendered_utf8_header_overrides_legacy_meta_charset(seed, article_html, 
     )
     assert result.evidence.verified
     assert "학교와 지역 도서관" in result.text
+
+
+def test_extracts_json_ld_published_and_modified_datetimes(seed, article_html, repository):
+    body = article_html.replace(
+        b"</head>",
+        (
+            b'<script type="application/ld+json">'
+            b'{"@type":"NewsArticle","datePublished":"2026-10-23T09:15:00+09:00",'
+            b'"dateModified":"2026-10-24T10:20:00+09:00"}'
+            b"</script></head>"
+        ),
+    )
+    result = ArticleExtractor(repository, ExtractionSettings()).extract(
+        seed, body, str(seed.original_url)
+    )
+    assert result.original_published_at == datetime(2026, 10, 23, 0, 15, tzinfo=UTC)
+    assert result.original_published_on == seed.published_on
+    assert result.original_modified_at == datetime(2026, 10, 24, 1, 20, tzinfo=UTC)
+    assert result.original_modified_on is not None
+
+
+def test_extracts_date_only_without_inventing_time(seed, article_html, repository):
+    body = article_html.replace(
+        b"</head>", b'<meta property="article:published_time" content="2026.10.23."></head>'
+    )
+    result = ArticleExtractor(repository, ExtractionSettings()).extract(
+        seed, body, str(seed.original_url)
+    )
+    assert result.original_published_on == seed.published_on
+    assert result.original_published_at is None
+
+
+def test_ignores_non_article_json_ld_and_malformed_dates(seed, article_html, repository):
+    body = article_html.replace(
+        b"</head>",
+        (
+            b'<script type="application/ld+json">'
+            b'{"@type":"BreadcrumbList","datePublished":"2026-99-99"}'
+            b"</script>"
+            b'<meta property="article:published_time" content="2026-99-99"></head>'
+        ),
+    )
+    result = ArticleExtractor(repository, ExtractionSettings()).extract(
+        seed, body, str(seed.original_url)
+    )
+    assert result.original_published_on is None
+    assert result.original_published_at is None
+
+
+def test_does_not_use_json_ld_creation_date_as_published_at(seed, article_html, repository):
+    body = article_html.replace(
+        b"</head>",
+        (
+            b'<script type="application/ld+json">'
+            b'{"@type":"NewsArticle","dateCreated":"2026-10-23T09:15:00+09:00"}'
+            b"</script></head>"
+        ),
+    )
+    result = ArticleExtractor(repository, ExtractionSettings()).extract(
+        seed, body, str(seed.original_url)
+    )
+    assert result.original_published_on is None
+    assert result.original_published_at is None
 
 
 def test_rejected_page_does_not_overwrite_publisher_record(

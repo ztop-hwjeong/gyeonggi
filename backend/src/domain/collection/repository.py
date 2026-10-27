@@ -117,7 +117,7 @@ class CollectionRepository:
                 "INSERT INTO ops.collection_rules(id,version,definition) "
                 "VALUES (:id,:version,CAST(:definition AS jsonb)) ON CONFLICT(id) DO UPDATE "
                 "SET version=EXCLUDED.version, definition=EXCLUDED.definition, "
-                "updated_at=now(), next_run_at=now() RETURNING *",
+                "updated_at=now() RETURNING *",
                 params,
             )
             await self.rows(

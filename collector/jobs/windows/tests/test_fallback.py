@@ -70,13 +70,11 @@ def test_stage_order_and_early_success(
         for stage, status in zip(stages, statuses, strict=True)
     ]
     monkeypatch.setattr(details, "ArticleDetailCollector", Mock(return_value=collector))
-    monkeypatch.setattr(details, "DetailRepository", Mock(return_value=repository))
-    monkeypatch.setattr(details, "RawObjectStore", MagicMock())
-    monkeypatch.setattr(
-        details.Secret,
-        "load",
-        Mock(return_value=Mock(get=lambda: {"access_key": "test", "secret_key": "test"})),
-    )
+    scoped = MagicMock()
+    scoped.get.return_value = repository
+    container = MagicMock()
+    container.return_value.__enter__.return_value = scoped
+    monkeypatch.setattr(details, "create_detail_container", Mock(return_value=container))
     monkeypatch.setattr(
         details.FlowRunContext, "get", lambda: SimpleNamespace(flow_run=SimpleNamespace(id=uuid4()))
     )

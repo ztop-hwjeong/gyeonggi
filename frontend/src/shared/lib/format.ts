@@ -3,6 +3,7 @@ export const number = (value: number | undefined | null) =>
 
 export function dateTime(value: string | undefined | null) {
   if (!value) return "—";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   return new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
     month: "2-digit",

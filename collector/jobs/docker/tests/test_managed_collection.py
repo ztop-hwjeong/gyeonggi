@@ -22,7 +22,6 @@ def request_data():
                 "terms": ["학교 정책"],
                 "sources": ["bigkinds"],
                 "enabled": False,
-                "interval_minutes": 15,
             },
             "start_date": "2026-06-01",
             "end_date": "2026-06-02",

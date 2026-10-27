@@ -45,9 +45,6 @@ function EditorForm({
     rule?.definition.sources ?? ["bigkinds"],
   );
   const [enabled, setEnabled] = useState(rule?.definition.enabled ?? false);
-  const [interval, setInterval] = useState(
-    rule?.definition.interval_minutes ?? 15,
-  );
   const [pending, setPending] = useState<"save" | null>(null);
   const [error, setError] = useState<Error>();
   const [saved, setSaved] = useState(initiallySaved);
@@ -59,7 +56,6 @@ function EditorForm({
         terms: [],
         sources: ["bigkinds"],
         enabled: false,
-        interval_minutes: 15,
       },
     ),
   );
@@ -72,7 +68,6 @@ function EditorForm({
       .filter(Boolean),
     sources,
     enabled,
-    interval_minutes: interval,
   };
   const dirty = JSON.stringify(definition) !== baseline;
   useUnsavedChanges(dirty);
@@ -220,24 +215,9 @@ function EditorForm({
                 />
                 자동 수집 사용
               </label>
-              <div className="field">
-                <label htmlFor="rule-interval">수집 주기</label>
-                <select
-                  id="rule-interval"
-                  value={interval}
-                  onChange={(e) => setInterval(Number(e.target.value))}
-                >
-                  {[15, 30, 60, 180, 1440].map((value) => (
-                    <option key={value} value={value}>
-                      {value >= 60 ? `${value / 60}시간` : `${value}분`}마다
-                    </option>
-                  ))}
-                </select>
-              </div>
               <p className="hint">
-                자동 수집을 켜고 저장하면 선택한 모든 채널에서 새 자료를
-                주기적으로 모아요. 이전 자료가 필요하면 기간 수집을 별도로
-                요청해 주세요.
+                자동 수집을 켜면 이 조건이 자동 수집 대상에 포함돼요. 이전
+                자료가 필요하면 기간 수집을 별도로 요청해 주세요.
               </p>
             </div>
           </section>

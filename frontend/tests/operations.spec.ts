@@ -15,7 +15,6 @@ const rule: Schema["RuleInfo"] = {
     terms: ["교권보호"],
     sources: ["bigkinds", "naver_blog"],
     enabled: false,
-    interval_minutes: 15,
   },
 };
 const run: Schema["RequestInfo"] = {
@@ -191,6 +190,7 @@ test("키워드 등록과 수정에 입력 조건과 조회 버전을 전달한�
 }) => {
   const writes = await mockApi(page);
   await page.goto("/keywords/new");
+  await expect(page.getByLabel("수집 주기")).toHaveCount(0);
   await page.getByLabel("조건 이름").fill("경기 교육");
   await page
     .getByLabel("검색 키워드", { exact: true })
@@ -201,6 +201,7 @@ test("키워드 등록과 수정에 입력 조건과 조회 버전을 전달한�
     terms: ["경기교육", "경기 교육"],
     enabled: false,
   });
+  expect(writes[0].body).not.toHaveProperty("interval_minutes");
   await page.getByLabel("조건 이름").fill("경기 교육 수정");
   await page.getByRole("button", { name: "검색 조건 저장" }).click();
   await expect(page).toHaveURL(new RegExp(`/keywords/${ruleId}`));
@@ -428,12 +429,21 @@ test("자료 본문을 읽고 검색하던 위치로 돌아간다", async ({ pag
 test("기사의 분석 대상 판단을 저장한 뒤 바로 표시한다", async ({ page }) => {
   const articleId = "0c0a49b8-0ff5-455b-a17a-5609efafc9cb";
   let decision = "exclude";
+  let sentiment = {
+    article_id: articleId,
+    sentiment: "긍정",
+    mixed_sentiment: true,
+    sentiment_reason: "지원 정책의 효과를 중심으로 다룬 기사",
+    origin: "ai",
+    updated_at: now,
+  };
   const article = {
     id: articleId,
     title: "교육 정책 안내",
     summary: "검색 요약 내용",
     publisher: "교육 소식",
-    published_at: now,
+    published_on: "2026-10-26",
+    published_at: null,
     sources: [],
     inclusion: "include",
     inclusion_reason: null,
@@ -468,6 +478,30 @@ test("기사의 분석 대상 판단을 저장한 뒤 바로 표시한다", asyn
           },
         ],
       });
+    if (path === `/articles/${articleId}/sentiment`) {
+      if (request.method() === "PUT") {
+        sentiment = {
+          ...sentiment,
+          ...request.postDataJSON(),
+          origin: "manual",
+          updated_at: now,
+        };
+      }
+      return route.fulfill({ json: sentiment });
+    }
+    if (path === `/articles/${articleId}/reprints`)
+      return route.fulfill({
+        json: [
+          {
+            article_id: "1c0a49b8-0ff5-455b-a17a-5609efafc9cb",
+            title: "같은 내용의 다른 기사",
+            publisher: "경기일보",
+            body_similarity: 0.98,
+            matching_basis: "본문 유사",
+            checked_at: now,
+          },
+        ],
+      });
     if (path === `/articles/${articleId}/targets` && request.method() === "GET")
       return route.fulfill({
         json: [
@@ -494,6 +528,16 @@ test("기사의 분석 대상 판단을 저장한 뒤 바로 표시한다", asyn
     });
   });
   await page.goto(`/results/read?material_id=${articleId}`);
+  await expect(page.getByText("2026-10-26", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("최종 논조")).toHaveValue("긍정");
+  await expect(page.getByLabel("논조 판단 근거")).toHaveValue(
+    "지원 정책의 효과를 중심으로 다룬 기사",
+  );
+  await expect(page.getByText("같은 내용의 다른 기사")).toBeVisible();
+  await page.getByLabel("최종 논조").selectOption("부정");
+  await page.getByLabel("논조 판단 근거").fill("비판적 보도가 중심");
+  await page.getByRole("button", { name: "논조 저장" }).click();
+  await expect(page.getByLabel("최종 논조")).toHaveValue("부정");
   const targetState = page.locator(".target-list > div > .button-row > span");
   await expect(targetState).toHaveText("제외");
   await page.getByRole("button", { name: "포함", exact: true }).last().click();

@@ -13,10 +13,14 @@ from domain.article_workflow.models import (
     FilterRuleWrite,
     ReapplyRequest,
     ReapplyResult,
+    ReprintInfo,
+    SentimentInfo,
+    SentimentWrite,
     TargetInfo,
     TargetUpdate,
     TargetWrite,
 )
+from domain.article_workflow.relations import ArticleRelations
 from domain.article_workflow.repository import (
     ArticleWorkflow,
     WorkflowConflict,
@@ -26,6 +30,36 @@ from domain.article_workflow.repository import (
 )
 
 router = APIRouter(tags=["article-workflow"], route_class=DishkaRoute)
+
+
+@router.get("/articles/{article_id}/sentiment")
+async def article_sentiment(
+    article_id: UUID, relations: FromDishka[ArticleRelations]
+) -> SentimentInfo:
+    try:
+        return await relations.sentiment(article_id)
+    except WorkflowError as error:
+        raise handle(error) from error
+
+
+@router.put("/articles/{article_id}/sentiment")
+async def override_article_sentiment(
+    article_id: UUID, body: SentimentWrite, relations: FromDishka[ArticleRelations]
+) -> SentimentInfo:
+    try:
+        return await relations.override_sentiment(article_id, body)
+    except WorkflowError as error:
+        raise handle(error) from error
+
+
+@router.get("/articles/{article_id}/reprints")
+async def article_reprints(
+    article_id: UUID, relations: FromDishka[ArticleRelations]
+) -> list[ReprintInfo]:
+    try:
+        return await relations.reprints(article_id)
+    except WorkflowError as error:
+        raise handle(error) from error
 
 
 def handle(error: WorkflowError) -> HTTPException:

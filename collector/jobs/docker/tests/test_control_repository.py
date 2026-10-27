@@ -9,7 +9,7 @@ from prefect.client.schemas.objects import State, StateType
 from psycopg.rows import DictRow, dict_row
 from psycopg.types.json import Jsonb
 
-from control.dispatch import reconcile, schedule_due, submit_one
+from control.dispatch import enqueue_enabled, reconcile, submit_one
 from control.models import ControlSettings
 from control.repository import ControlRepository
 
@@ -32,7 +32,6 @@ def test_dispatch_recovery_preview_isolation_and_final_state_preservation(monkey
             "terms": ["교육"],
             "sources": ["bigkinds"],
             "enabled": True,
-            "interval_minutes": 15,
         }
         conn.execute(
             "INSERT INTO ops.collection_rules(id,version,definition) VALUES (%s,1,%s)",
@@ -42,9 +41,8 @@ def test_dispatch_recovery_preview_isolation_and_final_state_preservation(monkey
             "INSERT INTO ops.collection_rule_versions(rule_id,version,definition) VALUES (%s,1,%s)",
             (rule_id, Jsonb(definition)),
         )
-        assert schedule_due(repository, 20) == 1
-        conn.execute("UPDATE ops.collection_rules SET next_run_at=now() WHERE id=%s", (rule_id,))
-        assert schedule_due(repository, 20) == 0
+        assert enqueue_enabled(repository) == 1
+        assert enqueue_enabled(repository) == 0
         request_id = conn.execute("SELECT id FROM ops.collection_requests").fetchall()[0]["id"]
         client = Mock()
         client.create_flow_run_from_deployment.side_effect = [TimeoutError(), Mock(id=run_id)]
@@ -92,3 +90,45 @@ def test_dispatch_recovery_preview_isolation_and_final_state_preservation(monkey
         destinations = [call.args[0] for call in client.read_deployment_by_name.call_args_list]
         assert destinations[0] != destinations[-1]
         conn.rollback()
+
+
+@pytest.mark.skipif(not os.environ.get("CONTROL_TEST_DATABASE_DSN"), reason="전용 검증 DB 필요")
+def test_all_enabled_rules_enqueue_beyond_submit_batch(monkeypatch):
+    with psycopg.Connection[DictRow].connect(
+        os.environ["CONTROL_TEST_DATABASE_DSN"], row_factory=dict_row
+    ) as conn:
+
+        @contextmanager
+        def connect():
+            yield conn
+
+        repository = ControlRepository(Mock(), Mock())
+        monkeypatch.setattr(repository, "connect", connect)
+        rule_ids = [uuid4() for _ in range(ControlSettings().dispatch_batch_size + 3)]
+        try:
+            for rule_id in rule_ids:
+                definition = {
+                    "name": f"검증 {rule_id}",
+                    "terms": ["교육"],
+                    "sources": ["bigkinds"],
+                    "enabled": True,
+                }
+                conn.execute(
+                    "INSERT INTO ops.collection_rules(id,version,definition) VALUES (%s,1,%s)",
+                    (rule_id, Jsonb(definition)),
+                )
+                conn.execute(
+                    "INSERT INTO ops.collection_rule_versions(rule_id,version,definition) "
+                    "VALUES (%s,1,%s)",
+                    (rule_id, Jsonb(definition)),
+                )
+            assert enqueue_enabled(repository) == len(rule_ids)
+            assert enqueue_enabled(repository) == 0
+            row = conn.execute(
+                "SELECT count(*) AS count FROM ops.collection_requests "
+                "WHERE rule_id = ANY(%s) AND status='queued'",
+                (rule_ids,),
+            ).fetchone()
+            assert row is not None and row["count"] == len(rule_ids)
+        finally:
+            conn.rollback()

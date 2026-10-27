@@ -10,6 +10,7 @@ from analysis.client import OpenAIArticleAnalyzer
 from analysis.container import create_analysis_container
 from analysis.models import AnalysisSettings
 from analysis.repository import AnalysisRepository
+from analysis.reprints import find_reprints
 
 
 @task(name="analyze-article", cache_policy=NO_CACHE, persist_result=False, retries=2)
@@ -44,10 +45,28 @@ async def analyze_article(source: str, source_id: str, content_hash: str) -> UUI
 
 @flow(name="analyze-stored-article", persist_result=False)
 async def analyze_stored_article(source: str, source_id: str, content_hash: str) -> str:
+    await detect_article_reprints(source, source_id, content_hash)
     run_id = await analyze_article(source, source_id, content_hash)
     await apply_article_analysis(run_id)
     get_run_logger().info("기사 분석 실행 완료: %s", run_id)
     return str(run_id)
+
+
+@task(name="detect-article-reprints", persist_result=False, retries=2)
+async def detect_article_reprints(source: str, source_id: str, content_hash: str) -> int:
+    container = create_analysis_container()
+    try:
+        async with container() as scoped:
+            repository = await scoped.get(AnalysisRepository)
+            article = await repository.article(source, source_id, content_hash)
+            if article is None:
+                raise ValueError("저장된 기사 본문 없음")
+            publisher, candidates = await repository.reprint_candidates(article.article_id)
+            matches = find_reprints(article, publisher, candidates)
+            await repository.save_reprints(article, matches)
+            return len(matches)
+    finally:
+        await container.close()
 
 
 @task(name="apply-article-analysis", persist_result=False, retries=2)

@@ -23,3 +23,14 @@ folder_tags = Table(
     Column("created_at", DateTime(timezone=True)),
     schema="ops",
 )
+
+material_tags = Table(
+    "material_tags",
+    metadata,
+    Column("material_id", UUID(as_uuid=True), primary_key=True),
+    Column("topic_id", String, primary_key=True),
+    Column("origin", String),
+    Column("created_at", DateTime(timezone=True)),
+    Column("updated_at", DateTime(timezone=True)),
+    schema="ops",
+)

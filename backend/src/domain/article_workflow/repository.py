@@ -30,7 +30,7 @@ from domain.article_workflow.tables import (
     article_inclusions,
     article_target_links,
 )
-from domain.collection.tables import article_contents, materials
+from domain.collection.tables import article_contents, articles, materials
 
 
 class WorkflowError(RuntimeError):
@@ -227,27 +227,29 @@ class ArticleWorkflow:
     async def _article(self, article_id: UUID) -> dict:
         content = (
             select(article_contents.c.body)
-            .where(article_contents.c.material_id == materials.c.id)
+            .where(article_contents.c.article_id == articles.c.id)
             .order_by(article_contents.c.created_at.desc(), article_contents.c.id.desc())
             .limit(1)
             .lateral("latest_content")
         )
         rows = await self.rows(
             select(
-                materials.c.id,
-                materials.c.kind,
-                materials.c.title,
-                func.coalesce(materials.c.summary, "").label("summary"),
+                articles.c.id,
+                articles.c.title,
+                func.coalesce(articles.c.summary, "").label("summary"),
                 func.coalesce(content.c.body, "").label("body"),
             )
-            .select_from(materials.outerjoin(content, literal(True)))
-            .where(materials.c.id == article_id)
-            .with_for_update(of=materials)
+            .select_from(articles.outerjoin(content, literal(True)))
+            .where(articles.c.id == article_id)
+            .with_for_update(of=articles)
         )
         if not rows:
+            kind = await self._session.scalar(
+                select(materials.c.kind).where(materials.c.id == article_id)
+            )
+            if kind is not None:
+                raise WorkflowInvalidMaterial("뉴스 기사에만 적용 가능")
             raise WorkflowNotFound("기사 없음")
-        if rows[0]["kind"] != "news":
-            raise WorkflowInvalidMaterial("뉴스 기사에만 적용 가능")
         return rows[0]
 
     async def _current(self, article_id: UUID, target_id: UUID | None) -> dict | None:

@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Column, DateTime, MetaData, Table, Text, Uuid
+from sqlalchemy import BigInteger, Column, DateTime, Float, MetaData, Table, Text, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 
 metadata = MetaData()
@@ -6,13 +6,36 @@ metadata = MetaData()
 article_contents = Table(
     "article_contents",
     metadata,
-    Column("material_id", Uuid),
+    Column("id", BigInteger),
+    Column("article_id", Uuid),
     Column("source", Text),
     Column("source_id", Text),
     Column("content_hash", Text),
     Column("title", Text),
     Column("body", Text),
+    Column("created_at", DateTime(timezone=True)),
     schema="dw",
+)
+
+articles = Table(
+    "articles",
+    metadata,
+    Column("id", Uuid),
+    Column("publisher", Text),
+    schema="dw",
+)
+
+reprints = Table(
+    "article_reprints",
+    metadata,
+    Column("article_a_id", Uuid),
+    Column("article_b_id", Uuid),
+    Column("article_a_content_hash", Text),
+    Column("article_b_content_hash", Text),
+    Column("body_similarity", Float),
+    Column("matching_basis", Text),
+    Column("checked_at", DateTime(timezone=True)),
+    schema="ops",
 )
 
 runs = Table(

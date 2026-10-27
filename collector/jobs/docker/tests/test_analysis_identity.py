@@ -40,8 +40,7 @@ def test_article_identity_and_exact_cache_across_sources() -> None:
         with psycopg.connect(dsn, autocommit=True) as connection:
             return scalar(
                 connection,
-                "SELECT dw.resolve_material_source(%s,%s,NULL,%s,%s,NULL,NULL,NULL,"
-                "NULL,NULL,NULL,NULL)",
+                "SELECT dw.resolve_article_source(%s,%s,NULL,%s,%s,NULL,NULL,NULL,NULL)",
                 (source, source_id, publisher_url, "같은 기사"),
             )
 
@@ -94,7 +93,17 @@ def test_article_identity_and_exact_cache_across_sources() -> None:
             is True
         )
         run_id, attempt_id = await repository.claim(first_article, None, None)
-        await repository.complete(run_id, attempt_id, {"article": {}}, {})
+        await repository.complete(
+            run_id,
+            attempt_id,
+            {
+                "tags": [],
+                "sentiment": "중립",
+                "mixed_sentiment": False,
+                "sentiment_reason": "평가 방향 없음",
+            },
+            {},
+        )
         second_run_id, second_attempt = await repository.claim(second_article, None, None)
         await async_engine.dispose()
         return run_id, attempt_id, second_run_id, second_attempt
@@ -147,22 +156,19 @@ def test_late_url_conflict_is_recorded_without_merging_and_homepage_is_ignored()
     with psycopg.connect(dsn, autocommit=True) as connection:
         first = scalar(
             connection,
-            "SELECT dw.resolve_material_source('bigkinds',%s,NULL,NULL,'A',NULL,NULL,NULL,"
-            "NULL,NULL,NULL,NULL)",
+            "SELECT dw.resolve_article_source('bigkinds',%s,NULL,NULL,'A',NULL,NULL,NULL,NULL)",
             (source_id,),
         )
         second = scalar(
             connection,
-            "SELECT dw.resolve_material_source('naver_news',%s,NULL,%s,'A',NULL,NULL,NULL,"
-            "NULL,NULL,NULL,NULL)",
+            "SELECT dw.resolve_article_source('naver_news',%s,NULL,%s,'A',NULL,NULL,NULL,NULL)",
             (other_id, publisher_url),
         )
         assert first != second
         assert (
             scalar(
                 connection,
-                "SELECT dw.resolve_material_source('bigkinds',%s,NULL,%s,'A',NULL,NULL,NULL,"
-                "NULL,NULL,NULL,NULL)",
+                "SELECT dw.resolve_article_source('bigkinds',%s,NULL,%s,'A',NULL,NULL,NULL,NULL)",
                 (source_id, publisher_url),
             )
             == first
@@ -170,7 +176,7 @@ def test_late_url_conflict_is_recorded_without_merging_and_homepage_is_ignored()
         assert (
             scalar(
                 connection,
-                "SELECT other_material_id FROM dw.material_identity_conflicts "
+                "SELECT other_article_id FROM dw.article_identity_conflicts "
                 "WHERE source='bigkinds' AND source_id=%s",
                 (source_id,),
             )
@@ -195,8 +201,8 @@ def test_material_kind_metadata_and_news_only_analysis_queue() -> None:
     with psycopg.connect(dsn, autocommit=True) as connection:
         blog_id = scalar(
             connection,
-            "SELECT dw.resolve_material_source('naver_blog',%s,%s,NULL,'블로그글',"
-            "NULL,NULL,NULL,NULL,NULL,'교육 블로그',NULL)",
+            "SELECT dw.resolve_blog_source('naver_blog',%s,%s,NULL,'블로그글',"
+            "NULL,'교육 블로그',NULL,NULL,NULL)",
             (f"l-{suffix}", f"https://blog.naver.com/test/{suffix}"),
         )
         assert connection.execute(
@@ -204,8 +210,8 @@ def test_material_kind_metadata_and_news_only_analysis_queue() -> None:
         ).fetchone() == ("blog", "교육 블로그", None)
         news_id = scalar(
             connection,
-            "SELECT dw.resolve_material_source('naver_news',%s,NULL,NULL,'뉴스',"
-            "NULL,'언론사',NULL,NULL,NULL,NULL,NULL)",
+            "SELECT dw.resolve_article_source('naver_news',%s,NULL,NULL,'뉴스',"
+            "NULL,'언론사',NULL,NULL)",
             (f"n-{suffix}",),
         )
         run_id = uuid4()
@@ -213,16 +219,12 @@ def test_material_kind_metadata_and_news_only_analysis_queue() -> None:
             "INSERT INTO ops.article_detail_runs(id,summary) VALUES (%s,'{}'::jsonb)",
             (run_id,),
         )
-        for source, source_id in (
-            ("naver_blog", f"l-{suffix}"),
-            ("naver_news", f"n-{suffix}"),
-        ):
-            connection.execute(
-                "INSERT INTO dw.article_contents"
-                "(source,source_id,content_hash,title,body,stage,run_id,provenance) "
-                "VALUES (%s,%s,%s,'제목','본문','test',%s,'{}'::jsonb)",
-                (source, source_id, suffix, run_id),
-            )
+        connection.execute(
+            "INSERT INTO dw.article_contents"
+            "(source,source_id,content_hash,title,body,stage,run_id,provenance) "
+            "VALUES ('naver_news',%s,%s,'제목','본문','test',%s,'{}'::jsonb)",
+            (f"n-{suffix}", suffix, run_id),
+        )
         assert (
             scalar(
                 connection,

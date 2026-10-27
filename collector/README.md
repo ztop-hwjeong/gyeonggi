@@ -93,12 +93,7 @@ Compose의 `naver-init`은 두 값을 환경변수로 받아 Prefect Secret
 `naver-api-hub-credentials`에 등록한다. 작업 배포에는 블록 이름만 지정한다.
 키 변경 후에는 `docker compose --profile collector up -d --force-recreate naver-init`으로 갱신한다.
 
-초기 DB 구성 후 `infra/postgres/migrations/002_search_collection.sql`을 적용한다.
-
-```powershell
-docker compose cp infra/postgres/migrations/002_search_collection.sql postgres:/tmp/002_search_collection.sql
-docker compose exec -T postgres psql -U gyeonggi -d gyeonggi -v ON_ERROR_STOP=1 -f /tmp/002_search_collection.sql
-```
+DB 초기 구성은 [루트 실행 안내](../README.md#웹-실행)에 따라 전체 SQL을 번호순으로 적용한다.
 
 Docker 작업 이미지를 빌드한 뒤 `collector/jobs/docker`에서 배포한다.
 
@@ -157,13 +152,13 @@ $env:PREFECT_DEPLOYMENTS_CLEAR_SCHEDULES_ON_EMPTY = 'true'
 uv run prefect deploy --name naver-news --name naver-blog --name managed-collection --name managed-backfill --name collection-dispatch --no-prompt
 ```
 
-`collection-dispatch`는 1분마다 활성 규칙의 실행 시각을 확인하고 요청 큐를 처리한다.
+`collection-dispatch`의 실행 시점은 Prefect 배포 스케줄에서 관리하며, 실행될 때 활성 규칙의 요청 큐를 처리한다.
 과거 수집은 `managed-backfill`, 증분·미리보기는 `managed-collection` 배포로 보낸다.
 각 배포는 한 번에 하나씩 실행하며 Docker Worker의 세 슬롯은 과거 수집·일반 수집·요청 제어를
 함께 처리한다. 긴 과거 수집 중에도 정기 수집과 취소 요청을 처리하며 소스별 요청 제한은 공유한다.
 기존 네이버 배포의 고정 키워드 스케줄은 빈 배열과 명시적 초기화 설정으로 제거한다.
 `schedules: null`은 기존 스케줄을 보존하므로 정기 실행 해제에 사용하지 않는다.
-규칙의 주기는 15분 이상이며 실행 중인 같은 규칙·채널의 정기 요청을 중복 생성하지 않는다.
+실행 중인 같은 규칙·채널의 증분 요청은 중복 생성하지 않는다.
 규칙 변경은 이후 요청에 적용한다. 기존 요청은 당시 버전과 검색 조건을 유지한다.
 Prefect 제출은 요청 UUID로 중복 방지하며, 제출 응답이 유실돼도 같은 실행을 조회한다.
 작업이 중단되면 Prefect 종료 상태를 대조해 요청이 계속 실행 중으로 남지 않게 한다.
@@ -259,12 +254,7 @@ HTTP Content-Type과 HTML 인코딩 선언을 해석한 뒤 추출하며, 제목
 기록한다. 구조 확인만으로 빅카인즈 기사와 동일하다고 판정하지 않으며, 실제 수집에서도
 제목·요약 검증을 계속 적용한다.
 
-DB 초기 구성은 저장소 루트에서 다음과 같이 적용한다. DB와 RustFS 원본은 함께 백업하고 복구한다.
-
-```powershell
-docker compose cp infra/postgres/migrations/001_article_collection.sql postgres:/tmp/001_article_collection.sql
-docker compose exec -T postgres psql -U gyeonggi -d gyeonggi -v ON_ERROR_STOP=1 -f /tmp/001_article_collection.sql
-```
+DB 초기 구성은 [루트 실행 안내](../README.md#웹-실행)를 따른다. DB와 RustFS 원본은 함께 백업하고 복구한다.
 
 `collector/jobs/windows`에서 배포한다. DB 비밀번호는 환경변수 대신 지정한 Prefect Secret에
 등록한다. 자격 증명 값은 배포 YAML이나 실행 매개변수에 넣지 않는다.

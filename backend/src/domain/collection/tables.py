@@ -3,6 +3,39 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 metadata = MetaData()
 
+articles = Table(
+    "articles",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("title", String),
+    Column("summary", String),
+    Column("publisher", String),
+    Column("published_on", Date),
+    Column("published_at", DateTime(timezone=True)),
+    Column("original_published_on", Date),
+    Column("original_published_at", DateTime(timezone=True)),
+    Column("original_modified_on", Date),
+    Column("original_modified_at", DateTime(timezone=True)),
+    Column("created_at", DateTime(timezone=True)),
+    Column("updated_at", DateTime(timezone=True)),
+    schema="dw",
+)
+
+blog_posts = Table(
+    "blog_posts",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("title", String),
+    Column("summary", String),
+    Column("blog_name", String),
+    Column("blog_url", String),
+    Column("published_on", Date),
+    Column("published_at", DateTime(timezone=True)),
+    Column("created_at", DateTime(timezone=True)),
+    Column("updated_at", DateTime(timezone=True)),
+    schema="dw",
+)
+
 materials = Table(
     "materials",
     metadata,
@@ -13,6 +46,7 @@ materials = Table(
     Column("publisher", String),
     Column("blog_name", String),
     Column("blog_url", String),
+    Column("published_on", Date),
     Column("published_at", DateTime(timezone=True)),
     Column("created_at", DateTime(timezone=True)),
     Column("updated_at", DateTime(timezone=True)),
@@ -28,6 +62,7 @@ material_sources = Table(
     Column("url", String),
     Column("original_url", String),
     Column("canonical_url", String),
+    Column("published_at", DateTime(timezone=True)),
     Column("first_seen_at", DateTime(timezone=True)),
     Column("last_seen_at", DateTime(timezone=True)),
     schema="dw",
@@ -37,12 +72,17 @@ article_contents = Table(
     "article_contents",
     metadata,
     Column("id", BigInteger, primary_key=True),
-    Column("material_id", UUID(as_uuid=True)),
+    Column("article_id", UUID(as_uuid=True)),
     Column("source", String),
     Column("source_id", String),
     Column("content_hash", String),
     Column("title", String),
     Column("body", String),
+    Column("original_published_on", Date),
+    Column("original_published_at", DateTime(timezone=True)),
+    Column("original_modified_on", Date),
+    Column("original_modified_at", DateTime(timezone=True)),
+    Column("collected_at", DateTime(timezone=True)),
     Column("created_at", DateTime(timezone=True)),
     schema="dw",
 )
