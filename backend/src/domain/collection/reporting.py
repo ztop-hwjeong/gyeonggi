@@ -206,6 +206,15 @@ class CollectionReporting:
                 or_(
                     materials.c.title.ilike(pattern, escape="\\"),
                     materials.c.summary.ilike(pattern, escape="\\"),
+                    and_(
+                        materials.c.kind == "news",
+                        select(article_contents.c.id)
+                        .where(
+                            article_contents.c.article_id == materials.c.id,
+                            article_contents.c.body.ilike(pattern, escape="\\"),
+                        )
+                        .exists(),
+                    ),
                 )
             )
         if query.tag_id is not None:
@@ -353,6 +362,12 @@ class CollectionReporting:
                 or_(
                     materials.c.title.ilike(pattern, escape="\\"),
                     materials.c.summary.ilike(pattern, escape="\\"),
+                    select(article_contents.c.id)
+                    .where(
+                        article_contents.c.article_id == materials.c.id,
+                        article_contents.c.body.ilike(pattern, escape="\\"),
+                    )
+                    .exists(),
                 )
             )
         inclusion = func.coalesce(article_inclusions.c.decision, "include")
