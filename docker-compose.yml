@@ -145,6 +145,19 @@ services:
       retries: 5
       start_period: 10s
 
+  prefect-db-init:
+    profiles: [collector]
+    image: postgres:18.6
+    command: [psql, -h, postgres, -U, gyeonggi, -d, gyeonggi, -v, ON_ERROR_STOP=1, -f, /init/create-database.sql]
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 설정 필요}
+    volumes:
+      - ./infra/prefect/create-database.sql:/init/create-database.sql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [collector]
+
   prefect-server:
     profiles: [collector]
     image: prefecthq/prefect:3.9.0-python3.13
@@ -152,14 +165,22 @@ services:
     command: [prefect, server, start, --host, 0.0.0.0, --port, "4200"]
     environment:
       PREFECT_HOME: /var/lib/prefect
-      PREFECT_SERVER_DATABASE_CONNECTION_URL: sqlite+aiosqlite:////var/lib/prefect/prefect.db
+      PREFECT_SERVER_DATABASE_DRIVER: postgresql+asyncpg
+      PREFECT_SERVER_DATABASE_HOST: postgres
+      PREFECT_SERVER_DATABASE_PORT: "5432"
+      PREFECT_SERVER_DATABASE_USER: gyeonggi
+      PREFECT_SERVER_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 설정 필요}
+      PREFECT_SERVER_DATABASE_NAME: gyeonggi_prefect
       PREFECT_SERVER_UI_API_URL: http://127.0.0.1:4200/api
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
     ports:
       - "127.0.0.1:4200:4200"
     volumes:
-      - ./.docker/prefect/server:/var/lib/prefect
+      - prefect-data:/var/lib/prefect
     networks: [collector]
+    depends_on:
+      prefect-db-init:
+        condition: service_completed_successfully
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4200/api/health', timeout=3)"]
       interval: 10s
@@ -263,6 +284,8 @@ networks:
     name: gyeonggi-collector
 
 volumes:
+  prefect-data:
+    name: gyeonggi-prefect-data
   collector-data:
     name: gyeonggi-collector-data
 

@@ -7,7 +7,7 @@ from curl_cffi.requests.exceptions import RequestException
 from playwright.async_api import Error as PlaywrightError
 
 from articles.browser import fetch_browser, fetch_rendered_browser
-from articles.extraction import ArticleExtractor, ExtractionRejectedError
+from articles.extraction import ArticleExtractor, ExtractionRejectedError, NoTextBodyError
 from articles.http import fetch_bigkinds, fetch_original
 from articles.models import ArticleSeed, DetailAttempt, DetailStage, ExtractedArticle, FetchSnapshot
 from articles.requests import PublisherRateLimiter, RequestStoppedError
@@ -62,6 +62,15 @@ class ArticleDetailCollector:
                     snapshots,
                 )
             result = self._result(stage, extraction, snapshots)
+        except NoTextBodyError as error:
+            confirmed = stage == "browser_rendered"
+            result = DetailAttempt(
+                stage=stage,
+                status="skipped" if confirmed else "rejected",
+                skip_reason="no_text_body" if confirmed else None,
+                reason=str(error),
+                snapshots=snapshots,
+            )
         except (
             RequestStoppedError,
             TransientHttpError,

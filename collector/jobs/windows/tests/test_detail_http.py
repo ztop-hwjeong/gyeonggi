@@ -115,3 +115,40 @@ def test_other_article_id_is_rejected(transport: tuple, seed: ArticleSeed) -> No
             ExtractionSettings(),
             [],
         )
+
+
+@pytest.mark.parametrize("change", ["none", "short_body", "wrong_title"])
+def test_title_only_listing_requires_verified_detail_identity_and_full_body(
+    transport, seed, article_text, change
+):
+    http, store = transport
+    seed = seed.model_copy(update={"summary": seed.title})
+    http.request_raw.side_effect = [
+        response(200, b"search"),
+        response(
+            200,
+            json.dumps(
+                {
+                    "detail": {
+                        "NEWS_ID": seed.source_id,
+                        "TITLE": "전혀 다른 국제 금융 기사"
+                        if change == "wrong_title"
+                        else seed.title,
+                        "CONTENT": seed.title if change == "short_body" else article_text,
+                    }
+                }
+            ).encode(),
+        ),
+    ]
+    result = fetch_bigkinds(
+        seed,
+        store,
+        DetailSettings(bigkinds_rate_limit_name="test"),
+        HttpSettings(),
+        Mock(),
+        ExtractionSettings(),
+        [],
+    )
+    assert result.evidence.verified is (change == "none")
+    if change == "none":
+        assert "기사 ID·제목 일치" in result.evidence.reason

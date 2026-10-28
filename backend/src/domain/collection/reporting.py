@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import ColumnElement, Date, cast, func, literal, or_, select
+from sqlalchemy import ColumnElement, Date, and_, case, cast, func, literal, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +30,8 @@ from domain.collection.models import (
 )
 from domain.collection.tables import (
     article_contents,
+    article_detail_results,
+    article_detail_runs,
     collection_requests,
     collection_rules,
     material_sources,
@@ -65,8 +67,40 @@ class CollectionReporting:
             .limit(1)
             .lateral("latest_content")
         )
-        source = materials.outerjoin(latest, literal(True)).outerjoin(
-            article_sentiments, article_sentiments.c.article_id == materials.c.id
+        detail = (
+            select(
+                article_detail_results.c.result["status"].astext.label("status"),
+                article_detail_results.c.result["skip_reason"].astext.label("skip_reason"),
+            )
+            .select_from(
+                article_detail_results.join(
+                    article_detail_runs,
+                    article_detail_runs.c.id == article_detail_results.c.run_id,
+                ).join(
+                    material_sources,
+                    and_(
+                        material_sources.c.source_id == article_detail_results.c.source_id,
+                        material_sources.c.source
+                        == article_detail_results.c.result["seed"]["source"].astext,
+                    ),
+                )
+            )
+            .where(
+                material_sources.c.material_id == materials.c.id,
+                material_sources.c.source.in_(("bigkinds", "naver_news")),
+            )
+            .order_by(
+                article_detail_runs.c.summary["started_at"].astext.desc(),
+                article_detail_runs.c.id.desc(),
+            )
+            .limit(1)
+            .correlate(materials)
+            .lateral("latest_detail")
+        )
+        source = (
+            materials.outerjoin(latest, literal(True))
+            .outerjoin(detail, literal(True))
+            .outerjoin(article_sentiments, article_sentiments.c.article_id == materials.c.id)
         )
         fields = [
             materials.c.id,
@@ -81,6 +115,10 @@ class CollectionReporting:
             materials.c.updated_at,
             func.coalesce(func.substr(latest.c.body, 1, 240), "").label("content_preview"),
             latest.c.body.is_not(None).label("has_body"),
+            case(
+                (and_(latest.c.body.is_(None), detail.c.status == "skipped"), detail.c.skip_reason),
+                else_=None,
+            ).label("body_skip_reason"),
             latest.c.body,
             latest.c.content_hash,
             latest.c.created_at.label("body_collected_at"),
@@ -267,6 +305,14 @@ class CollectionReporting:
             .where(materials.c.kind.in_(("news", "blog")))
             .group_by(materials.c.kind)
         )
+        body_status = self.material_query().subquery()
+        skipped = (
+            await self.rows(
+                select(func.count().label("count"))
+                .select_from(body_status)
+                .where(body_status.c.kind == "news", body_status.c.body_skip_reason.is_not(None))
+            )
+        )[0]["count"]
         return Overview.model_validate(
             {
                 **counts,
@@ -277,6 +323,7 @@ class CollectionReporting:
                     "blog": next((row["count"] for row in kinds if row["kind"] == "blog"), 0),
                 },
                 "source_counts": {row["source"]: row["count"] for row in source_rows},
+                "body_skipped_articles": skipped,
                 "daily_counts": [
                     {
                         "day": first_day + timedelta(days=offset),

@@ -3,6 +3,67 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 metadata = MetaData()
 
+publishers = Table(
+    "publishers",
+    metadata,
+    Column("code", Text, primary_key=True),
+    Column("name", Text),
+    Column("category_code", Text),
+    schema="dw",
+)
+publisher_domains = Table(
+    "publisher_domains",
+    metadata,
+    Column("domain", Text, primary_key=True),
+    Column("publisher_code", Text),
+    schema="dw",
+)
+publisher_source_codes = Table(
+    "publisher_source_codes",
+    metadata,
+    Column("source", Text, primary_key=True),
+    Column("source_code", Text, primary_key=True),
+    Column("publisher_code", Text),
+    schema="dw",
+)
+
+search_items = Table(
+    "search_items",
+    metadata,
+    Column("provider", Text),
+    Column("channel", Text),
+    Column("source_id", Text),
+    Column("article_id", UUID(as_uuid=True)),
+    Column("data", JSONB),
+    Column("first_seen_at", DateTime(timezone=True)),
+    schema="dw",
+)
+news_items = Table(
+    "news_items",
+    metadata,
+    Column("source", Text),
+    Column("source_id", Text),
+    Column("data", JSONB),
+    Column("article_id", UUID(as_uuid=True)),
+    Column("first_seen_at", DateTime(timezone=True)),
+    schema="dw",
+)
+articles = Table(
+    "articles",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("publisher", Text),
+    Column("publisher_code", Text),
+    schema="dw",
+)
+search_run_items = Table(
+    "search_run_items",
+    metadata,
+    Column("run_id", UUID(as_uuid=True)),
+    Column("source_id", Text),
+    schema="st",
+)
+
 detail_runs = Table(
     "article_detail_runs",
     metadata,

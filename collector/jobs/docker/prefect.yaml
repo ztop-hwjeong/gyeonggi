@@ -37,6 +37,8 @@ deployments:
           BIGKINDS_RATE_LIMIT_NAME: bigkinds-http
           COLLECTION_OUTPUT_DIRECTORY: /var/lib/collector
           HTTP_IMPERSONATE: chrome
+          HTTP_TIMEOUT_SECONDS: "120"
+          HTTP_RATE_LIMIT_TIMEOUT_SECONDS: "180"
   - name: naver-news
     entrypoint: src/flows/naver.py:naver_collect_list
     tags: [docker, naver, list, news]
@@ -73,6 +75,8 @@ deployments:
           OBJECT_STORAGE_CREDENTIALS_BLOCK: collector-object-storage-credentials
           HTTP_IMPERSONATE: chrome
           BIGKINDS_RATE_LIMIT_NAME: bigkinds-http
+          HTTP_TIMEOUT_SECONDS: "120"
+          HTTP_RATE_LIMIT_TIMEOUT_SECONDS: "180"
   - name: naver-blog
     entrypoint: src/flows/naver.py:naver_collect_list
     tags: [docker, naver, list, blog]
@@ -89,13 +93,13 @@ deployments:
     entrypoint: src/flows/managed.py:managed_collection
     tags: [docker, collection, managed]
     schedules: null
-    concurrency_limit: 1
+    concurrency_limit: 3
     work_pool: *naver-pool
   - name: collection-dispatch
     entrypoint: src/flows/dispatch.py:dispatch_collections
     tags: [docker, collection, dispatch]
     schedules:
-      - interval: 60
+      - interval: 600
         active: true
     concurrency_limit: 1
     work_pool: *naver-pool
@@ -130,7 +134,7 @@ deployments:
     tags: [docker, analysis, dispatch]
     schedules:
       - interval: 60
-        active: true
+        active: false
     work_pool:
       name: docker-collector
       job_variables:

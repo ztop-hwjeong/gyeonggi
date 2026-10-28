@@ -26,14 +26,14 @@ SOURCES = (
     SourceInfo(
         code="naver_news",
         name="네이버 뉴스",
-        supports_backfill=False,
-        description="최신순 검색과 커서 이후 증분 수집",
+        supports_backfill=True,
+        description="최신순 검색의 날짜 경계까지 기간 보충 수집",
     ),
     SourceInfo(
         code="naver_blog",
         name="네이버 블로그",
-        supports_backfill=False,
-        description="최신순 검색과 커서 이후 증분 수집",
+        supports_backfill=True,
+        description="최신순 검색의 작성일 경계까지 기간 보충 수집",
     ),
 )
 
@@ -100,13 +100,6 @@ class RunCreate(DateRange):
     version: int = Field(ge=1)
     source: SourceCode
     mode: Literal["incremental", "backfill"]
-
-    @model_validator(mode="after")
-    def valid_capability(self) -> Self:
-        if self.mode == "backfill" and self.source != "bigkinds":
-            raise ValueError("네이버 검색 API는 기간 지정 과거 수집을 지원하지 않음")
-        return self
-
 
 class PreviewCreate(DateRange):
     definition: RuleDefinition
@@ -259,6 +252,7 @@ class StoredMaterial(BaseModel):
     sources: list[ArticleSource]
     content_preview: str
     has_body: bool
+    body_skip_reason: Literal["no_text_body"] | None = None
     sentiment: Literal["긍정", "중립", "부정"] | None = None
     mixed_sentiment: bool | None = None
     sentiment_reason: str | None = None
@@ -292,6 +286,7 @@ class StoredArticle(BaseModel):
     inclusion_reason: str | None
     content_preview: str
     has_body: bool
+    body_skip_reason: Literal["no_text_body"] | None = None
     sentiment: Literal["긍정", "중립", "부정"] | None = None
     mixed_sentiment: bool | None = None
     sentiment_reason: str | None = None
@@ -328,3 +323,4 @@ class Overview(BaseModel):
     partial_requests: int
     daily_counts: list[DailyCount]
     source_counts: dict[str, int]
+    body_skipped_articles: int

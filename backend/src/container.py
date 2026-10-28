@@ -22,6 +22,7 @@ from domain.monitoring.config import MonitoringSettings
 from domain.monitoring.errors import MonitoringUnavailableError
 from domain.monitoring.prefect import PrefectMonitor
 from domain.monitoring.repository import MonitoringRepository
+from domain.publishers.repository import PublisherRepository
 from domain.tag_folders.material_tags import MaterialTags
 from domain.tag_folders.repository import TagFolderRepository
 from domain.templates.archive import TemplateArchive
@@ -73,6 +74,10 @@ class TemplateProvider(Provider):
 
 
 class CollectionProvider(Provider):
+    @provide(scope=Scope.REQUEST)
+    def publishers(self, session: AsyncSession) -> PublisherRepository:
+        return PublisherRepository(session)
+
     @provide(scope=Scope.REQUEST)
     def reporting(self, session: AsyncSession) -> CollectionReporting:
         return CollectionReporting(session)

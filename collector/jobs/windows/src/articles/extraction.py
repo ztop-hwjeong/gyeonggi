@@ -11,6 +11,7 @@ from w3lib.encoding import html_to_unicode
 
 from articles.adaptive import PostgresAdaptiveStorage, ProfileContext
 from articles.dates import extract_source_dates
+from articles.domains import get_body_policy
 from articles.matching import normalized_text, verify_article
 from articles.models import ArticleSeed, Evidence, ExtractedArticle
 from articles.storage import DetailRepository
@@ -21,6 +22,10 @@ class ExtractionRejectedError(RuntimeError):
     pass
 
 
+class NoTextBodyError(ExtractionRejectedError):
+    pass
+
+
 class ArticleExtractor:
     def __init__(self, repository: DetailRepository, settings: ExtractionSettings) -> None:
         self._repository = repository
@@ -28,7 +33,8 @@ class ArticleExtractor:
 
     def scope_key(self, seed: ArticleSeed, url: str) -> str:
         host = urlsplit(url).netloc.lower()
-        publisher = sha256(seed.publisher.encode()).hexdigest()[:16]
+        identity = seed.publisher_code if seed.source == "naver_news" else seed.publisher
+        publisher = sha256((identity or host).encode()).hexdigest()[:16]
         origin = sha256(host.encode()).hexdigest()[:16]
         return f"{publisher}:{origin}"
 
@@ -36,9 +42,18 @@ class ArticleExtractor:
         self, seed: ArticleSeed, body: bytes, url: str, content_type: str | None = None
     ) -> ExtractedArticle:
         _, decoded = html_to_unicode(content_type, body)
+        publisher = (
+            self._repository.resolve_publisher(str(seed.original_url) if seed.original_url else url)
+            if seed.source == "naver_news"
+            else None
+        )
+        if publisher:
+            seed = seed.model_copy(
+                update={"publisher_code": publisher.code, "publisher": publisher.name}
+            )
         scope = self.scope_key(seed, url)
         origin = f"{urlsplit(url).scheme}://{urlsplit(url).netloc}"
-        profile = ProfileContext(seed.publisher, origin, seed.source_id, url)
+        profile = ProfileContext(seed.publisher or "", origin, seed.source_id, url)
         page = Selector(
             content=decoded,
             url=url,
@@ -64,6 +79,9 @@ class ArticleExtractor:
             [title, *headings],
             key=lambda value: ratio(normalized_text(seed.title), normalized_text(value)),
         )
+        policy = get_body_policy(url)
+        if policy is not None and policy.has_no_text_body(seed, page, title, url, decoded):
+            raise NoTextBodyError("영상 제공·텍스트 본문 없음")
         saved = page.retrieve("article-body")
         if saved is not None:
             relocated = page.relocate(
@@ -82,11 +100,32 @@ class ArticleExtractor:
                         method="adaptive",
                         evidence=evidence,
                         adaptive_scope=scope,
+                        publisher=publisher,
                         original_published_on=original_published_on,
                         original_published_at=original_published_at,
                         original_modified_on=original_modified_on,
                         original_modified_at=original_modified_at,
                     )
+        # 의미가 명시된 본문을 요약과 대조해 추천 기사 목록의 학습 방지
+        for candidate in page.css('[itemprop~="articleBody"], .article_body, .article-body')[
+            : self._settings.max_dom_candidates
+        ]:
+            text = str(candidate.get_all_text(separator="\n", strip=True))
+            evidence = verify_article(seed, title, text, self._settings)
+            if evidence.verified:
+                self._remember(page, candidate, profile, evidence)
+                return ExtractedArticle(
+                    title=title,
+                    text=text,
+                    method="snippet_dom",
+                    evidence=evidence,
+                    adaptive_scope=scope,
+                    publisher=publisher,
+                    original_published_on=original_published_on,
+                    original_published_at=original_published_at,
+                    original_modified_on=original_modified_on,
+                    original_modified_at=original_modified_at,
+                )
         candidates = page.css("article,main,section,div,td")[: self._settings.max_dom_candidates]
         text = document.text if document is not None and document.text else ""
         evidence = verify_article(seed, title, text, self._settings)
@@ -113,6 +152,7 @@ class ArticleExtractor:
                 method="trafilatura",
                 evidence=evidence,
                 adaptive_scope=scope if page.retrieve("article-body") else None,
+                publisher=publisher,
                 original_published_on=original_published_on,
                 original_published_at=original_published_at,
                 original_modified_on=original_modified_on,
@@ -134,6 +174,7 @@ class ArticleExtractor:
                 method="snippet_dom",
                 evidence=evidence,
                 adaptive_scope=scope,
+                publisher=publisher,
                 original_published_on=original_published_on,
                 original_published_at=original_published_at,
                 original_modified_on=original_modified_on,

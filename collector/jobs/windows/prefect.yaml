@@ -13,7 +13,7 @@ deployments:
     concurrency_limit: 1
     work_pool:
       name: windows-collector
-      job_variables:
+      job_variables: &article_detail_job
         command: '"{{ $WINDOWS_JOB_DIRECTORY }}/.venv/Scripts/python.exe" -m prefect.engine'
         env:
           PYTHONPATH: "{{ $WINDOWS_JOB_DIRECTORY }}/src"
@@ -28,4 +28,29 @@ deployments:
           OBJECT_STORAGE_REGION: "{{ $OBJECT_STORAGE_REGION }}"
           OBJECT_STORAGE_CREDENTIALS_BLOCK: "{{ $OBJECT_STORAGE_CREDENTIALS_BLOCK }}"
           DETAIL_BIGKINDS_RATE_LIMIT_NAME: bigkinds-http
+          DETAIL_RATE_LIMIT_TIMEOUT_SECONDS: "180"
           HTTP_IMPERSONATE: chrome
+          HTTP_TIMEOUT_SECONDS: "120"
+          HTTP_RATE_LIMIT_TIMEOUT_SECONDS: "180"
+
+  - name: naver-news-details
+    entrypoint: src/flows/details.py:collect_naver_news_details
+    tags: [windows, articles, details, naver]
+    schedules: []
+    concurrency_limit: 1
+    work_pool:
+      name: windows-collector
+      job_variables: *article_detail_job
+
+  - name: article-pending-details
+    entrypoint: src/flows/details.py:collect_pending_article_details
+    tags: [windows, articles, details, collection]
+    schedules:
+      - interval: 300
+        active: true
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    work_pool:
+      name: windows-collector
+      job_variables: *article_detail_job

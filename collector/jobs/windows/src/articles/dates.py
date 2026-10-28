@@ -5,6 +5,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from lxml import html
+from lxml.etree import ParserError
 
 KST = ZoneInfo("Asia/Seoul")
 _DATE_ONLY = re.compile(r"^(\d{4})[./-](\d{1,2})[./-](\d{1,2})\.?$")
@@ -12,6 +13,11 @@ _KOREAN_DATETIME = re.compile(
     r"^(\d{4})[./-](\d{1,2})[./-](\d{1,2})\.?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$"
 )
 _PAGE_DATE = re.compile(r"\d{4}[./-]\d{1,2}[./-]\d{1,2}\.?")
+_LABELED_DATETIME = re.compile(
+    r"(입력|등록|발행|수정)\s*[:：]?\s*"
+    r"(\d{4}[./-]\d{1,2}[./-]\d{1,2}\.?)\s+"
+    r"(?:(오전|오후)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?"
+)
 
 
 def parse_source_date(value: object) -> tuple[date | None, datetime | None]:
@@ -83,13 +89,47 @@ def _trafilatura_date(markup: str, value: str | None) -> str | None:
     return None
 
 
+def _reconcile_visible_clock(
+    tree: html.HtmlElement, value: tuple[date | None, datetime | None], *, modified: bool
+) -> tuple[date | None, datetime | None]:
+    for node in tree.xpath('//*[contains(@class,"date") or contains(@class,"time")]'):
+        text = " ".join(node.text_content().split())
+        if len(text) > 200:
+            continue
+        for match in _LABELED_DATETIME.finditer(text):
+            label, day, period, hour, minute, second = match.groups()
+            if (label == "수정") != modified:
+                continue
+            hour_value = int(hour)
+            if period:
+                if not 1 <= hour_value <= 12:
+                    continue
+                hour_value = hour_value % 12 + (12 if period == "오후" else 0)
+            visible_on, visible_at = parse_source_date(
+                f"{day} {hour_value}:{minute}:{second or '00'}"
+            )
+            if visible_at is None:
+                continue
+            metadata_at = value[1]
+            if metadata_at is None:
+                if value[0] is None or value[0] == visible_on:
+                    return visible_on, visible_at
+                continue
+            if metadata_at.astimezone(KST).replace(second=0, microsecond=0) == visible_at:
+                return value
+            # 화면의 한국 시각과 일치하는 메타데이터 시계값의 잘못된 UTC 선언 보정
+            if metadata_at.replace(tzinfo=KST, second=0, microsecond=0) == visible_at:
+                return visible_on, visible_at
+    return value
+
+
 def extract_source_dates(
     markup: str, trafilatura_date: str | None
 ) -> tuple[date | None, datetime | None, date | None, datetime | None]:
     """JSON-LD와 메타데이터를 우선해 원문 발행·수정 시각 추출."""
     try:
         tree = html.fromstring(markup)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, ParserError):
         return parse_source_date(trafilatura_date) + (None, None)
     published: list[str] = []
     modified: list[str] = []
@@ -121,6 +161,8 @@ def extract_source_dates(
         return None, None
 
     trafilatura_value = _trafilatura_date(markup, trafilatura_date)
-    published_on, published_at = first([*published, trafilatura_value or ""])
-    modified_on, modified_at = first(modified)
+    published_on, published_at = _reconcile_visible_clock(
+        tree, first([*published, trafilatura_value or ""]), modified=False
+    )
+    modified_on, modified_at = _reconcile_visible_clock(tree, first(modified), modified=True)
     return published_on, published_at, modified_on, modified_at

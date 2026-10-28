@@ -4,7 +4,7 @@ from unittest.mock import Mock
 import pytest
 
 from articles.adaptive import PostgresAdaptiveStorage, ProfileContext
-from articles.extraction import ArticleExtractor, ExtractionRejectedError
+from articles.extraction import ArticleExtractor, ExtractionRejectedError, NoTextBodyError
 from articles.matching import verify_article
 from articles.models import ArticleSeed
 from config import ExtractionSettings
@@ -38,6 +38,21 @@ def test_adaptive_record_is_reused_by_new_extractor(
     assert result.method == "adaptive"
     assert result.evidence.verified
     assert repository.save_profile.call_count == 2
+
+
+def test_verified_semantic_body_trains_without_recommended_article_feed(
+    seed, article_html, repository
+):
+    body = article_html.replace(b'id="news-body"', b'itemprop="articleBody"')
+    body = body.replace(b"<aside>", b"<aside>" + ("국제 금융 추천 기사 " * 1000).encode())
+    extractor = ArticleExtractor(repository, ExtractionSettings())
+    first = extractor.extract(seed, body, str(seed.original_url))
+    assert first.evidence.verified
+    assert first.adaptive_scope
+    assert "국제 금융 추천 기사" not in first.text
+    replay = extractor.extract(seed, body, str(seed.original_url))
+    assert replay.method == "adaptive"
+    assert replay.text == first.text
 
 
 def test_legacy_korean_encoding_keeps_title_body_and_profile(seed, article_html, repository):
@@ -201,6 +216,37 @@ def test_correct_title_with_wrong_body_is_rejected(seed: ArticleSeed) -> None:
     assert not result.verified
 
 
+@pytest.mark.parametrize("ellipsis", ["...", "…"])
+def test_disjoint_search_snippets_are_matched_separately(seed, ellipsis):
+    first = (
+        "교육청은 지역사회와 함께 학생들의 안전한 귀가를 지원하기 위한 "
+        "새로운 협력 사업을 시작한다고 밝혔다."
+    )
+    last = (
+        "학부모 대표들은 학교 현장의 다양한 의견을 충분히 수렴하고 "
+        "지원 인력을 확대해야 한다고 강조했다."
+    )
+    summary = first + ellipsis + last
+    body = first + " 학교별 이동 동선과 차량 배정, 사업 예산과 관련한 논의가 이어졌다. " * 12 + last
+    edited = seed.model_copy(update={"summary": summary})
+    result = verify_article(edited, seed.title, body, ExtractionSettings())
+    assert result.verified
+    assert result.snippet_match_fraction == 1
+    wrong = verify_article(
+        edited, seed.title, "국제 금융 시장과 수출 실적을 분석했다. " * 40, ExtractionSettings()
+    )
+    assert not wrong.verified
+
+
+def test_short_disjoint_snippets_require_enough_matched_text(seed):
+    first = "지역사회와연계한학생귀가지원사업이이번학기부터시작된다"
+    last = "학부모대표들은안전한교육환경을위한지원인력확충을요구했다"
+    edited = seed.model_copy(update={"summary": first + "…" + last})
+    padding = "국제금융시장과반도체수출증가에대한경제동향분석결과를발표했다" * 20
+    assert verify_article(edited, seed.title, first + padding + last, ExtractionSettings()).verified
+    assert not verify_article(edited, seed.title, first + padding, ExtractionSettings()).verified
+
+
 def test_edited_article_is_accepted_by_title_and_summary_similarity(seed: ArticleSeed) -> None:
     summary = (
         "새 학기를 앞두고 지역 교육청의 방과후 교실 운영 계획을 둘러싼 논의가 이어지고 있다. "
@@ -239,4 +285,16 @@ def test_storage_adapter_rejects_unverified_training(repository: Mock) -> None:
     )
     with pytest.raises(ValueError, match="검증"):
         store.save(Mock(), "article-body")
+    repository.save_profile.assert_not_called()
+
+
+def test_registered_domain_policy_is_called_before_training(seed, repository):
+    url = "https://news.kbs.co.kr/news/view.do?ncd=1234"
+    seeded = seed.model_copy(update={"original_url": url})
+    markup = (
+        f'<html><title>{seed.title}</title><h1>{seed.title}</h1>'
+        '<div id="cont_newstext"></div><script>const video="/news_1234.mp4"</script></html>'
+    ).encode()
+    with pytest.raises(NoTextBodyError, match="영상 제공"):
+        ArticleExtractor(repository, ExtractionSettings()).extract(seeded, markup, url)
     repository.save_profile.assert_not_called()

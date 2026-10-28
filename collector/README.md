@@ -14,7 +14,7 @@ docker compose --profile collector up -d --build
 
 Prefect UI는 `http://127.0.0.1:4200`이다. 두 pool은 초기화 서비스에서 등록한다. Docker worker는 작업마다 별도 Linux 컨테이너를 생성한다. 작업 이미지는 `gyeonggi-collector:local`이며, 수집 코드를 수정하면 다시 빌드한다. Docker worker는 작업 컨테이너 생성을 위해 Docker 소켓을 사용한다.
 
-로컬 단일 Prefect 서버의 메타데이터는 SQLite로 `.docker/prefect/server`에 보존하며 업무 PostgreSQL과 분리한다. 서버·background service를 여러 프로세스로 확장할 때는 전용 PostgreSQL DB와 Redis를 구성한다.
+Prefect 메타데이터는 PostgreSQL의 별도 DB `gyeonggi_prefect`, 서버 홈은 Docker 볼륨 `gyeonggi-prefect-data`에 보존한다.
 
 ## Docker 작업 배포
 
@@ -229,7 +229,7 @@ UI에서 pool별 worker ONLINE/OFFLINE, 마지막 heartbeat, 작업 상태와 �
 판정에 사용한 유사도와 인정 사유는 추출 결과에 보존한다.
 401·429·Retry-After는 같은 언론사에 브라우저로 반복 요청하지 않는다.
 Edge 탭은 원문 사이트의 시작 화면으로 연결한 뒤 해당 출처에서 기사를 fetch한다.
-작업 완료 후 창을 유지한다.
+수집 탭은 처리 후 정리하며 Edge 창은 유지한다.
 
 RustFS의 S3 API는 `http://127.0.0.1:9000`, 콘솔은 `http://127.0.0.1:9001`이다.
 데이터는 `.docker/rustfs/data`, Compose 자격 증명 파일은 `.docker/rustfs/secrets`에 둔다.
@@ -274,16 +274,23 @@ $env:OBJECT_STORAGE_BUCKET = 'collector-raw'
 $env:OBJECT_STORAGE_REGION = 'us-east-1'
 $env:OBJECT_STORAGE_CREDENTIALS_BLOCK = 'collector-object-storage-credentials'
 uv run prefect deploy --name article-details --no-prompt
+uv run prefect deploy --name naver-news-details --no-prompt
+uv run prefect deploy --name article-pending-details --no-prompt
 ```
 
 `collect-article-details/article-details`의 `articles`에 목록 결과의 기사 배열을 전달한다.
-원문 URL·소스 ID·언론사·제목·발행일·요약을 함께 전달해야 한다. 자동 주기는 배포하지 않는다.
+원문 URL·소스 ID·제목·발행일·요약을 함께 전달한다. `source`는 `bigkinds` 또는
+`naver_news`이며 네이버 언론사는 생략할 수 있다. 네이버 제공 시각은 `published_at`으로 전달한다.
+자동 주기는 배포하지 않는다.
 한 실행 내 중복 ID는 거부하며 같은 내용의 본문은 DW에 중복 적재하지 않는다.
 요청 간격, 응답 크기 제한과 본문 검증 임계값은 `DETAIL_`·`EXTRACTION_` 설정으로 관리한다.
 요약이 너무 짧거나 제목·본문이 맞지 않으면 성공으로 취급하지 않는다.
 언론사 본문 구조를 사전 검증할 때는 `allow_bigkinds_fallback=false`로 실행한다.
 이 경우 원문 HTTP·브라우저 단계에서 검증하지 못한 기사를 빅카인즈 상세로 대체하지 않는다.
 원문 추출 성공과 PostgreSQL adaptive 프로필 저장 여부를 함께 확인한다.
+
+정기 목록 수집은 `collection-dispatch`, 미수집 본문 수집은 `article-pending-details` 배포에서
+실행한다. 주기는 각 작업의 `prefect.yaml`에서 관리한다. AI 분석 정기 배포는 기본 비활성 상태다.
 
 
 ## 검증

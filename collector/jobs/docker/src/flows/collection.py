@@ -103,8 +103,6 @@ def collect_naver_request(
     settings: NaverSettings,
     credentials: NaverCredentials,
 ) -> tuple[str, dict]:
-    if request.mode == "backfill":
-        raise ValueError("네이버 기간 수집 미지원")
     search = SearchRequest(
         channel=cast(Literal["news", "blog"], request.source.removeprefix("naver_")),
         terms=request.definition.terms,
@@ -114,7 +112,15 @@ def collect_naver_request(
     if request.mode != "preview":
         try:
             summary = collect_naver(
-                search, flow_run_id, searches, objects, settings, credentials, http
+                search,
+                flow_run_id,
+                searches,
+                objects,
+                settings,
+                credentials,
+                http,
+                request.start_date if request.mode == "backfill" else None,
+                request.end_date if request.mode == "backfill" else None,
             )
             return summary.status, summary.model_dump(mode="json")
         finally:

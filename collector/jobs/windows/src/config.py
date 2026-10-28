@@ -17,7 +17,7 @@ class BrowserFetchSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     browser_cdp_url: AnyHttpUrl
-    browser_connect_timeout_ms: int = Field(default=5_000, gt=0)
+    browser_connect_timeout_ms: int = Field(default=30_000, gt=0)
     browser_navigation_timeout_ms: int = Field(default=30_000, gt=0)
     browser_fetch_timeout_ms: int = Field(default=30_000, gt=0)
 

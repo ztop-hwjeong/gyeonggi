@@ -39,6 +39,12 @@ from flows import details
             "browser_rendered",
             False,
         ),
+        (
+            ["curl_cffi", "browser_fetch", "browser_rendered"],
+            ["rejected", "rejected", "skipped"],
+            None,
+            True,
+        ),
     ],
 )
 def test_stage_order_and_early_success(
@@ -66,12 +72,18 @@ def test_stage_order_and_early_success(
         monkeypatch.setenv(name, value)
     collector = Mock()
     collector.attempt.side_effect = [
-        DetailAttempt(stage=stage, status=status, reason="test")
+        DetailAttempt(
+            stage=stage,
+            status=status,
+            reason="test",
+            skip_reason="no_text_body" if status == "skipped" else None,
+        )
         for stage, status in zip(stages, statuses, strict=True)
     ]
-    monkeypatch.setattr(details, "ArticleDetailCollector", Mock(return_value=collector))
     scoped = MagicMock()
-    scoped.get.return_value = repository
+    scoped.get.side_effect = lambda kind: (
+        collector if kind is details.ArticleDetailCollector else repository
+    )
     container = MagicMock()
     container.return_value.__enter__.return_value = scoped
     monkeypatch.setattr(details, "create_detail_container", Mock(return_value=container))
@@ -79,6 +91,7 @@ def test_stage_order_and_early_success(
         details.FlowRunContext, "get", lambda: SimpleNamespace(flow_run=SimpleNamespace(id=uuid4()))
     )
     monkeypatch.setattr(details, "get_run_logger", Mock())
+    monkeypatch.setattr(details, "cleanup_browser_tabs", Mock())
     monkeypatch.setattr(details, "collect_stage", details.collect_stage.fn)
     monkeypatch.setattr(details, "finish_article", details.finish_article.fn)
     result = details.collect_article_details.fn([seed], allow_bigkinds_fallback)
@@ -86,7 +99,10 @@ def test_stage_order_and_early_success(
     stored = repository.save_detail.call_args.args[1]
     assert stored.selected_stage == expected
     assert result.collected_count == (1 if expected is not None else 0)
-    assert result.status == ("completed" if expected is not None else "partial")
+    is_skip = statuses[-1] == "skipped"
+    assert result.status == ("completed" if expected is not None or is_skip else "partial")
+    assert result.skipped_count == int(is_skip)
+    assert stored.status == ("collected" if expected else "skipped" if is_skip else "failed")
 
 
 @pytest.mark.parametrize("status,retry_after", [(401, None), (429, None), (503, "120")])
@@ -119,3 +135,18 @@ def test_403_allows_authorized_browser_stage() -> None:
     assert browser_allowed(
         DetailAttempt(stage="curl_cffi", status="failed", reason="test", snapshots=[response])
     )
+
+
+def test_transport_stage_skip_is_still_article_failure(monkeypatch, seed, repository):
+    scoped = MagicMock()
+    scoped.get.return_value = repository
+    container = MagicMock()
+    container.return_value.__enter__.return_value = scoped
+    monkeypatch.setattr(details, "create_detail_container", Mock(return_value=container))
+    result = details.finish_article.fn(
+        seed,
+        [DetailAttempt(stage="browser_fetch", status="skipped", reason="원문 서버 대기")],
+        uuid4(),
+    )
+    assert result.status == "failed"
+    assert result.skip_reason is None

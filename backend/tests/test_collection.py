@@ -62,8 +62,9 @@ def test_retired_collection_source_cannot_be_registered(setup_collection, defini
     repository.save_rule.assert_not_awaited()
 
 
-def test_run_requires_idempotency_key_and_supported_period(setup_collection):
+def test_run_requires_idempotency_key(setup_collection):
     client, repository, rule_id = setup_collection
+    now = datetime.now(UTC)
     body = {
         "rule_id": str(rule_id),
         "version": 1,
@@ -74,11 +75,27 @@ def test_run_requires_idempotency_key_and_supported_period(setup_collection):
     }
     assert client.post("/collection-runs", json=body).status_code == 422
     key = str(uuid4())
-    unsupported = client.post(
+    repository.enqueue.return_value = {
+        "id": key,
+        "rule_id": rule_id,
+        "rule_version": 1,
+        "source": "naver_blog",
+        "mode": "backfill",
+        "definition": {"name": "교육 정책", "terms": ["교권보호"], "sources": ["naver_blog"]},
+        "start_date": "2026-06-01",
+        "end_date": "2026-10-23",
+        "status": "queued",
+        "flow_run_id": None,
+        "summary": {},
+        "error": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    accepted = client.post(
         "/collection-runs", json={**body, "source": "naver_blog"}, headers={"Idempotency-Key": key}
     )
-    assert unsupported.status_code == 422
-    repository.enqueue.assert_not_awaited()
+    assert accepted.status_code == 202
+    assert repository.enqueue.await_args.args[1].source == "naver_blog"
 
 
 def test_preview_enqueues_draft_without_saving_rule(setup_collection, definition):
@@ -171,3 +188,15 @@ def test_period_rejects_reverse_dates_and_allows_long_history():
         {**base, "start_date": "2024-01-01", "end_date": "2026-10-23"}
     )
     assert request.start_date.year == 2024
+
+
+def test_naver_news_and_blog_backfill_allowed():
+    base = {
+        "rule_id": uuid4(),
+        "version": 1,
+        "mode": "backfill",
+        "start_date": "2026-10-21",
+        "end_date": "2026-10-28",
+    }
+    assert RunCreate.model_validate({**base, "source": "naver_news"}).source == "naver_news"
+    assert RunCreate.model_validate({**base, "source": "naver_blog"}).source == "naver_blog"

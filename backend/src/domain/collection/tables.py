@@ -95,6 +95,22 @@ collection_rules = Table(
     schema="ops",
 )
 
+article_detail_results = Table(
+    "article_detail_results",
+    metadata,
+    Column("run_id", UUID(as_uuid=True), primary_key=True),
+    Column("source_id", String, primary_key=True),
+    Column("result", JSONB),
+    schema="st",
+)
+article_detail_runs = Table(
+    "article_detail_runs",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("summary", JSONB),
+    schema="ops",
+)
+
 collection_requests = Table(
     "collection_requests",
     metadata,

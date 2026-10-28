@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from collector_storage.objects import RawObject
 from pydantic import HttpUrl
-from sqlalchemy import MetaData, Table, create_engine, insert, select
+from sqlalchemy import MetaData, Table, create_engine, insert, select, update
 
 from articles.models import (
     ArticleDetail,
@@ -50,9 +50,7 @@ def test_persists_original_dates_without_requeuing_same_content(seed) -> None:
     objects.put.return_value = raw
     objects.read.return_value = body.encode()
     repository = DetailRepository(engine, objects)
-    seeded = seed.model_copy(
-        update={"source_id": source_id, "original_url": HttpUrl(original_url)}
-    )
+    seeded = seed.model_copy(update={"source_id": source_id, "original_url": HttpUrl(original_url)})
     store = ArticleStore(repository, run_id, seeded)
     try:
         with engine.begin() as connection:
@@ -144,6 +142,203 @@ def test_persists_original_dates_without_requeuing_same_content(seed) -> None:
         assert naver_time == datetime(2026, 10, 24, 16, 2, 3, tzinfo=UTC)
         assert len(queue_count) == 1
         assert len(key_count) == 1
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.skipif("ANALYSIS_TEST_DATABASE_URL" not in os.environ, reason="전용 검증 DB 필요")
+@pytest.mark.parametrize("source", ["naver_news", "bigkinds"])
+def test_unknown_publisher_keeps_body_and_binds_after_registration(seed, source):
+    engine = create_engine(os.environ["ANALYSIS_TEST_DATABASE_URL"])
+    metadata = MetaData()
+    catalog = Table("publishers", metadata, schema="dw", autoload_with=engine)
+    domains = Table("publisher_domains", metadata, schema="dw", autoload_with=engine)
+    articles = Table("articles", metadata, schema="dw", autoload_with=engine)
+    contents = Table("article_contents", metadata, schema="dw", autoload_with=engine)
+    results = Table("article_detail_results", metadata, schema="st", autoload_with=engine)
+    listing = Table(
+        "search_items" if source == "naver_news" else "news_items",
+        metadata,
+        schema="dw",
+        autoload_with=engine,
+    )
+    key = uuid4().hex
+    domain = f"{key}.example"
+    run_id = uuid4()
+    seeded = seed.model_copy(
+        update={
+            "source": source,
+            "source_id": key,
+            "publisher_code": domain,
+            "original_url": HttpUrl(f"https://www.{domain}:443/article"),
+        }
+    )
+    repository = DetailRepository(engine, Mock())
+    body = "검증된 본문과 독립적으로 관리하는 언론사 정보 " * 30
+    try:
+        data = seeded.model_dump(mode="json") | {
+            "url": str(seeded.original_url),
+            "publisher_domain": domain,
+        }
+        values = (
+            {"provider": "naver", "channel": "news", "content_hash": key}
+            if source == "naver_news"
+            else {"source": source}
+        )
+        with engine.begin() as connection:
+            connection.execute(insert(listing).values(source_id=key, data=data, **values))
+        repository.save_run(
+            DetailRunSummary(
+                run_id=str(run_id),
+                status="running",
+                started_at=datetime.now(UTC),
+                requested_count=1,
+            )
+        )
+        detail = _detail(seeded, body, datetime.now(UTC))
+        repository.save_detail(run_id, detail)
+        with engine.connect() as connection:
+            article_id = connection.scalar(
+                select(contents.c.article_id).where(
+                    contents.c.source == source, contents.c.source_id == key
+                )
+            )
+            assert article_id is not None
+            assert (
+                connection.scalar(
+                    select(articles.c.publisher_code).where(articles.c.id == article_id)
+                )
+                is None
+            )
+            assert connection.scalar(select(catalog.c.code).where(catalog.c.code == domain)) is None
+            assert (
+                connection.scalar(
+                    select(contents.c.body).where(contents.c.article_id == article_id)
+                )
+                == body
+            )
+            stored = connection.scalar(
+                select(results.c.result).where(
+                    results.c.run_id == run_id, results.c.source_id == key
+                )
+            )
+            assert stored is not None and stored["seed"]["publisher_code"] == domain
+        registered = "9004" if source == "naver_news" else "9006"
+        with engine.begin() as connection:
+            connection.execute(
+                insert(catalog).values(
+                    code=registered, name="등록 언론사", category_code="online_specialty"
+                )
+            )
+            connection.execute(insert(domains).values(domain=domain, publisher_code=registered))
+        with engine.connect() as connection:
+            row = connection.execute(
+                select(articles.c.publisher_code, articles.c.publisher).where(
+                    articles.c.id == article_id
+                )
+            ).one()
+            assert (row.publisher_code, row.publisher) == (registered, "등록 언론사")
+        replacement = "9005" if source == "naver_news" else "9007"
+        with engine.begin() as connection:
+            connection.execute(
+                insert(catalog).values(
+                    code=replacement, name="변경 언론사", category_code="online_specialty"
+                )
+            )
+            connection.execute(
+                update(domains).where(domains.c.domain == domain).values(publisher_code=replacement)
+            )
+        repository.save_detail(run_id, detail)
+        with engine.connect() as connection:
+            assert (
+                connection.scalar(
+                    select(articles.c.publisher_code).where(articles.c.id == article_id)
+                )
+                == replacement
+            )
+            assert (
+                len(
+                    connection.execute(
+                        select(contents.c.id).where(contents.c.article_id == article_id)
+                    ).all()
+                )
+                == 1
+            )
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.skipif("ANALYSIS_TEST_DATABASE_URL" not in os.environ, reason="전용 검증 DB 필요")
+def test_no_text_skip_keeps_metadata_without_queueing_analysis_or_retry(seed):
+    engine = create_engine(os.environ["ANALYSIS_TEST_DATABASE_URL"])
+    metadata = MetaData()
+    news = Table("news_items", metadata, schema="dw", autoload_with=engine)
+    sources = Table("article_sources", metadata, schema="dw", autoload_with=engine)
+    contents = Table("article_contents", metadata, schema="dw", autoload_with=engine)
+    queue = Table("analysis_queue", metadata, schema="ops", autoload_with=engine)
+    results = Table("article_detail_results", metadata, schema="st", autoload_with=engine)
+    key, run_id = uuid4().hex, uuid4()
+    seeded = seed.model_copy(
+        update={"source_id": key, "original_url": HttpUrl(f"https://news.example/{key}")}
+    )
+    repository = DetailRepository(engine, Mock())
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                insert(news).values(
+                    source="bigkinds", source_id=key, data=seeded.model_dump(mode="json")
+                )
+            )
+        repository.save_run(
+            DetailRunSummary(
+                run_id=str(run_id),
+                status="running",
+                started_at=datetime.now(UTC),
+                requested_count=1,
+            )
+        )
+        repository.save_detail(
+            run_id,
+            ArticleDetail(
+                seed=seeded,
+                status="skipped",
+                selected_stage=None,
+                skip_reason="no_text_body",
+                attempts=[
+                    DetailAttempt(
+                        stage="browser_rendered",
+                        status="skipped",
+                        reason="영상 제공·텍스트 본문 없음",
+                        skip_reason="no_text_body",
+                    )
+                ],
+            ),
+        )
+        with engine.connect() as connection:
+            original = connection.execute(
+                select(sources).where(sources.c.source == "bigkinds", sources.c.source_id == key)
+            ).one()
+            assert original.original_url == str(seeded.original_url)
+            assert (
+                connection.scalar(
+                    select(contents.c.id).where(contents.c.article_id == original.article_id)
+                )
+                is None
+            )
+            assert (
+                connection.scalar(
+                    select(queue.c.article_id).where(queue.c.article_id == original.article_id)
+                )
+                is None
+            )
+            result = connection.scalar(
+                select(results.c.result).where(
+                    results.c.run_id == run_id, results.c.source_id == key
+                )
+            )
+            assert result is not None and result["status"] == "skipped"
+            assert result["skip_reason"] == "no_text_body"
+        assert all(item.source_id != key for item in repository.pending_articles(500))
     finally:
         engine.dispose()
 

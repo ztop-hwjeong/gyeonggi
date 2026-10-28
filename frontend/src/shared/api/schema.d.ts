@@ -1125,6 +1125,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/publisher-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Categories */
+        get: operations["categories_publisher_categories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/publishers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Publishers */
+        get: operations["publishers_publishers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/publisher-source-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Source Categories */
+        get: operations["source_categories_publisher_source_categories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/publisher-domains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Domains */
+        get: operations["domains_publisher_domains_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1783,6 +1851,8 @@ export interface components {
             source_counts: {
                 [key: string]: number;
             };
+            /** Body Skipped Articles */
+            body_skipped_articles: number;
         };
         /** PoolInfo */
         PoolInfo: {
@@ -1811,6 +1881,80 @@ export interface components {
             end_date: string;
             definition: components["schemas"]["RuleDefinition"];
             source: components["schemas"]["SourceCode"];
+        };
+        /** PublisherCategory */
+        PublisherCategory: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Publisher Count */
+            publisher_count: number;
+        };
+        /** PublisherDomain */
+        PublisherDomain: {
+            /** Domain */
+            domain: string;
+            /** Publisher Code */
+            publisher_code: string | null;
+            /** Publisher Name */
+            publisher_name: string | null;
+            /** Observed Name */
+            observed_name: string | null;
+        };
+        /** PublisherInfo */
+        PublisherInfo: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Category Code */
+            category_code: string;
+            /** Category Name */
+            category_name: string;
+            /** Category Source */
+            category_source: string;
+            /** Domains */
+            domains: string[];
+            /** Sources */
+            sources: components["schemas"]["PublisherSource"][];
+        };
+        /** PublisherPage */
+        PublisherPage: {
+            /** Items */
+            items: components["schemas"]["PublisherInfo"][];
+            /** Total */
+            total: number;
+        };
+        /** PublisherSource */
+        PublisherSource: {
+            /** Source */
+            source: string;
+            /** Source Code */
+            source_code: string;
+            /** Source Name */
+            source_name: string | null;
+            /** Source Category Code */
+            source_category_code: string | null;
+            /** Source Category Name */
+            source_category_name: string | null;
+            /** Area */
+            area: string | null;
+        };
+        /** PublisherSourceCategory */
+        PublisherSourceCategory: {
+            /** Source */
+            source: string;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Publisher Count */
+            publisher_count: number;
+            /** Source Code Count */
+            source_code_count: number;
+            /** Categories */
+            categories: components["schemas"]["PublisherCategory"][];
         };
         /** ReapplyRequest */
         ReapplyRequest: {
@@ -2331,6 +2475,8 @@ export interface components {
             content_preview: string;
             /** Has Body */
             has_body: boolean;
+            /** Body Skip Reason */
+            body_skip_reason?: "no_text_body" | null;
             /** Sentiment */
             sentiment?: ("긍정" | "중립" | "부정") | null;
             /** Mixed Sentiment */
@@ -2370,6 +2516,8 @@ export interface components {
             content_preview: string;
             /** Has Body */
             has_body: boolean;
+            /** Body Skip Reason */
+            body_skip_reason?: "no_text_body" | null;
             /** Sentiment */
             sentiment?: ("긍정" | "중립" | "부정") | null;
             /** Mixed Sentiment */
@@ -2428,6 +2576,8 @@ export interface components {
             content_preview: string;
             /** Has Body */
             has_body: boolean;
+            /** Body Skip Reason */
+            body_skip_reason?: "no_text_body" | null;
             /** Sentiment */
             sentiment?: ("긍정" | "중립" | "부정") | null;
             /** Mixed Sentiment */
@@ -2465,6 +2615,8 @@ export interface components {
             content_preview: string;
             /** Has Body */
             has_body: boolean;
+            /** Body Skip Reason */
+            body_skip_reason?: "no_text_body" | null;
             /** Sentiment */
             sentiment?: ("긍정" | "중립" | "부정") | null;
             /** Mixed Sentiment */
@@ -5406,6 +5558,123 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    categories_publisher_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublisherCategory"][];
+                };
+            };
+        };
+    };
+    publishers_publishers_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                category_code?: string | null;
+                source?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublisherPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    source_categories_publisher_source_categories_get: {
+        parameters: {
+            query?: {
+                source?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublisherSourceCategory"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    domains_publisher_domains_get: {
+        parameters: {
+            query?: {
+                unmapped?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublisherDomain"][];
+                };
             };
             /** @description Validation Error */
             422: {

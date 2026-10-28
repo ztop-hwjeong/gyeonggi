@@ -4,6 +4,7 @@ from hashlib import sha256
 from html.parser import HTMLParser
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from collector_storage.publishers import publisher_code
 from pydantic import HttpUrl
 
 from sources.naver.models import Channel, Listing
@@ -47,6 +48,7 @@ def normalize_item(channel: Channel, data: dict) -> Listing:
             raise ValueError("네이버 블로그 작성일 형식 오류")
         published_on = date(int(value[:4]), int(value[4:6]), int(value[6:])).isoformat()
     original = canonical_url(data["originallink"]) if data.get("originallink") else None
+    code = publisher_code(original or url) if channel == "news" else None
     return Listing(
         channel=channel,
         source_id=sha256(url.encode()).hexdigest(),
@@ -54,6 +56,8 @@ def normalize_item(channel: Channel, data: dict) -> Listing:
         url=HttpUrl(url),
         original_url=HttpUrl(original) if original else None,
         summary=plain_text(data["description"]),
+        publisher_code=code,
+        publisher_domain=code if code and not code.startswith("naver:") else None,
         published_at=published_at,
         published_on=published_on,
         blog_name=plain_text(data["bloggername"])

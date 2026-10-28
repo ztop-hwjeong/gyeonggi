@@ -1,10 +1,11 @@
 from datetime import UTC, datetime
 from hashlib import sha256
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from collector_storage.objects import RawObject, RawObjectStore
-from sqlalchemy import func, select
+from collector_storage.publishers import publisher_code
+from sqlalchemy import func, literal, select, union_all, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
@@ -15,15 +16,22 @@ from articles.models import (
     DetailRunSummary,
     DetailStage,
     FetchSnapshot,
+    PublisherIdentity,
 )
 from articles.tables import (
     adaptive_history,
     adaptive_profiles,
     article_contents,
+    articles,
     attempts,
     detail_results,
     detail_runs,
+    news_items,
+    publisher_domains,
+    publishers,
     responses,
+    search_items,
+    search_run_items,
 )
 
 
@@ -31,6 +39,119 @@ class DetailRepository:
     def __init__(self, engine: Engine, objects: RawObjectStore) -> None:
         self._engine = engine
         self._objects = objects
+
+    def pending_naver_news(
+        self, limit: int, search_run_id: UUID | None = None
+    ) -> list[ArticleSeed]:
+        return self.pending_articles(limit, "naver_news", search_run_id)
+
+    def pending_articles(
+        self,
+        limit: int,
+        source: Literal["bigkinds", "naver_news"] | None = None,
+        search_run_id: UUID | None = None,
+    ) -> list[ArticleSeed]:
+        listings = union_all(
+            select(
+                literal("naver_news").label("source"),
+                search_items.c.source_id,
+                search_items.c.data,
+                search_items.c.article_id,
+                search_items.c.first_seen_at,
+            ).where(search_items.c.provider == "naver", search_items.c.channel == "news"),
+            select(
+                news_items.c.source,
+                news_items.c.source_id,
+                news_items.c.data,
+                news_items.c.article_id,
+                news_items.c.first_seen_at,
+            ).where(news_items.c.source == "bigkinds"),
+        ).subquery()
+        collected = (
+            select(article_contents.c.id)
+            .where(article_contents.c.article_id == listings.c.article_id)
+            .exists()
+        )
+        attempted = (
+            select(detail_results.c.run_id)
+            .where(
+                detail_results.c.source_id == listings.c.source_id,
+                detail_results.c.result["seed"]["source"].astext == listings.c.source,
+            )
+            .exists()
+        )
+        scope = []
+        if source is not None:
+            scope.append(listings.c.source == source)
+        if search_run_id is not None:
+            scope.append(listings.c.source == "naver_news")
+            scope.append(
+                select(search_run_items.c.source_id)
+                .where(
+                    search_run_items.c.run_id == search_run_id,
+                    search_run_items.c.source_id == listings.c.source_id,
+                )
+                .exists()
+            )
+        candidates = (
+            select(
+                listings.c.source,
+                listings.c.source_id,
+                listings.c.data,
+                articles.c.publisher,
+                articles.c.publisher_code,
+                listings.c.first_seen_at,
+                func.row_number()
+                .over(
+                    partition_by=listings.c.article_id,
+                    order_by=[listings.c.first_seen_at, listings.c.source_id],
+                )
+                .label("rank"),
+            )
+            .join(articles, articles.c.id == listings.c.article_id)
+            .where(
+                ~collected,
+                ~attempted,
+                *scope,
+            )
+            .subquery()
+        )
+        statement = (
+            select(candidates)
+            .where(candidates.c.rank == 1)
+            .order_by(candidates.c.first_seen_at.desc(), candidates.c.source_id)
+            .limit(limit)
+        )
+        with self._engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        return [
+            ArticleSeed(
+                source=row["source"],
+                source_id=row["source_id"],
+                title=row["data"]["title"],
+                summary=row["data"].get("summary", ""),
+                publisher=row["publisher"] or row["data"].get("publisher") or None,
+                publisher_code=row["publisher_code"]
+                or publisher_code(row["data"].get("original_url") or row["data"].get("url") or ""),
+                original_url=row["data"].get("original_url") or row["data"].get("url"),
+                published_on=row["data"].get("published_on"),
+                published_at=row["data"].get("published_at"),
+            )
+            for row in rows
+        ]
+
+    def resolve_publisher(self, url: str) -> PublisherIdentity | None:
+        code = publisher_code(url)
+        if code is None:
+            return None
+        lookup = select(publishers.c.code, publishers.c.name).where(
+            publishers.c.code == func.dw.resolve_publisher_code(code)
+        )
+        with self._engine.connect() as connection:
+            row = connection.execute(lookup).one_or_none()
+        if row is None:
+            return PublisherIdentity(code=code, name=None, method="domain")
+        return PublisherIdentity(code=row.code, name=row.name)
 
     def save_run(self, summary: DetailRunSummary) -> None:
         statement = insert(detail_runs).values(
@@ -140,7 +261,7 @@ class DetailRepository:
                     original_modified_at=content.original_modified_at,
                     collected_at=datetime.now(UTC),
                 )
-                connection.execute(
+                article_id = connection.execute(
                     content_statement.on_conflict_do_update(
                         index_elements=[
                             article_contents.c.source,
@@ -175,8 +296,27 @@ class DetailRepository:
                             "collected_at": content_statement.excluded.collected_at,
                             "provenance": content_statement.excluded.provenance,
                         },
+                    ).returning(article_contents.c.article_id)
+                ).scalar_one()
+                if result.seed.publisher_code:
+                    domain = publisher_code(str(result.seed.original_url or ""))
+                    registered_code = connection.scalar(
+                        select(
+                            func.coalesce(
+                                select(publisher_domains.c.publisher_code)
+                                .where(publisher_domains.c.domain == domain)
+                                .scalar_subquery(),
+                                func.dw.resolve_publisher_code(result.seed.publisher_code),
+                            )
+                        )
                     )
-                )
+                    # 미등록 도메인은 원문·수집 이력만 보존하고 언론사 연결을 뒤로 미루는 저장
+                    if registered_code is not None:
+                        connection.execute(
+                            update(articles)
+                            .where(articles.c.id == article_id)
+                            .values(publisher_code=registered_code)
+                        )
 
     def read_profile(self, scope: str, identifier: str) -> dict[str, Any] | None:
         with self._engine.connect() as connection:

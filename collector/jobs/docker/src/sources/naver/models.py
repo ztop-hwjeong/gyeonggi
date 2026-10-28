@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from hashlib import sha256
 from typing import Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
@@ -53,6 +54,9 @@ class Listing(BaseModel):
     url: HttpUrl
     original_url: HttpUrl | None = None
     summary: str
+    publisher_code: str | None = None
+    publisher_domain: str | None = None
+    publisher: str | None = None
     published_at: datetime | None = None
     published_on: str | None = None
     blog_name: str | None = None
@@ -87,6 +91,63 @@ class SearchSummary(BaseModel):
     error_code: str | None = None
     missing_date_count: int = 0
     date_boundary_reached: bool = False
+    start_date: date | None = None
+    end_date: date | None = None
+
+
+class BackfillPagination:
+    def __init__(self, start_date: date) -> None:
+        self.start_date = start_date
+        self.seen: set[str] = set()
+        self.total: int | None = None
+        self.previous_date: date | None = None
+        self.dates_ordered = True
+        self.missing_date_count = 0
+        self.date_boundary_reached = False
+
+    @staticmethod
+    def publication_date(item: Listing) -> date | None:
+        if item.published_at is not None:
+            return item.published_at.astimezone(ZoneInfo("Asia/Seoul")).date()
+        return date.fromisoformat(item.published_on) if item.published_on else None
+
+    def accept(
+        self, page: SearchPage, items: list[Listing], page_size: int
+    ) -> tuple[bool, str | None]:
+        ids = {item.source_id for item in items}
+        if self.total is None:
+            self.total = page.total
+        elif page.total != self.total:
+            return False, "검색 건수 변경"
+        if not ids and page.total > page.start - 1:
+            return False, "검색 건수가 있으나 빈 페이지"
+        if ids and ids <= self.seen:
+            return False, "동일 페이지 반복"
+        self.seen.update(ids)
+        for item in items:
+            day = self.publication_date(item)
+            if day is None:
+                self.missing_date_count += 1
+                self.dates_ordered = False
+                continue
+            if self.previous_date is not None and day > self.previous_date:
+                self.dates_ordered = False
+            self.previous_date = day
+        if page.start + len(items) > page.total:
+            return (
+                self.dates_ordered,
+                "검색 결과 끝 도달" if self.dates_ordered else "날짜 누락·역순",
+            )
+        if len(items) < page_size:
+            return False, "검색 건수보다 짧은 페이지"
+        if (
+            self.dates_ordered
+            and self.previous_date is not None
+            and self.previous_date < self.start_date
+        ):
+            self.date_boundary_reached = True
+            return True, "시작일 이전 날짜 경계 확인"
+        return False, None
 
 
 class Pagination:

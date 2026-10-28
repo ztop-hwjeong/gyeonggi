@@ -27,6 +27,12 @@ export function OperationsSummary({ data }: { data: Schema["Overview"] }) {
         </Link>
       </div>
       <div className="panel-body">
+        {data.body_skipped_articles > 0 && (
+          <p className="hint">
+            본문 없음으로 건너뛴 기사 {number(data.body_skipped_articles)}건 ·
+            본문 분석 제외
+          </p>
+        )}
         {data.total_rules === 0 ? (
           <div className="action-row">
             <div>

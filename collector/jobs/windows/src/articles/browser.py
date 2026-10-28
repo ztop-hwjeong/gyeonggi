@@ -2,12 +2,54 @@ import asyncio
 import base64
 from urllib.parse import urlsplit
 
-from playwright.async_api import Page, Route, async_playwright
+from playwright.async_api import Browser, Page, Playwright, Route, async_playwright
 
 from articles.models import ArticleSeed, FetchSnapshot
 from articles.requests import PublisherRateLimiter, RequestStoppedError, validate_public_url
 from articles.storage import ArticleStore
 from config import BrowserFetchSettings, DetailSettings
+
+
+async def connect_browser(playwright: Playwright, settings: BrowserFetchSettings) -> Browser:
+    try:
+        return await playwright.chromium.connect_over_cdp(
+            str(settings.browser_cdp_url), timeout=settings.browser_connect_timeout_ms
+        )
+    except Exception as error:
+        # 드라이버 종료가 일반 Exception으로 전달되는 CDP 경계의 오류 정규화
+        raise RequestStoppedError(f"브라우저 연결 실패: {error}") from error
+
+
+async def close_article_tabs(settings: BrowserFetchSettings) -> None:
+    async with async_playwright() as playwright:
+        connection = await connect_browser(
+            playwright,
+            settings.model_copy(
+                update={
+                    "browser_connect_timeout_ms": max(
+                        settings.browser_connect_timeout_ms, settings.browser_navigation_timeout_ms
+                    ),
+                }
+            ),
+        )
+        try:
+            context = connection.contexts[0]
+            selected = []
+            for page in context.pages:
+                marker = await page.evaluate("window.name")
+                if isinstance(marker, str) and marker.startswith(
+                    (
+                        "collector-article-fetch:",
+                        "collector-article-render:",
+                    )
+                ):
+                    selected.append(page)
+            if selected and len(selected) == len(context.pages):
+                await context.new_page()
+            for page in selected:
+                await page.close()
+        finally:
+            await connection.close()
 
 
 async def fetch_in_page(page: Page, url: str, timeout_ms: int, max_bytes: int) -> dict:
@@ -32,6 +74,20 @@ async def fetch_in_page(page: Page, url: str, timeout_ms: int, max_bytes: int) -
     )
 
 
+async def close_article_page(connection: Browser, page: Page | None) -> None:
+    if page is None:
+        return
+    context = connection.contexts[0]
+    # 마지막 수집 탭을 닫아도 Edge 창을 유지하는 빈 탭 한 개 확보
+    if len(context.pages) == 1:
+        await context.new_page()
+    await page.close()
+
+
+async def close_article_popup(page: Page) -> None:
+    await page.close()
+
+
 async def fetch_browser(
     seed: ArticleSeed,
     store: ArticleStore,
@@ -47,36 +103,28 @@ async def fetch_browser(
     origin = f"{parsed.scheme}://{parsed.netloc}"
     marker = "collector-article-fetch:" + origin
     async with async_playwright() as playwright:
-        connection = await playwright.chromium.connect_over_cdp(
-            str(browser.browser_cdp_url), timeout=browser.browser_connect_timeout_ms
-        )
+        connection = await connect_browser(playwright, browser)
+        selected = None
         try:
             context = connection.contexts[0]
-            selected = None
-            for page in context.pages:
-                if (
-                    page.url.startswith(origin + "/")
-                    and await page.evaluate("window.name") == marker
-                ):
-                    selected = page
-                    break
-            if selected is None:
-                selected = await context.new_page()
-                await asyncio.to_thread(limiter.acquire, origin)
-                response = await selected.goto(
-                    origin,
-                    wait_until="domcontentloaded",
-                    timeout=browser.browser_navigation_timeout_ms,
-                )
-                if response is None or not 200 <= response.status < 300:
-                    raise RequestStoppedError("언론사 출처 탭 준비 실패")
-                selected_origin = urlsplit(selected.url)
-                if (selected_origin.scheme, selected_origin.netloc) != (
-                    parsed.scheme,
-                    parsed.netloc,
-                ):
-                    raise RequestStoppedError("언론사 출처 탭 리다이렉트")
-                await selected.evaluate("name => {window.name = name}", marker)
+            selected = await context.new_page()
+            selected.on("popup", close_article_popup)
+            await selected.evaluate("name => {window.name = name}", marker)
+            await asyncio.to_thread(limiter.acquire, origin)
+            response = await selected.goto(
+                origin,
+                wait_until="domcontentloaded",
+                timeout=browser.browser_navigation_timeout_ms,
+            )
+            if response is None or not 200 <= response.status < 300:
+                raise RequestStoppedError("언론사 출처 탭 준비 실패")
+            selected_origin = urlsplit(selected.url)
+            if (selected_origin.scheme, selected_origin.netloc) != (
+                parsed.scheme,
+                parsed.netloc,
+            ):
+                raise RequestStoppedError("언론사 출처 탭 리다이렉트")
+            await selected.evaluate("name => {window.name = name}", marker)
             await asyncio.to_thread(limiter.acquire, url)
             result = await fetch_in_page(
                 selected, url, browser.browser_fetch_timeout_ms, settings.max_response_bytes
@@ -94,8 +142,10 @@ async def fetch_browser(
                 raise RequestStoppedError(f"브라우저 원문 HTTP {snapshot.status_code}")
             return snapshot
         finally:
-            # 관리 중인 Edge와 출처별 탭은 유지하고 CDP 연결만 해제
-            await connection.close()
+            try:
+                await close_article_page(connection, selected)
+            finally:
+                await connection.close()
 
 
 async def fetch_rendered_browser(
@@ -112,22 +162,13 @@ async def fetch_rendered_browser(
     origin = urlsplit(url)
     marker = f"collector-article-render:{origin.scheme}://{origin.netloc}"
     async with async_playwright() as playwright:
-        connection = await playwright.chromium.connect_over_cdp(
-            str(browser.browser_cdp_url), timeout=browser.browser_connect_timeout_ms
-        )
+        connection = await connect_browser(playwright, browser)
+        selected = None
         try:
             context = connection.contexts[0]
-            page = None
-            for candidate in context.pages:
-                if (
-                    candidate.url.startswith(("http://", "https://"))
-                    and await candidate.evaluate("window.name") == marker
-                ):
-                    page = candidate
-                    break
-            if page is None:
-                page = await context.new_page()
-            selected = page
+            selected = await context.new_page()
+            selected.on("popup", close_article_popup)
+            await selected.evaluate("name => {window.name = name}", marker)
             navigations = 0
 
             async def check_navigation(route: Route) -> None:
@@ -191,4 +232,7 @@ async def fetch_rendered_browser(
             finally:
                 await selected.unroute("**/*", check_navigation)
         finally:
-            await connection.close()
+            try:
+                await close_article_page(connection, selected)
+            finally:
+                await connection.close()

@@ -3,9 +3,10 @@ from datetime import date
 from unittest.mock import Mock
 
 import pytest
+from collector_storage.publishers import publisher_code
 from pydantic import HttpUrl
 
-from articles.models import ArticleSeed
+from articles.models import ArticleSeed, PublisherIdentity
 from articles.storage import DetailRepository
 
 
@@ -55,6 +56,10 @@ def article_html(seed: ArticleSeed, article_text: str) -> bytes:
 @pytest.fixture
 def repository() -> Mock:
     repository = Mock(spec=DetailRepository)
+    repository.resolve_publisher.side_effect = lambda url: PublisherIdentity(
+        code=publisher_code(url) or "unknown",
+        name=None,
+    )
     profiles: dict[tuple[str, str], dict] = {}
 
     def read(scope: str, identifier: str) -> dict | None:

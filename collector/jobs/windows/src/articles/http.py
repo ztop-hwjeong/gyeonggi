@@ -5,7 +5,7 @@ from collector_http.client import ChromiumHttpClient
 from collector_http.config import HttpSettings
 from scrapling import Selector
 
-from articles.matching import verify_article
+from articles.matching import normalized_text, verify_article
 from articles.models import ArticleSeed, ExtractedArticle, FetchSnapshot
 from articles.requests import PublisherRateLimiter, RequestStoppedError, validate_public_url
 from articles.storage import ArticleStore
@@ -61,6 +61,8 @@ def fetch_bigkinds(
     extraction_settings: ExtractionSettings,
     snapshots: list[FetchSnapshot],
 ) -> ExtractedArticle:
+    if seed.source != "bigkinds":
+        raise RequestStoppedError("빅카인즈 상세는 빅카인즈 기사 ID 필요")
     base = str(settings.bigkinds_base_url).rstrip("/")
     with ChromiumHttpClient(http_settings, limiter.acquire_bigkinds) as http:
         warmup = http.request_raw("GET", base + "/v2/news/search.do")
@@ -114,4 +116,11 @@ def fetch_bigkinds(
         Selector(content=f"<div>{detail['CONTENT']}</div>").get_all_text(separator="\n", strip=True)
     )
     evidence = verify_article(seed, title, text, extraction_settings)
+    if evidence.reason == "검증할 요약 문장 부족" and normalized_text(
+        seed.summary
+    ) == normalized_text(seed.title) == normalized_text(title):
+        # 목록에 제목만 제공된 기사의 상세 API 고유 ID와 동일 제목을 이용한 검증
+        evidence = evidence.model_copy(
+            update={"verified": True, "reason": "빅카인즈 기사 ID·제목 일치(목록 본문 요약 없음)"}
+        )
     return ExtractedArticle(title=title, text=text, method="bigkinds_api", evidence=evidence)

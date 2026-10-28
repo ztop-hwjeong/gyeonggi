@@ -121,6 +121,10 @@ export function MaterialReader({
             <h2>본문</h2>
             {material.body ? (
               <p className="article-body">{material.body}</p>
+            ) : material.body_skip_reason === "no_text_body" ? (
+              <Empty title="본문 수집을 건너뛰었어요">
+                영상 제공·텍스트 본문 없음 · 본문 분석 및 자동 재시도 제외
+              </Empty>
             ) : (
               <Empty title="본문이 없어요" />
             )}

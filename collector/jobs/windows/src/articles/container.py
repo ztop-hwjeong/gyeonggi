@@ -2,6 +2,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import cast
 
+from collector_http.config import HttpSettings
 from collector_storage.config import DatabaseSettings, ObjectStorageSettings
 from collector_storage.objects import ObjectCredentials, RawObjectStore
 from dishka import Container, Provider, Scope, make_container, provide
@@ -10,7 +11,9 @@ from pydantic import SecretStr
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL, Engine
 
+from articles.pipeline import ArticleDetailCollector
 from articles.storage import DetailRepository
+from config import BrowserFetchSettings, DetailSettings, ExtractionSettings
 
 
 @dataclass(frozen=True)
@@ -24,6 +27,33 @@ class StorageCredentials:
 
 
 class DetailProvider(Provider):
+    @provide(scope=Scope.APP)
+    def detail_settings(self) -> DetailSettings:
+        return DetailSettings.model_validate({})
+
+    @provide(scope=Scope.APP)
+    def http_settings(self) -> HttpSettings:
+        return HttpSettings()
+
+    @provide(scope=Scope.APP)
+    def browser_settings(self) -> BrowserFetchSettings:
+        return BrowserFetchSettings.model_validate({})
+
+    @provide(scope=Scope.APP)
+    def extraction_settings(self) -> ExtractionSettings:
+        return ExtractionSettings()
+
+    @provide(scope=Scope.REQUEST)
+    def collector(
+        self,
+        settings: DetailSettings,
+        http: HttpSettings,
+        browser: BrowserFetchSettings,
+        extraction: ExtractionSettings,
+        repository: DetailRepository,
+    ) -> ArticleDetailCollector:
+        return ArticleDetailCollector(settings, http, browser, extraction, repository)
+
     @provide(scope=Scope.APP)
     def database_settings(self) -> DatabaseSettings:
         return DatabaseSettings.model_validate({})

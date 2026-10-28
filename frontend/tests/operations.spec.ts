@@ -123,6 +123,7 @@ async function mockApi(
       return route.fulfill({
         json: {
           total_items: 0,
+          body_skipped_articles: 0,
           active_rules: 0,
           total_rules: 1,
           partial_requests: options.partial ? 1 : 0,
@@ -424,6 +425,76 @@ test("자료 본문을 읽고 검색하던 위치로 돌아간다", async ({ pag
   await page.getByRole("link", { name: "수집 자료로 돌아가기" }).click();
   await expect(page).toHaveURL(/offset=20/);
   await expect(page.getByLabel("자료 검색")).toHaveValue("교육");
+});
+
+test("본문 없음 스킵 건수와 사유를 수집 실패와 구분한다", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/api/overview", (route) =>
+    route.fulfill({
+      json: {
+        total_items: 2,
+        kind_counts: { news: 2, blog: 0 },
+        body_skipped_articles: 2,
+        active_rules: 1,
+        total_rules: 1,
+        partial_requests: 0,
+        queued_requests: 0,
+        failed_requests: 0,
+        source_counts: { bigkinds: 2 },
+        daily_counts: [],
+      },
+    }),
+  );
+  await page.goto("/");
+  await expect(
+    page.getByText("본문 없음으로 건너뛴 기사 2건 · 본문 분석 제외"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /오류 또는 일부만 수집된 요청/ }),
+  ).toHaveCount(0);
+  const material = {
+    id: "0c0a49b8-0ff5-455b-a17a-5609efafc9cb",
+    kind: "news",
+    title: "본문 없는 영상 기사",
+    summary: "제목만 제공",
+    publisher: "KBS",
+    published_on: "2026-10-28",
+    published_at: null,
+    blog_name: null,
+    blog_url: null,
+    sources: [
+      {
+        source: "bigkinds",
+        source_id: "video",
+        original_url: "https://news.kbs.co.kr/news/view.do?ncd=1234",
+        url: null,
+      },
+    ],
+    content_preview: "",
+    has_body: false,
+    body: null,
+    body_collected_at: null,
+    content_hash: null,
+    body_skip_reason: "no_text_body",
+  };
+  await page.route("**/api/materials?**", (route) =>
+    route.fulfill({ json: { items: [material], total: 1 } }),
+  );
+  await page.route(`**/api/materials/${material.id}`, (route) =>
+    route.fulfill({ json: material }),
+  );
+  await page.goto("/results?q=영상");
+  await page
+    .getByRole("link", { name: "본문 없는 영상 기사", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "본문 수집을 건너뛰었어요" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "영상 제공·텍스트 본문 없음 · 본문 분석 및 자동 재시도 제외",
+    ),
+  ).toBeVisible();
 });
 
 test("기사의 분석 대상 판단을 저장한 뒤 바로 표시한다", async ({ page }) => {

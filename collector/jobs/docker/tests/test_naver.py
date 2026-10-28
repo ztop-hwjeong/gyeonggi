@@ -6,7 +6,14 @@ import pytest
 from pydantic import ValidationError
 
 from sources.naver.client import NaverApiError, parse_response
-from sources.naver.models import Channel, Cursor, Pagination, SearchPage, SearchRequest
+from sources.naver.models import (
+    BackfillPagination,
+    Channel,
+    Cursor,
+    Pagination,
+    SearchPage,
+    SearchRequest,
+)
 from sources.naver.normalization import normalize_item
 
 
@@ -107,6 +114,22 @@ def test_repeated_and_unexpected_empty_pages_are_not_success():
         False,
         "검색 건수가 있으나 빈 페이지",
     )
+
+
+def test_news_uses_original_domain_as_publisher_code_without_requiring_body():
+    listing = normalize_item(
+        "news",
+        {
+            "title": "기사",
+            "description": "요약",
+            "link": "https://n.news.naver.com/mnews/article/021/1234",
+            "originallink": "https://www.munhwa.com/article/1",
+        },
+    )
+    assert listing.publisher_code == "munhwa.com"
+    assert listing.publisher_domain == "munhwa.com"
+    assert listing.publisher is None
+    assert item(1, "blog").publisher_code is None
 
 
 def test_news_and_blog_keep_publication_dates_and_blog_channel_name():
@@ -223,3 +246,49 @@ def test_response_pagination_mismatch_fails():
     )
     with pytest.raises(ValueError, match="시작 위치"):
         parse_response(response, 1)
+
+
+@pytest.mark.parametrize(
+    ("channel", "values"),
+    [
+        ("news", ["2026-10-23T00:00:00+09:00", "2026-10-21T00:00:00+09:00"]),
+        ("blog", ["2026-10-23", "2026-10-21"]),
+    ],
+)
+def test_backfill_confirms_start_boundary_for_news_and_blog(channel, values):
+    good = BackfillPagination(date(2026, 10, 21))
+    assert good.accept(
+        *dated_page(1, values, channel), 2
+    ) == (False, None)
+    previous = "2026-10-20T00:00:00+09:00" if channel == "news" else "2026-10-20"
+    older = "2026-10-19T00:00:00+09:00" if channel == "news" else "2026-10-19"
+    assert good.accept(
+        *dated_page(3, [previous, older], channel), 2
+    ) == (True, "시작일 이전 날짜 경계 확인")
+
+
+def test_backfill_rejects_missing_or_reversed_dates():
+    for values in (
+        [None, "2026-10-20T00:00:00+09:00"],
+        ["2026-10-20T00:00:00+09:00", "2026-10-23T00:00:00+09:00"],
+    ):
+        uncertain = BackfillPagination(date(2026, 10, 21))
+        assert uncertain.accept(*dated_page(1, values, "news"), 2) == (False, None)
+        assert uncertain.accept(
+            *dated_page(3, ["2026-10-19T00:00:00+09:00", "2026-10-18T00:00:00+09:00"], "news"), 2
+        ) == (False, None)
+
+
+def test_backfill_repeated_page_and_short_page_remain_incomplete():
+    state = BackfillPagination(date(2026, 10, 21))
+    first, items = dated_page(1, ["2026-10-23T00:00:00+09:00", "2026-10-22T00:00:00+09:00"], "news")
+    assert state.accept(first, items, 2) == (False, None)
+    assert state.accept(first.model_copy(update={"start": 3}), items, 2) == (
+        False,
+        "동일 페이지 반복",
+    )
+    short = BackfillPagination(date(2026, 10, 21))
+    assert short.accept(*dated_page(1, ["2026-10-23T00:00:00+09:00"], "news"), 2) == (
+        False,
+        "검색 건수보다 짧은 페이지",
+    )

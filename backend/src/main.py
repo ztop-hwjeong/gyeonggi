@@ -12,6 +12,7 @@ from api.collection import router as collection_router
 from api.events import router as events_router
 from api.health import router as health_router
 from api.monitoring import router as monitoring_router
+from api.publishers import router as publishers_router
 from api.tag_folders import router as tag_folders_router
 from api.templates import router as templates_router
 from config import Settings
@@ -64,6 +65,7 @@ def create_app(container: AsyncContainer | None = None) -> FastAPI:
     app.include_router(article_workflow_router)
     app.include_router(tag_folders_router)
     app.include_router(events_router)
+    app.include_router(publishers_router)
 
     @app.exception_handler(CollectionNotFoundError)
     async def collection_not_found(request: Request, error: CollectionNotFoundError):

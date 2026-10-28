@@ -166,11 +166,13 @@ class SearchRepository:
         return new_count, updated_count
 
     def finish(
-        self, connection: psycopg.Connection, summary: SearchSummary, cursor: Cursor
+        self, connection: psycopg.Connection, summary: SearchSummary, cursor: Cursor | None
     ) -> None:
         with connection.transaction():
             self.save_run(connection, summary)
             if summary.cursor_advanced:
+                if cursor is None:
+                    raise ValueError("갱신할 검색 커서 없음")
                 connection.execute(
                     "UPDATE ops.search_streams SET cursor=%s,updated_at=now() WHERE stream_key=%s",
                     (Jsonb(cursor.model_dump(mode="json")), summary.stream_key),

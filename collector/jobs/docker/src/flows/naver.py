@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from functools import partial
 from typing import cast
 from uuid import UUID
@@ -18,7 +18,14 @@ from pydantic import SecretStr
 
 from sources.naver.client import NaverApiError, NaverClient, parse_response
 from sources.naver.config import NaverCredentials, NaverSettings
-from sources.naver.models import Listing, Pagination, SearchPage, SearchRequest, SearchSummary
+from sources.naver.models import (
+    BackfillPagination,
+    Listing,
+    Pagination,
+    SearchPage,
+    SearchRequest,
+    SearchSummary,
+)
 from sources.naver.normalization import normalize_item
 from sources.naver.storage import SearchRepository
 
@@ -66,9 +73,19 @@ def store_page(
     summary: SearchSummary,
     response_id: UUID,
     page: SearchPage,
+    start_date: date | None = None,
+    end_date: date | None = None,
 ) -> tuple[list[Listing], int, int]:
     items = [normalize_item(summary.channel, item) for item in page.items]
-    new, updated = repository.save_items(connection, summary, response_id, items)
+    selected = items
+    if start_date is not None and end_date is not None:
+        selected = [
+            item
+            for item in items
+            if (published := BackfillPagination.publication_date(item)) is None
+            or start_date <= published <= end_date
+        ]
+    new, updated = repository.save_items(connection, summary, response_id, selected)
     return items, new, updated
 
 
@@ -80,20 +97,30 @@ def collect(
     settings: NaverSettings,
     credentials: NaverCredentials,
     http_settings: HttpSettings,
+    start_date: date | None = None,
+    end_date: date | None = None,
 ) -> SearchSummary:
+    if (start_date is None) != (end_date is None):
+        raise ValueError("네이버 기간 수집에 시작일·종료일 필요")
     summary = SearchSummary(
         run_id=run_id,
         stream_key=request.stream_key,
         channel=request.channel,
         query=request.query,
         started_at=datetime.now(UTC),
+        start_date=start_date,
+        end_date=end_date,
     )
     with repository.lock(request) as connection:
-        pagination = Pagination(
-            request,
-            repository.cursor(connection, request.stream_key),
-            settings.overlap_pages,
-            settings.date_overlap_days,
+        pagination = (
+            BackfillPagination(start_date)
+            if start_date is not None
+            else Pagination(
+                request,
+                repository.cursor(connection, request.stream_key),
+                settings.overlap_pages,
+                settings.date_overlap_days,
+            )
         )
         repository.save_run(connection, summary)
         try:
@@ -111,14 +138,18 @@ def collect(
                         client, request, start, repository, connection, objects, summary
                     )
                     items, new, updated = store_page(
-                        repository, connection, summary, response_id, page
+                        repository, connection, summary, response_id, page, start_date, end_date
                     )
                     summary.pages_collected += 1
                     summary.retrieved_count += len(items)
                     summary.new_count += new
                     summary.updated_count += updated
                     summary.total_count = page.total
-                    complete, reason = pagination.accept(page, items)
+                    complete, reason = (
+                        pagination.accept(page, items, request.page_size)
+                        if isinstance(pagination, BackfillPagination)
+                        else pagination.accept(page, items)
+                    )
                     summary.missing_date_count = pagination.missing_date_count
                     summary.date_boundary_reached = pagination.date_boundary_reached
                     repository.save_run(connection, summary)
@@ -126,7 +157,7 @@ def collect(
                         summary.stop_reason = reason
                         break
                 summary.status = "completed" if complete else "partial"
-                summary.cursor_advanced = complete
+                summary.cursor_advanced = complete and start_date is None
                 if summary.stop_reason is None:
                     summary.stop_reason = "페이지 상한 내 수집 경계·겹침 구간 미확인"
         except Exception as error:
@@ -141,11 +172,21 @@ def collect(
                     )
             summary.finished_at = datetime.now(UTC)
             repository.finish(
-                connection, summary, pagination.next_cursor(run_id, summary.finished_at)
+                connection,
+                summary,
+                pagination.next_cursor(run_id, summary.finished_at)
+                if isinstance(pagination, Pagination)
+                else None,
             )
             raise
         summary.finished_at = datetime.now(UTC)
-        repository.finish(connection, summary, pagination.next_cursor(run_id, summary.finished_at))
+        repository.finish(
+            connection,
+            summary,
+            pagination.next_cursor(run_id, summary.finished_at)
+            if isinstance(pagination, Pagination)
+            else None,
+        )
     return summary
 
 
