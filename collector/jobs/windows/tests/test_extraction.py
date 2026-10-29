@@ -293,8 +293,34 @@ def test_registered_domain_policy_is_called_before_training(seed, repository):
     seeded = seed.model_copy(update={"original_url": url})
     markup = (
         f'<html><title>{seed.title}</title><h1>{seed.title}</h1>'
-        '<div id="cont_newstext"></div><script>const video="/news_1234.mp4"</script></html>'
+        '<div id="cont_newstext"></div>'
+        '<div id="mailHtmlContents"><div class="view_con_text"></div></div>'
+        '<div class="player-app"></div><script>const newsCode: "1234"</script></html>'
     ).encode()
     with pytest.raises(NoTextBodyError, match="영상 제공"):
         ArticleExtractor(repository, ExtractionSettings()).extract(seeded, markup, url)
+    repository.save_profile.assert_not_called()
+
+
+def test_news1_structured_body_is_verified_without_adaptive_training(
+    seed, article_text, repository
+):
+    import json
+
+    payload = {"props": {"pageProps": {"articleView": {
+        "id": "1", "title": seed.title,
+        "contentArrange": [{"type": "text", "content": line} for line in article_text.splitlines()],
+    }}}}
+    markup = (
+        f"<html><head><title>{seed.title}</title></head><body>"
+        f'<h1>{seed.title}</h1><script id="__NEXT_DATA__" type="application/json">'
+        f"{json.dumps(payload, ensure_ascii=False)}</script></body></html>"
+    ).encode()
+    result = ArticleExtractor(repository, ExtractionSettings()).extract(
+        seed.model_copy(update={"original_url": "https://www.news1.kr/local/gyeonggi/1"}),
+        markup,
+        "https://www.news1.kr/local/gyeonggi/1",
+    )
+    assert result.method == "domain"
+    assert result.text == article_text
     repository.save_profile.assert_not_called()

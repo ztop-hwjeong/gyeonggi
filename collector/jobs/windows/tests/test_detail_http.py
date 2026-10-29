@@ -152,3 +152,71 @@ def test_title_only_listing_requires_verified_detail_identity_and_full_body(
     assert result.evidence.verified is (change == "none")
     if change == "none":
         assert "기사 ID·제목 일치" in result.evidence.reason
+
+
+@pytest.mark.parametrize(
+    ("title", "summary", "body", "verified"),
+    [
+        (
+            "북한 황해도 개풍군",
+            (
+                "28일 경기도 김포시 애기봉 전망대에서 바라본 북한 황해도 개풍군 "
+                "접경지역에서 북한 주민들이 포착되고 있다."
+            ),
+            (
+                "28일 경기도 김포시 애기봉 전망대에서 바라본 북한 황해도 개풍군 "
+                "접경지역에서 북한 주민들이 포착되고 있다.\n진실은 노컷, 거짓은 칼컷"
+            ),
+            True,
+        ),
+        (
+            "북한 황해도 개풍군",
+            "북한 황해도 개풍군",
+            "북한 황해도 개풍군\n진실은 노컷, 거짓은 칼컷",
+            False,
+        ),
+        ("다른 제목", "단문 원문 문장입니다.", "단문 원문 문장입니다.", False),
+        (
+            "북한 황해도 개풍군",
+            "첫 번째 문장입니다. 두 번째 문장입니다.",
+            "첫 번째 문장입니다.",
+            False,
+        ),
+        ("북한 황해도 개풍군", "단문 원문 문장입니다.", "", False),
+        ("북한 황해도 개풍군", "짧은 목록 요약", "짧은 목록 요약 뒤 문장", False),
+    ],
+)
+def test_bigkinds_exact_short_body_requires_full_listing_summary(
+    transport, seed, title, summary, body, verified
+):
+    http, store = transport
+    seed = seed.model_copy(update={"title": "북한 황해도 개풍군", "summary": summary})
+    http.request_raw.side_effect = [
+        response(200, b"search"),
+        response(
+            200,
+            json.dumps(
+                {
+                    "detail": {
+                        "NEWS_ID": seed.source_id,
+                        "TITLE": title,
+                        "CONTENT": body,
+                    }
+                }
+            ).encode(),
+        ),
+    ]
+
+    result = fetch_bigkinds(
+        seed,
+        store,
+        DetailSettings(bigkinds_rate_limit_name="test"),
+        HttpSettings(),
+        Mock(),
+        ExtractionSettings(),
+        [],
+    )
+
+    assert result.evidence.verified is verified
+    if verified:
+        assert result.evidence.reason == "빅카인즈 단문 원문·목록 요약 일치"

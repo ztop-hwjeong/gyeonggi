@@ -12,6 +12,22 @@ from articles.storage import ArticleStore
 from config import DetailSettings, ExtractionSettings
 
 
+def is_exact_short_bigkinds_detail(
+    seed: ArticleSeed, title: str, text: str, settings: ExtractionSettings
+) -> bool:
+    """빅카인즈 단문 원문과 목록 절단 요약 일치 검증."""
+    normalized_title = normalized_text(title)
+    normalized_summary = normalized_text(seed.summary)
+    normalized_body = normalized_text(text)
+    return (
+        normalized_title == normalized_text(seed.title)
+        and normalized_summary != normalized_title
+        and len(normalized_summary) >= settings.min_summary_chars
+        and normalized_body != normalized_title
+        and normalized_body.startswith(normalized_summary)
+    )
+
+
 def fetch_original(
     seed: ArticleSeed,
     store: ArticleStore,
@@ -122,5 +138,11 @@ def fetch_bigkinds(
         # 목록에 제목만 제공된 기사의 상세 API 고유 ID와 동일 제목을 이용한 검증
         evidence = evidence.model_copy(
             update={"verified": True, "reason": "빅카인즈 기사 ID·제목 일치(목록 본문 요약 없음)"}
+        )
+    elif evidence.reason == "본문 길이 부족; 목록 요약보다 충분한 본문 필요" and (
+        is_exact_short_bigkinds_detail(seed, title, text, extraction_settings)
+    ):
+        evidence = evidence.model_copy(
+            update={"verified": True, "reason": "빅카인즈 단문 원문·목록 요약 일치"}
         )
     return ExtractedArticle(title=title, text=text, method="bigkinds_api", evidence=evidence)

@@ -41,7 +41,7 @@ class PublisherIdentity(BaseModel):
 class ExtractedArticle(BaseModel):
     title: str
     text: str
-    method: Literal["adaptive", "trafilatura", "snippet_dom", "bigkinds_api"]
+    method: Literal["adaptive", "trafilatura", "snippet_dom", "domain", "bigkinds_api"]
     evidence: Evidence
     adaptive_scope: str | None = None
     publisher: PublisherIdentity | None = None

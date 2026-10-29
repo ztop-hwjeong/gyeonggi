@@ -82,6 +82,22 @@ class ArticleExtractor:
         policy = get_body_policy(url)
         if policy is not None and policy.has_no_text_body(seed, page, title, url, decoded):
             raise NoTextBodyError("영상 제공·텍스트 본문 없음")
+        if policy is not None and (
+            domain_body := policy.extract_body(seed, page, title, url, decoded, self._settings)
+        ) is not None:
+            if not domain_body.evidence.verified:
+                raise ExtractionRejectedError(domain_body.evidence.reason)
+            return ExtractedArticle(
+                title=title,
+                text=domain_body.text,
+                method="domain",
+                evidence=domain_body.evidence,
+                publisher=publisher,
+                original_published_on=original_published_on,
+                original_published_at=original_published_at,
+                original_modified_on=original_modified_on,
+                original_modified_at=original_modified_at,
+            )
         saved = page.retrieve("article-body")
         if saved is not None:
             relocated = page.relocate(
