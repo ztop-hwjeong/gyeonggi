@@ -71,6 +71,7 @@ def test_stage_order_and_early_success(
     }.items():
         monkeypatch.setenv(name, value)
     collector = Mock()
+    repository.allows_rendered_browser.return_value = True
     collector.attempt.side_effect = [
         DetailAttempt(
             stage=stage,
@@ -91,7 +92,8 @@ def test_stage_order_and_early_success(
         details.FlowRunContext, "get", lambda: SimpleNamespace(flow_run=SimpleNamespace(id=uuid4()))
     )
     monkeypatch.setattr(details, "get_run_logger", Mock())
-    monkeypatch.setattr(details, "cleanup_browser_tabs", Mock())
+    cleanup = Mock()
+    monkeypatch.setattr(details, "cleanup_browser_tabs", cleanup)
     monkeypatch.setattr(details, "collect_stage", details.collect_stage.fn)
     monkeypatch.setattr(details, "finish_article", details.finish_article.fn)
     result = details.collect_article_details.fn([seed], allow_bigkinds_fallback)
@@ -103,6 +105,8 @@ def test_stage_order_and_early_success(
     assert result.status == ("completed" if expected is not None or is_skip else "partial")
     assert result.skipped_count == int(is_skip)
     assert stored.status == ("collected" if expected else "skipped" if is_skip else "failed")
+    if stages == ["curl_cffi"]:
+        cleanup.assert_not_called()
 
 
 @pytest.mark.parametrize("status,retry_after", [(401, None), (429, None), (503, "120")])
@@ -150,3 +154,40 @@ def test_transport_stage_skip_is_still_article_failure(monkeypatch, seed, reposi
     )
     assert result.status == "failed"
     assert result.skip_reason is None
+
+
+def test_http_failure_without_browser_policy_preserves_article_failure(
+    monkeypatch: pytest.MonkeyPatch, seed: ArticleSeed, repository: Mock
+) -> None:
+    collector = Mock()
+    collector.attempt.return_value = DetailAttempt(
+        stage="curl_cffi", status="failed", reason="ExtractionRejectedError: 본문 검증 실패"
+    )
+    repository.allows_rendered_browser.return_value = False
+    scoped = MagicMock()
+    scoped.get.side_effect = lambda kind: (
+        collector if kind is details.ArticleDetailCollector else repository
+    )
+    container = MagicMock()
+    container.return_value.__enter__.return_value = scoped
+    monkeypatch.setattr(details, "create_detail_container", Mock(return_value=container))
+    monkeypatch.setattr(
+        details.FlowRunContext, "get", lambda: SimpleNamespace(flow_run=SimpleNamespace(id=uuid4()))
+    )
+    monkeypatch.setattr(details, "get_run_logger", Mock())
+    cleanup = Mock()
+    monkeypatch.setattr(details, "cleanup_browser_tabs", cleanup)
+    monkeypatch.setattr(details, "collect_stage", details.collect_stage.fn)
+    monkeypatch.setattr(details, "finish_article", details.finish_article.fn)
+
+    result = details.collect_article_details.fn([seed], allow_bigkinds_fallback=False)
+
+    assert [call.args[0] for call in collector.attempt.call_args_list] == ["curl_cffi"]
+    skipped = repository.save_attempt.call_args.args[2]
+    assert skipped.stage == "browser_fetch"
+    assert skipped.reason == "도메인 브라우저 정책 미허용"
+    stored = repository.save_detail.call_args.args[1]
+    assert stored.status == "failed"
+    assert stored.skip_reason is None
+    assert result.failed_count == 1
+    cleanup.assert_not_called()

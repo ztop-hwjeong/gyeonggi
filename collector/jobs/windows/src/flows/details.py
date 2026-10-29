@@ -143,18 +143,28 @@ def run_collection(
     )
     repository.save_run(summary)
     results: list[ArticleDetail] = []
+    browser_used = False
     try:
-        cleanup_browser_tabs()
         for seed in articles:
             attempts = [collect_stage("curl_cffi", seed, UUID(run_id))]
             if attempts[-1].status != "accepted" and attempts[-1].skip_reason is None:
-                if browser_allowed(attempts[-1]):
+                allowed = browser_allowed(attempts[-1])
+                if repository.allows_rendered_browser(
+                    str(seed.original_url) if seed.original_url else None
+                ) and allowed:
+                    if not browser_used:
+                        cleanup_browser_tabs()
+                        browser_used = True
                     attempts.append(collect_stage("browser_fetch", seed, UUID(run_id)))
                 else:
                     skipped = DetailAttempt(
                         stage="browser_fetch",
                         status="skipped",
-                        reason="원문 서버 대기·인증·요청 제한 유지",
+                        reason=(
+                            "원문 서버 대기·인증·요청 제한 유지"
+                            if not allowed
+                            else "도메인 브라우저 정책 미허용"
+                        ),
                     )
                     attempts.append(skipped)
                     repository.save_attempt(UUID(run_id), seed, skipped)
@@ -176,7 +186,8 @@ def run_collection(
         repository.save_run(failed)
         raise
     finally:
-        cleanup_browser_tabs()
+        if browser_used:
+            cleanup_browser_tabs()
 
 
 def update_summary(

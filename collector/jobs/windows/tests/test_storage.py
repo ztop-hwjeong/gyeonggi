@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from collector_storage.objects import RawObject
 from pydantic import HttpUrl
-from sqlalchemy import MetaData, Table, create_engine, insert, select, update
+from sqlalchemy import MetaData, Table, create_engine, delete, insert, select, update
 
 from articles.models import (
     ArticleDetail,
@@ -340,6 +340,35 @@ def test_no_text_skip_keeps_metadata_without_queueing_analysis_or_retry(seed):
             assert result["skip_reason"] == "no_text_body"
         assert all(item.source_id != key for item in repository.pending_articles(500))
     finally:
+        engine.dispose()
+
+
+@pytest.mark.skipif(
+    "ANALYSIS_TEST_DATABASE_URL" not in os.environ,
+    reason="전용 PostgreSQL 테스트 데이터베이스 필요",
+)
+def test_browser_policy_uses_exact_normalized_host() -> None:
+    engine = create_engine(os.environ["ANALYSIS_TEST_DATABASE_URL"])
+    metadata = MetaData()
+    policies = Table("article_browser_policies", metadata, schema="ops", autoload_with=engine)
+    domain = f"www.{uuid4().hex}.example"
+    repository = DetailRepository(engine, Mock())
+    try:
+        assert not repository.allows_rendered_browser(f"https://{domain}/article")
+        with engine.begin() as connection:
+            connection.execute(
+                insert(policies).values(
+                    domain=domain,
+                    browser_mode="rendered_after_http_failure",
+                    reason="HTTP 본문 검증 실패 후 브라우저 본문 확보",
+                    evidence={"curl_cffi": {"accepted": 0}, "browser_rendered": {"accepted": 1}},
+                )
+            )
+        assert repository.allows_rendered_browser(f"https://{domain.upper()}/article")
+        assert not repository.allows_rendered_browser(f"https://sub.{domain}/article")
+    finally:
+        with engine.begin() as connection:
+            connection.execute(delete(policies).where(policies.c.domain == domain))
         engine.dispose()
 
 

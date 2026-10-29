@@ -9,6 +9,7 @@ from sqlalchemy import func, literal, select, union_all, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
+from articles.domains import domain_host
 from articles.models import (
     ArticleDetail,
     ArticleSeed,
@@ -21,6 +22,7 @@ from articles.models import (
 from articles.tables import (
     adaptive_history,
     adaptive_profiles,
+    article_browser_policies,
     article_contents,
     articles,
     attempts,
@@ -152,6 +154,18 @@ class DetailRepository:
         if row is None:
             return PublisherIdentity(code=code, name=None, method="domain")
         return PublisherIdentity(code=row.code, name=row.name)
+
+    def allows_rendered_browser(self, url: str | None) -> bool:
+        host = domain_host(url)
+        if host is None:
+            return False
+        with self._engine.connect() as connection:
+            mode = connection.execute(
+                select(article_browser_policies.c.browser_mode).where(
+                    article_browser_policies.c.domain == host
+                )
+            ).scalar_one_or_none()
+        return mode == "rendered_after_http_failure"
 
     def save_run(self, summary: DetailRunSummary) -> None:
         statement = insert(detail_runs).values(

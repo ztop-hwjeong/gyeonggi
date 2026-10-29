@@ -18,6 +18,16 @@ publisher_domains = Table(
     Column("publisher_code", Text),
     schema="dw",
 )
+article_browser_policies = Table(
+    "article_browser_policies",
+    metadata,
+    Column("domain", Text, primary_key=True),
+    Column("browser_mode", Text),
+    Column("reason", Text),
+    Column("evidence", JSONB),
+    Column("updated_at", DateTime(timezone=True)),
+    schema="ops",
+)
 publisher_source_codes = Table(
     "publisher_source_codes",
     metadata,
