@@ -6,7 +6,7 @@ from prefect.flows import load_flow_from_entrypoint
 from pydantic import HttpUrl
 
 from flows.blog_details import blog_seed, terminal_skip_reason
-from sources.blogs.extraction import extract_blog
+from sources.blogs.extraction import extract_blog, published_datetime
 from sources.blogs.http import fetch_blog, validate_public_url
 from sources.blogs.models import BlogSeed
 
@@ -94,6 +94,35 @@ def test_short_blog_body_and_matching_date_are_collected():
     assert content.original_published_on == date(2026, 10, 28)
     assert content.body == "짧지만 실제로 작성된 블로그 본문입니다."
     assert evidence["body_chars"] >= 10
+
+
+def test_original_published_time_uses_naver_write_epoch_not_relative_label():
+    value = published_datetime(
+        '<span class="se_publishDate">1시간 전</span>'
+        '<script>var postWriteDate = "1793230366123";</script>'
+    )
+    assert value is not None
+    assert value.isoformat() == "2026-10-29T08:32:46.123000+09:00"
+
+
+def test_original_published_time_uses_published_meta_only():
+    value = published_datetime(
+        '<meta property="article:modified_time" content="2026-10-29T10:00:00+09:00">'
+        '<meta property="article:published_time" content="2026-10-28T15:30:00+09:00">'
+    )
+    assert value is not None
+    assert value.isoformat() == "2026-10-28T15:30:00+09:00"
+    assert published_datetime('<span class="se_publishDate">1시간 전</span>') is None
+
+
+def test_absolute_time_conflicting_with_listed_date_is_rejected():
+    with pytest.raises(ValueError, match="목록·원문 작성일 불일치"):
+        extract_blog(
+            '<span class="se-title-text">황현필 관련 강연 논란</span>'
+            '<div class="se-main-container">실제로 작성된 블로그 본문입니다.</div>'
+            '<script>var postWriteDate = "1793230366123";</script>',
+            seed(),
+        )
 
 
 def test_image_only_and_unrelated_title_are_rejected():

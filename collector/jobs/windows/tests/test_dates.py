@@ -41,3 +41,28 @@ def test_visible_registered_time_supports_korean_period_without_inventing_missin
         datetime(2026, 10, 27, 3, 31, tzinfo=UTC)
     )
     assert extract_source_dates('<p class="date">입력 2026.10.27</p>', None)[1] is None
+
+
+def test_compact_og_regdate_is_published_timestamp_only_for_explicit_metadata():
+    markup = '<meta property="og:regDate" content="20261029070706">'
+    assert extract_source_dates(markup, None)[1] == datetime(2026, 10, 28, 22, 7, 6, tzinfo=UTC)
+    assert extract_source_dates('<p class="date">20261029070706</p>', None)[1] is None
+
+
+def test_debug_news_date_requires_matching_visible_approval_minute():
+    source = '<meta name="debug-news-date" content="Wed Oct 28 15:59:41 KST 2026">'
+    assert extract_source_dates(source, None)[1] is None
+    markup = source + '<p class="article-date">승인 2026-10-28 15:59</p>'
+    assert extract_source_dates(markup, None)[1] == datetime(2026, 10, 28, 6, 59, 41, tzinfo=UTC)
+
+
+def test_approval_and_distribution_are_published_but_updated_is_modified_only():
+    assert extract_source_dates('<p class="date">배포일 2026-10-27 10:09</p>', None)[1] == datetime(
+        2026, 10, 27, 1, 9, tzinfo=UTC
+    )
+    published_on, published_at, modified_on, modified_at = extract_source_dates(
+        '<p class="date">UPDATED. 2026-10-28 15:07 (수)</p>', None
+    )
+    assert (published_on, published_at) == (None, None)
+    assert modified_on == date(2026, 10, 28)
+    assert modified_at == datetime(2026, 10, 28, 6, 7, tzinfo=UTC)

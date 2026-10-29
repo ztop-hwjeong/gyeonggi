@@ -14,10 +14,17 @@ _KOREAN_DATETIME = re.compile(
 )
 _PAGE_DATE = re.compile(r"\d{4}[./-]\d{1,2}[./-]\d{1,2}\.?")
 _LABELED_DATETIME = re.compile(
-    r"(입력|등록|발행|수정)\s*[:：]?\s*"
+    r"(입력|등록|발행|승인|배포일|수정|UPDATED)\s*[.:：]?\s*"
     r"(\d{4}[./-]\d{1,2}[./-]\d{1,2}\.?)\s+"
-    r"(?:(오전|오후)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?"
+    r"(?:(오전|오후)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?",
+    re.IGNORECASE,
 )
+_DEBUG_NEWS_DATE = re.compile(
+    r"^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+"
+    r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+"
+    r"\d{2}:\d{2}:\d{2}\s+KST\s+\d{4}$"
+)
+_COMPACT_DATETIME = re.compile(r"^\d{14}$")
 
 
 def parse_source_date(value: object) -> tuple[date | None, datetime | None]:
@@ -75,6 +82,66 @@ def _metadata_values(tree: html.HtmlElement, names: tuple[str, ...]) -> Iterable
             yield node.get("content") or node.get("datetime") or node.text_content()
 
 
+def _compact_published_metadata(tree: html.HtmlElement) -> tuple[date | None, datetime | None]:
+    for node in tree.xpath("//meta[@content]"):
+        label = (node.get("property") or node.get("name") or "").casefold()
+        value = node.get("content", "").strip()
+        if label != "og:regdate" or not _COMPACT_DATETIME.fullmatch(value):
+            continue
+        try:
+            parsed = datetime.strptime(value, "%Y%m%d%H%M%S").replace(tzinfo=KST)
+        except ValueError:
+            continue
+        return parsed.date(), parsed
+    return None, None
+
+
+def _visible_labeled_time(
+    tree: html.HtmlElement, *, labels: set[str], expected_on: date | None = None
+) -> tuple[date | None, datetime | None]:
+    for node in tree.xpath('//*[contains(@class,"date") or contains(@class,"time")]'):
+        text = " ".join(node.text_content().split())
+        if len(text) > 200:
+            continue
+        for match in _LABELED_DATETIME.finditer(text):
+            label, day, period, hour, minute, second = match.groups()
+            if label.casefold() not in labels:
+                continue
+            hour_value = int(hour)
+            if period:
+                if not 1 <= hour_value <= 12:
+                    continue
+                hour_value = hour_value % 12 + (12 if period == "오후" else 0)
+            visible_on, visible_at = parse_source_date(
+                f"{day} {hour_value}:{minute}:{second or '00'}"
+            )
+            if visible_at is not None and (expected_on is None or expected_on == visible_on):
+                return visible_on, visible_at
+    return None, None
+
+
+def _debug_news_published_time(tree: html.HtmlElement) -> tuple[date | None, datetime | None]:
+    for node in tree.xpath("//meta[@content]"):
+        label = (node.get("property") or node.get("name") or "").casefold()
+        value = node.get("content", "").strip()
+        if label != "debug-news-date" or not _DEBUG_NEWS_DATE.fullmatch(value):
+            continue
+        try:
+            published = datetime.strptime(value, "%a %b %d %H:%M:%S KST %Y").replace(
+                tzinfo=KST
+            )
+        except ValueError:
+            continue
+        visible_on, visible_at = _visible_labeled_time(
+            tree, labels={"승인"}, expected_on=published.date()
+        )
+        visible_minute = visible_at.replace(second=0, microsecond=0) if visible_at else None
+        published_minute = published.replace(second=0, microsecond=0)
+        if visible_minute == published_minute:
+            return published.date(), published
+    return None, None
+
+
 def _trafilatura_date(markup: str, value: str | None) -> str | None:
     parsed_on, _ = parse_source_date(value)
     if parsed_on is None:
@@ -92,34 +159,18 @@ def _trafilatura_date(markup: str, value: str | None) -> str | None:
 def _reconcile_visible_clock(
     tree: html.HtmlElement, value: tuple[date | None, datetime | None], *, modified: bool
 ) -> tuple[date | None, datetime | None]:
-    for node in tree.xpath('//*[contains(@class,"date") or contains(@class,"time")]'):
-        text = " ".join(node.text_content().split())
-        if len(text) > 200:
-            continue
-        for match in _LABELED_DATETIME.finditer(text):
-            label, day, period, hour, minute, second = match.groups()
-            if (label == "수정") != modified:
-                continue
-            hour_value = int(hour)
-            if period:
-                if not 1 <= hour_value <= 12:
-                    continue
-                hour_value = hour_value % 12 + (12 if period == "오후" else 0)
-            visible_on, visible_at = parse_source_date(
-                f"{day} {hour_value}:{minute}:{second or '00'}"
-            )
-            if visible_at is None:
-                continue
-            metadata_at = value[1]
-            if metadata_at is None:
-                if value[0] is None or value[0] == visible_on:
-                    return visible_on, visible_at
-                continue
-            if metadata_at.astimezone(KST).replace(second=0, microsecond=0) == visible_at:
-                return value
-            # 화면의 한국 시각과 일치하는 메타데이터 시계값의 잘못된 UTC 선언 보정
-            if metadata_at.replace(tzinfo=KST, second=0, microsecond=0) == visible_at:
+    labels = {"수정", "updated"} if modified else {"입력", "등록", "발행", "승인", "배포일"}
+    visible_on, visible_at = _visible_labeled_time(tree, labels=labels)
+    if visible_at is not None:
+        metadata_at = value[1]
+        if metadata_at is None:
+            if value[0] is None or value[0] == visible_on:
                 return visible_on, visible_at
+        elif metadata_at.astimezone(KST).replace(second=0, microsecond=0) == visible_at:
+            return value
+        # 화면의 한국 시각과 일치하는 메타데이터 시계값의 잘못된 UTC 선언 보정
+        elif metadata_at.replace(tzinfo=KST, second=0, microsecond=0) == visible_at:
+            return visible_on, visible_at
     return value
 
 
@@ -160,9 +211,16 @@ def extract_source_dates(
                 return parsed_on, None
         return None, None
 
+    compact_published = _compact_published_metadata(tree)
+    debug_published = _debug_news_published_time(tree)
     trafilatura_value = _trafilatura_date(markup, trafilatura_date)
+    published_value = first([*published, trafilatura_value or ""])
+    if published_value[1] is None:
+        published_value = compact_published if compact_published[1] is not None else published_value
+    if published_value[1] is None:
+        published_value = debug_published if debug_published[1] is not None else published_value
     published_on, published_at = _reconcile_visible_clock(
-        tree, first([*published, trafilatura_value or ""]), modified=False
+        tree, published_value, modified=False
     )
     modified_on, modified_at = _reconcile_visible_clock(tree, first(modified), modified=True)
     return published_on, published_at, modified_on, modified_at
