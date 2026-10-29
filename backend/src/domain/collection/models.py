@@ -101,6 +101,7 @@ class RunCreate(DateRange):
     source: SourceCode
     mode: Literal["incremental", "backfill"]
 
+
 class PreviewCreate(DateRange):
     definition: RuleDefinition
     source: SourceCode
@@ -252,7 +253,7 @@ class StoredMaterial(BaseModel):
     sources: list[ArticleSource]
     content_preview: str
     has_body: bool
-    body_skip_reason: Literal["no_text_body"] | None = None
+    body_skip_reason: str | None = None
     sentiment: Literal["긍정", "중립", "부정"] | None = None
     mixed_sentiment: bool | None = None
     sentiment_reason: str | None = None

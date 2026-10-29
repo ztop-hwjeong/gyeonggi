@@ -2577,7 +2577,7 @@ export interface components {
             /** Has Body */
             has_body: boolean;
             /** Body Skip Reason */
-            body_skip_reason?: "no_text_body" | null;
+            body_skip_reason?: string | null;
             /** Sentiment */
             sentiment?: ("긍정" | "중립" | "부정") | null;
             /** Mixed Sentiment */
@@ -2616,7 +2616,7 @@ export interface components {
             /** Has Body */
             has_body: boolean;
             /** Body Skip Reason */
-            body_skip_reason?: "no_text_body" | null;
+            body_skip_reason?: string | null;
             /** Sentiment */
             sentiment?: ("긍정" | "중립" | "부정") | null;
             /** Mixed Sentiment */

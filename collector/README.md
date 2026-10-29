@@ -149,7 +149,7 @@ DB 마이그레이션을 번호순으로 적용하고 Docker 작업 이미지를
 
 ```powershell
 $env:PREFECT_DEPLOYMENTS_CLEAR_SCHEDULES_ON_EMPTY = 'true'
-uv run prefect deploy --name naver-news --name naver-blog --name managed-collection --name managed-backfill --name collection-dispatch --no-prompt
+uv run prefect deploy --name naver-news --name naver-blog --name blog-pending-details --name managed-collection --name managed-backfill --name collection-dispatch --no-prompt
 ```
 
 `collection-dispatch`의 실행 시점은 Prefect 배포 스케줄에서 관리하며, 실행될 때 활성 규칙의 요청 큐를 처리한다.
@@ -290,7 +290,8 @@ uv run prefect deploy --name article-pending-details --no-prompt
 원문 추출 성공과 PostgreSQL adaptive 프로필 저장 여부를 함께 확인한다.
 
 정기 목록 수집은 `collection-dispatch`, 미수집 본문 수집은 `article-pending-details` 배포에서
-실행한다. 주기는 각 작업의 `prefect.yaml`에서 관리한다. AI 분석 정기 배포는 기본 비활성 상태다.
+실행한다. 블로그 본문은 Docker의 `blog-pending-details` 배포에서 수집한다.
+주기는 각 작업의 `prefect.yaml`에서 관리한다. AI 분석 정기 배포는 기본 비활성 상태다.
 
 
 ## 검증

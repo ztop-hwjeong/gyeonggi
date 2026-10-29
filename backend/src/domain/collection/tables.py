@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Column, Date, DateTime, MetaData, String, Table
+from sqlalchemy import BigInteger, Column, Date, DateTime, FetchedValue, MetaData, String, Table
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 metadata = MetaData()
@@ -85,6 +85,39 @@ article_contents = Table(
     Column("collected_at", DateTime(timezone=True)),
     Column("created_at", DateTime(timezone=True)),
     schema="dw",
+)
+
+blog_contents = Table(
+    "blog_contents",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True, server_default=FetchedValue()),
+    Column("blog_post_id", UUID(as_uuid=True)),
+    Column("source", String),
+    Column("source_id", String),
+    Column("content_hash", String),
+    Column("title", String),
+    Column("body", String),
+    Column("stage", String),
+    Column("run_id", UUID(as_uuid=True)),
+    Column("provenance", JSONB),
+    Column("original_published_on", Date),
+    Column("original_published_at", DateTime(timezone=True)),
+    Column("original_modified_on", Date),
+    Column("original_modified_at", DateTime(timezone=True)),
+    Column("collected_at", DateTime(timezone=True)),
+    Column("created_at", DateTime(timezone=True)),
+    schema="dw",
+)
+
+blog_detail_results = Table(
+    "blog_detail_results",
+    metadata,
+    Column("run_id", UUID(as_uuid=True), primary_key=True),
+    Column("source", String, primary_key=True),
+    Column("source_id", String, primary_key=True),
+    Column("result", JSONB),
+    Column("created_at", DateTime(timezone=True)),
+    schema="st",
 )
 
 collection_rules = Table(

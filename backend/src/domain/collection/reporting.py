@@ -32,6 +32,8 @@ from domain.collection.tables import (
     article_contents,
     article_detail_results,
     article_detail_runs,
+    blog_contents,
+    blog_detail_results,
     collection_requests,
     collection_rules,
     material_sources,
@@ -67,6 +69,21 @@ class CollectionReporting:
             .limit(1)
             .lateral("latest_content")
         )
+        latest_blog = (
+            select(
+                blog_contents.c.body,
+                blog_contents.c.content_hash,
+                blog_contents.c.created_at,
+                blog_contents.c.original_published_on,
+                blog_contents.c.original_published_at,
+                blog_contents.c.original_modified_on,
+                blog_contents.c.original_modified_at,
+            )
+            .where(blog_contents.c.blog_post_id == materials.c.id)
+            .order_by(blog_contents.c.created_at.desc(), blog_contents.c.id.desc())
+            .limit(1)
+            .lateral("latest_blog_content")
+        )
         detail = (
             select(
                 article_detail_results.c.result["status"].astext.label("status"),
@@ -97,11 +114,40 @@ class CollectionReporting:
             .correlate(materials)
             .lateral("latest_detail")
         )
+        blog_detail = (
+            select(
+                blog_detail_results.c.result["status"].astext.label("status"),
+                blog_detail_results.c.result["skip_reason"].astext.label("skip_reason"),
+            )
+            .select_from(
+                blog_detail_results.join(
+                    material_sources,
+                    and_(
+                        material_sources.c.source == blog_detail_results.c.source,
+                        material_sources.c.source_id == blog_detail_results.c.source_id,
+                    ),
+                )
+            )
+            .where(material_sources.c.material_id == materials.c.id)
+            .order_by(blog_detail_results.c.created_at.desc(), blog_detail_results.c.run_id.desc())
+            .limit(1)
+            .correlate(materials)
+            .lateral("latest_blog_detail")
+        )
         source = (
             materials.outerjoin(latest, literal(True))
+            .outerjoin(latest_blog, literal(True))
             .outerjoin(detail, literal(True))
-            .outerjoin(article_sentiments, article_sentiments.c.article_id == materials.c.id)
+            .outerjoin(blog_detail, literal(True))
+            .outerjoin(
+                article_sentiments,
+                and_(
+                    materials.c.kind == "news",
+                    article_sentiments.c.article_id == materials.c.id,
+                ),
+            )
         )
+        body = func.coalesce(latest.c.body, latest_blog.c.body)
         fields = [
             materials.c.id,
             materials.c.kind,
@@ -113,19 +159,38 @@ class CollectionReporting:
             materials.c.published_on,
             materials.c.published_at,
             materials.c.updated_at,
-            func.coalesce(func.substr(latest.c.body, 1, 240), "").label("content_preview"),
-            latest.c.body.is_not(None).label("has_body"),
+            func.coalesce(func.substr(body, 1, 240), "").label("content_preview"),
+            body.is_not(None).label("has_body"),
             case(
-                (and_(latest.c.body.is_(None), detail.c.status == "skipped"), detail.c.skip_reason),
+                (
+                    and_(body.is_(None), materials.c.kind == "news", detail.c.status == "skipped"),
+                    detail.c.skip_reason,
+                ),
+                (
+                    and_(
+                        body.is_(None),
+                        materials.c.kind == "blog",
+                        blog_detail.c.status == "skipped",
+                    ),
+                    blog_detail.c.skip_reason,
+                ),
                 else_=None,
             ).label("body_skip_reason"),
-            latest.c.body,
-            latest.c.content_hash,
-            latest.c.created_at.label("body_collected_at"),
-            latest.c.original_published_on,
-            latest.c.original_published_at,
-            latest.c.original_modified_on,
-            latest.c.original_modified_at,
+            body.label("body"),
+            func.coalesce(latest.c.content_hash, latest_blog.c.content_hash).label("content_hash"),
+            func.coalesce(latest.c.created_at, latest_blog.c.created_at).label("body_collected_at"),
+            func.coalesce(
+                latest.c.original_published_on, latest_blog.c.original_published_on
+            ).label("original_published_on"),
+            func.coalesce(
+                latest.c.original_published_at, latest_blog.c.original_published_at
+            ).label("original_published_at"),
+            func.coalesce(latest.c.original_modified_on, latest_blog.c.original_modified_on).label(
+                "original_modified_on"
+            ),
+            func.coalesce(latest.c.original_modified_at, latest_blog.c.original_modified_at).label(
+                "original_modified_at"
+            ),
             article_sentiments.c.sentiment,
             article_sentiments.c.mixed_sentiment,
             article_sentiments.c.sentiment_reason,
@@ -212,6 +277,15 @@ class CollectionReporting:
                         .where(
                             article_contents.c.article_id == materials.c.id,
                             article_contents.c.body.ilike(pattern, escape="\\"),
+                        )
+                        .exists(),
+                    ),
+                    and_(
+                        materials.c.kind == "blog",
+                        select(blog_contents.c.id)
+                        .where(
+                            blog_contents.c.blog_post_id == materials.c.id,
+                            blog_contents.c.body.ilike(pattern, escape="\\"),
                         )
                         .exists(),
                     ),

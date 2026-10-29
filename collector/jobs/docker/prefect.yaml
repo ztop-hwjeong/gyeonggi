@@ -89,6 +89,19 @@ deployments:
         page_size: 50
         max_pages: 20
     work_pool: *naver-pool
+  - name: blog-pending-details
+    entrypoint: src/flows/blog_details.py:collect_pending_blog_details
+    tags: [docker, blogs, details, collection]
+    parameters:
+      start_date: "2026-10-21"
+      limit: 50
+    schedules:
+      - interval: 300
+        active: true
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    work_pool: *naver-pool
   - name: managed-collection
     entrypoint: src/flows/managed.py:managed_collection
     tags: [docker, collection, managed]
