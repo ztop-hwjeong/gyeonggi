@@ -1,3 +1,5 @@
+import gzip
+import zlib
 from hashlib import sha256
 from typing import Self
 
@@ -55,8 +57,9 @@ class RawObjectStore:
         self._client.put_object(
             Bucket=result.bucket,
             Key=result.key,
-            Body=body,
+            Body=gzip.compress(body, compresslevel=6, mtime=0),
             ContentType=content_type or "application/octet-stream",
+            ContentEncoding="gzip",
             Metadata={"sha256": result.sha256},
             IfNoneMatch="*",
         )
@@ -66,7 +69,16 @@ class RawObjectStore:
         response = self._client.get_object(Bucket=reference.bucket, Key=reference.key)
         stream = response["Body"]
         try:
-            body = stream.read(reference.byte_length + 1)
+            encoding = (response.get("ContentEncoding") or "").lower()
+            if encoding == "gzip":
+                with gzip.GzipFile(fileobj=stream) as decoder:
+                    body = decoder.read(reference.byte_length + 1)
+            elif encoding in ("", "identity"):
+                body = stream.read(reference.byte_length + 1)
+            else:
+                raise RuntimeError("수집 원본 객체 인코딩 미지원")
+        except (OSError, EOFError, zlib.error) as error:
+            raise RuntimeError("수집 원본 객체 무결성 불일치") from error
         finally:
             stream.close()
         if len(body) != reference.byte_length or sha256(body).hexdigest() != reference.sha256:
