@@ -79,6 +79,7 @@ detail_runs = Table(
     metadata,
     Column("id", UUID(as_uuid=True), primary_key=True),
     Column("summary", JSONB),
+    Column("created_at", DateTime(timezone=True)),
     schema="ops",
 )
 responses = Table(

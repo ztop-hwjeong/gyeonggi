@@ -4,7 +4,7 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import MetaData, Table, create_engine, insert, select
+from sqlalchemy import MetaData, Table, create_engine, insert, select, update
 
 from articles.models import (
     ArticleDetail,
@@ -20,10 +20,11 @@ from articles.storage import DetailRepository
     "ANALYSIS_TEST_DATABASE_URL" not in os.environ,
     reason="전용 PostgreSQL 테스트 데이터베이스 필요",
 )
-def test_pending_news_deduplicates_and_skips_collected_or_failed_articles():
+def test_pending_news_excludes_collected_and_retries_failed_after_cooldown():
     engine = create_engine(os.environ["ANALYSIS_TEST_DATABASE_URL"])
     metadata = MetaData()
     search = Table("search_items", metadata, schema="dw", autoload_with=engine)
+    news = Table("news_items", metadata, schema="dw", autoload_with=engine)
     sources = Table("article_sources", metadata, schema="dw", autoload_with=engine)
     articles = Table("articles", metadata, schema="dw", autoload_with=engine)
     streams = Table("search_streams", metadata, schema="ops", autoload_with=engine)
@@ -32,6 +33,7 @@ def test_pending_news_deduplicates_and_skips_collected_or_failed_articles():
     run_items = Table("search_run_items", metadata, schema="st", autoload_with=engine)
     publishers = Table("publishers", metadata, schema="dw", autoload_with=engine)
     domains = Table("publisher_domains", metadata, schema="dw", autoload_with=engine)
+    detail_runs = Table("article_detail_runs", metadata, schema="ops", autoload_with=engine)
     repository = DetailRepository(engine, Mock())
     prefix = str(uuid4())
     run_id = uuid4()
@@ -68,6 +70,13 @@ def test_pending_news_deduplicates_and_skips_collected_or_failed_articles():
                         data=listing,
                     )
                 )
+            connection.execute(
+                insert(news).values(
+                    source="bigkinds",
+                    source_id=f"{prefix}-bigkinds-collected",
+                    data=data("collected"),
+                )
+            )
             connection.execute(
                 insert(search).values(
                     provider="naver",
@@ -168,6 +177,17 @@ def test_pending_news_deduplicates_and_skips_collected_or_failed_articles():
         assert f"{prefix}-collected" not in remaining
         assert f"{prefix}-failed" not in remaining
         assert len(pending_ids & remaining) == 1
+        assert f"{prefix}-bigkinds-collected" not in {
+            seed.source_id for seed in repository.pending_articles(500, "bigkinds")
+        }
+        with engine.begin() as connection:
+            connection.execute(
+                update(detail_runs)
+                .where(detail_runs.c.id == run_id)
+                .values(created_at=datetime.now(UTC) - timedelta(hours=1, seconds=1))
+            )
+        retried = {seed.source_id for seed in repository.pending_naver_news(500)}
+        assert f"{prefix}-failed" in retried
         with engine.connect() as connection:
             stored = connection.execute(
                 select(articles.c.publisher, articles.c.publisher_code, sources.c.published_at)

@@ -8,7 +8,7 @@ class NaverSettings(BaseSettings):
     base_url: AnyHttpUrl = AnyHttpUrl("https://naverapihub.apigw.ntruss.com")
     credentials_block: str = Field(min_length=1)
     rate_limit_name: str = Field(min_length=1)
-    daily_request_limit: int = Field(default=1000, ge=1, le=25000)
+    daily_request_limit: int = Field(default=5000, ge=1, le=25000)
     overlap_pages: int = Field(default=1, ge=0, le=3)
     date_overlap_days: int = Field(default=1, ge=1, le=30)
     error_pause_seconds: int = Field(default=900, ge=1)

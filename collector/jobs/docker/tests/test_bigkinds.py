@@ -66,6 +66,18 @@ def test_search_passes_query_unchanged_and_uses_page_number(
     assert payload["resultNumber"] == 2
 
 
+def test_default_page_size_uses_verified_maximum_batch() -> None:
+    request = ListCollectionRequest(
+        search_key="교육",
+        start_date=date(2026, 10, 28),
+        end_date=date(2026, 10, 28),
+    )
+    assert request.page_size == 100
+    assert search_payload(request, 1)["resultNumber"] == 100
+    with pytest.raises(ValidationError):
+        ListCollectionRequest.model_validate({**request.model_dump(), "page_size": 101})
+
+
 def test_list_client_does_not_fetch_details(request_data: ListCollectionRequest) -> None:
     http = Mock()
     http.request.return_value.content = b"{}"

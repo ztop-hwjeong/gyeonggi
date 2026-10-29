@@ -14,6 +14,36 @@ from control.models import ControlSettings
 from control.repository import ControlRepository
 
 
+def test_dispatch_recovers_finished_request_before_enqueuing(monkeypatch):
+    from flows import dispatch
+
+    active = ["finished-prefect-run"]
+    queued = []
+
+    def enqueue(repository):
+        if active:
+            return 0
+        queued.append("next-request")
+        return 1
+
+    def submit(repository, client, settings):
+        return bool(queued and queued.pop())
+
+    @contextmanager
+    def client_scope(**kwargs):
+        yield Mock()
+
+    monkeypatch.setattr(dispatch, "control_repository", Mock(return_value=Mock()))
+    monkeypatch.setattr(dispatch, "get_client", client_scope)
+    monkeypatch.setattr(dispatch, "get_run_logger", Mock(return_value=Mock()))
+    monkeypatch.setattr(dispatch, "reconcile", lambda *args: active.clear())
+    monkeypatch.setattr(dispatch, "enqueue_enabled", enqueue)
+    monkeypatch.setattr(dispatch, "submit_one", submit)
+
+    assert dispatch.dispatch_collections.fn() == {"scheduled": 1, "submitted": 1}
+    assert not queued
+
+
 @pytest.mark.skipif(not os.environ.get("CONTROL_TEST_DATABASE_DSN"), reason="전용 검증 DB 필요")
 def test_dispatch_recovery_preview_isolation_and_final_state_preservation(monkeypatch):
     with psycopg.Connection[DictRow].connect(

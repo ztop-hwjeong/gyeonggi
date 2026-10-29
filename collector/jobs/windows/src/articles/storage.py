@@ -1,11 +1,11 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from collector_storage.objects import RawObject, RawObjectStore
 from collector_storage.publishers import publisher_code
-from sqlalchemy import func, literal, select, union_all, update
+from sqlalchemy import func, literal, or_, select, union_all, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
@@ -74,13 +74,26 @@ class DetailRepository:
             .where(article_contents.c.article_id == listings.c.article_id)
             .exists()
         )
-        attempted = (
+        skipped = (
             select(detail_results.c.run_id)
             .where(
                 detail_results.c.source_id == listings.c.source_id,
                 detail_results.c.result["seed"]["source"].astext == listings.c.source,
+                detail_results.c.result["status"].astext == "skipped",
             )
             .exists()
+        )
+        last_failure = (
+            select(func.max(detail_runs.c.created_at))
+            .select_from(
+                detail_results.join(detail_runs, detail_runs.c.id == detail_results.c.run_id)
+            )
+            .where(
+                detail_results.c.source_id == listings.c.source_id,
+                detail_results.c.result["seed"]["source"].astext == listings.c.source,
+                detail_results.c.result["status"].astext == "failed",
+            )
+            .scalar_subquery()
         )
         scope = []
         if source is not None:
@@ -113,7 +126,11 @@ class DetailRepository:
             .join(articles, articles.c.id == listings.c.article_id)
             .where(
                 ~collected,
-                ~attempted,
+                ~skipped,
+                or_(
+                    last_failure.is_(None),
+                    last_failure <= datetime.now(UTC) - timedelta(hours=1),
+                ),
                 *scope,
             )
             .subquery()

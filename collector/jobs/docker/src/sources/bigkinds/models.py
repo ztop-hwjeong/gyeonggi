@@ -11,8 +11,8 @@ class ListCollectionRequest(BaseModel):
     search_key: str = Field(min_length=1)
     start_date: date
     end_date: date
-    # 참고 요청과 실제 조회로 확인한 페이지 크기 범위
-    page_size: int = Field(default=10, ge=1, le=10)
+    # 실제 조회로 확인한 BigKinds 최대 페이지 크기
+    page_size: int = Field(default=100, ge=1, le=100)
     max_pages: int | None = Field(default=None, ge=1)
     provider_codes: tuple[Annotated[str, Field(pattern=r"^[0-9]{8}$")], ...] = ()
 

@@ -16,8 +16,8 @@ class SearchRequest(BaseModel):
 
     channel: Channel
     terms: tuple[str, ...] = Field(min_length=1, max_length=10)
-    page_size: int = Field(default=50, ge=1, le=100)
-    max_pages: int = Field(default=20, ge=1, le=20)
+    page_size: int = Field(default=100, ge=1, le=100)
+    max_pages: int = Field(default=10, ge=1, le=20)
 
     @field_validator("terms")
     @classmethod
@@ -172,6 +172,7 @@ class Pagination:
         self.previous_date: datetime | date | None = None
         self.dates_ordered = True
         self.boundary_reason: str | None = None
+        self.date_boundary_page: int | None = None
         self.missing_date_count = 0
         self.date_boundary_reached = False
 
@@ -239,12 +240,21 @@ class Pagination:
         if self.cursor is None:
             return True, "최신 첫 페이지로 초기화"
         if (
-            self.boundary_page is None
-            and self.cursor.head_ids
+            self.cursor.head_ids
             and set(self.cursor.head_ids) <= self.seen
+            and (self.boundary_page is None or self.date_boundary_page is not None)
         ):
             self.boundary_page = self.pages
+            self.date_boundary_page = None
             self.boundary_reason = "이전 커서 및 겹침 구간 확인"
+        elif self.boundary_page is None and crossed_date:
+            self.boundary_page = self.pages
+            self.date_boundary_page = self.pages
+            self.boundary_reason = "이전 수집일 및 겹침 기간 확인"
+        if self.date_boundary_page is not None and not self.dates_ordered:
+            self.boundary_page = None
+            self.date_boundary_page = None
+            self.boundary_reason = None
         exhausted = page.start + len(ids) > page.total
         if exhausted:
             return True, "검색 결과 끝 도달"

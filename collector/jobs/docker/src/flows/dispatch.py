@@ -9,10 +9,10 @@ from flows.managed import control_repository
 @flow(name="dispatch-collections", persist_result=False)
 def dispatch_collections() -> dict:
     settings, repository = ControlSettings(), control_repository()
-    scheduled = enqueue_enabled(repository)
     submitted = 0
     with get_client(sync_client=True) as client:
         reconcile(repository, client, settings.dispatch_batch_size)
+        scheduled = enqueue_enabled(repository)
         for _ in range(settings.dispatch_batch_size):
             if not submit_one(repository, client, settings):
                 break

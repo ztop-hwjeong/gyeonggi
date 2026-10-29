@@ -3,9 +3,10 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
-from sources.naver.client import NaverApiError, parse_response
+from sources.naver.client import NaverApiError, NaverClient, parse_response
+from sources.naver.config import NaverCredentials, NaverSettings
 from sources.naver.models import (
     BackfillPagination,
     Channel,
@@ -72,6 +73,36 @@ def test_terms_are_literal_phrases(terms):
 def test_retired_channel_is_rejected_before_collection():
     with pytest.raises(ValidationError):
         SearchRequest.model_validate({"channel": "cafearticle", "terms": ["교육"]})
+
+
+def test_client_uses_hundred_item_default_display_and_offsets():
+    request = SearchRequest(channel="news", terms=("교육",))
+    http = Mock()
+    client = NaverClient(
+        http,
+        NaverSettings(credentials_block="test", rate_limit_name="test"),
+        NaverCredentials(client_id=SecretStr("test"), client_secret=SecretStr("test")),
+    )
+
+    client.fetch(request, 1)
+    client.fetch(request, 101)
+
+    assert [call.kwargs["params"] for call in http.request_raw.call_args_list] == [
+        {
+            "query": request.query,
+            "display": 100,
+            "start": 1,
+            "sort": "date",
+            "format": "json",
+        },
+        {
+            "query": request.query,
+            "display": 100,
+            "start": 101,
+            "sort": "date",
+            "format": "json",
+        },
+    ]
 
 
 def test_bootstrap_only_reads_one_page_without_claiming_historical_coverage():
@@ -159,7 +190,7 @@ def dated_page(start, values, channel: Channel = "blog"):
 
 
 @pytest.mark.parametrize("channel", ["news", "blog"])
-def test_old_dates_alone_never_confirm_deleted_cursor_ids(channel):
+def test_deleted_cursor_head_uses_strict_date_boundary_after_overlap(channel):
     previous = cursor([99]).model_copy(
         update={
             "oldest_published_at": datetime(2026, 10, 23, tzinfo=UTC),
@@ -168,14 +199,20 @@ def test_old_dates_alone_never_confirm_deleted_cursor_ids(channel):
     )
     state = Pagination(SearchRequest(channel=channel, terms=("교육",), page_size=2), previous, 1)
     suffix = "T00:00:00+00:00" if channel == "news" else ""
-    for start, days in [(1, [24, 23]), (3, [23, 22]), (5, [21, 20])]:
+    for start, days in [(1, [24, 23]), (3, [23, 22])]:
         assert state.accept(
             *dated_page(start, [f"2026-10-{day}{suffix}" for day in days], channel)
         ) == (False, None)
     assert state.accept(
-        *dated_page(7, [f"2026-10-19{suffix}", f"2026-10-18{suffix}"], channel)
-    ) == (False, None)
+        *dated_page(5, [f"2026-10-21{suffix}", f"2026-10-20{suffix}"], channel)
+    ) == (
+        False,
+        None,
+    )
     assert state.date_boundary_reached
+    assert state.accept(
+        *dated_page(7, [f"2026-10-19{suffix}", f"2026-10-18{suffix}"], channel)
+    ) == (True, "이전 수집일 및 겹침 기간 확인")
     saved = state.next_cursor(uuid4(), datetime.now(UTC))
     assert saved.oldest_published_on == (date(2026, 10, 23) if channel == "blog" else None)
     assert saved.oldest_published_at == (

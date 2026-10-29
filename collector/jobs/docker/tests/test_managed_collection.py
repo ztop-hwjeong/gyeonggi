@@ -88,7 +88,7 @@ def test_repeated_page_stops_and_retains_partial_items(monkeypatch, request_data
     request = request_data.model_copy(update={"end_date": request_data.start_date})
     status, summary = collection.collect_bigkinds(request, Mock(), Mock(), ControlSettings())
     assert status == "partial"
-    assert client.search.call_count == 2
+    assert client.search.call_count == 1
     assert summary["retrieved_count"] == 1
 
 

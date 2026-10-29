@@ -73,15 +73,15 @@ def test_failed_fetch_is_not_retried_and_records_unchanged_cursor(monkeypatch):
     repository.pause_requests.assert_called_once_with(3600)
 
 
-@pytest.mark.parametrize("boundary_page,expected_status", [(19, "completed"), (None, "partial")])
-def test_default_window_scans_twenty_pages_without_skipping_unconfirmed_gap(
+@pytest.mark.parametrize("boundary_page,expected_status", [(9, "completed"), (None, "partial")])
+def test_default_window_scans_ten_pages_without_skipping_unconfirmed_gap(
     monkeypatch, boundary_page, expected_status
 ):
     repository = MagicMock()
     repository.cursor.return_value = cursor([900])
     batches = [
         page(1 + index * 2, [900 if index + 1 == boundary_page else index * 2, index * 2 + 1])
-        for index in range(20)
+        for index in range(10)
     ]
     fetch = Mock(side_effect=[(batch, uuid4()) for batch, _ in batches])
     monkeypatch.setattr(naver, "fetch_page", fetch)
@@ -97,9 +97,38 @@ def test_default_window_scans_twenty_pages_without_skipping_unconfirmed_gap(
         NaverCredentials(client_id=SecretStr("test"), client_secret=SecretStr("test")),
         HttpSettings(),
     )
-    assert [call.args[2] for call in fetch.call_args_list] == list(range(1, 40, 2))
+    assert [call.args[2] for call in fetch.call_args_list] == list(range(1, 20, 2))
     assert result.status == expected_status
     assert result.cursor_advanced == (expected_status == "completed")
+
+
+def test_default_batch_requests_hundred_items_without_requesting_start_1001(monkeypatch):
+    repository = MagicMock()
+    repository.cursor.return_value = cursor([2000])
+    batches = [
+        page(1 + index * 100, range(index * 100, (index + 1) * 100), total=1001)
+        for index in range(10)
+    ]
+    fetch = Mock(side_effect=[(batch, uuid4()) for batch, _ in batches])
+    monkeypatch.setattr(naver, "fetch_page", fetch)
+    monkeypatch.setattr(
+        naver, "store_page", Mock(side_effect=[(items, 0, 0) for _, items in batches])
+    )
+
+    request = SearchRequest(channel="news", terms=("교육",))
+    result = naver.collect(
+        request,
+        uuid4(),
+        repository,
+        MagicMock(),
+        NaverSettings(credentials_block="test", rate_limit_name="test"),
+        NaverCredentials(client_id=SecretStr("test"), client_secret=SecretStr("test")),
+        HttpSettings(),
+    )
+
+    assert request.page_size == 100 and request.max_pages == 10
+    assert [call.args[2] for call in fetch.call_args_list] == list(range(1, 1001, 100))
+    assert result.status == "partial"
 
 
 @pytest.mark.parametrize(

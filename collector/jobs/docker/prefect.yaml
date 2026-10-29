@@ -48,8 +48,8 @@ deployments:
       request:
         channel: news
         terms: &policy-terms [폰프리스쿨, 폰프리 스쿨, 교권보호, 경기RAS, 벽깨기교육, 편한교복]
-        page_size: 50
-        max_pages: 20
+        page_size: 100
+        max_pages: 10
     work_pool: &naver-pool
       name: docker-collector
       job_variables:
@@ -61,7 +61,7 @@ deployments:
           PREFECT_API_URL: http://prefect-server:4200/api
           NAVER_CREDENTIALS_BLOCK: naver-api-hub-credentials
           NAVER_RATE_LIMIT_NAME: naver-api-hub-http
-          NAVER_DAILY_REQUEST_LIMIT: "1000"
+          NAVER_DAILY_REQUEST_LIMIT: "5000"
           NAVER_OVERLAP_PAGES: "1"
           NAVER_DATE_OVERLAP_DAYS: "1"
           DATABASE_HOST: postgres
@@ -86,8 +86,8 @@ deployments:
       request:
         channel: blog
         terms: *policy-terms
-        page_size: 50
-        max_pages: 20
+        page_size: 100
+        max_pages: 10
     work_pool: *naver-pool
   - name: blog-pending-details
     entrypoint: src/flows/blog_details.py:collect_pending_blog_details
