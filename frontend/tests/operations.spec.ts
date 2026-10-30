@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { Schema } from "../src/shared/api/client";
+import { chooseOption } from "./select-option";
 
 const ruleId = "11111111-1111-4111-8111-111111111111";
 const requestId = "22222222-2222-4222-8222-222222222222";
@@ -255,12 +256,14 @@ test("검색 조건을 정기·현안 분석 대상에 함께 연결한다", asy
   await page.goto(`/keywords/${ruleId}`);
   await page.getByLabel(/현안 분석/).check();
   await page.getByRole("button", { name: "검색 조건 저장" }).click();
-  expect(writes).toContainEqual(
-    expect.objectContaining({
-      path: `/keyword-rules/${ruleId}/targets`,
-      body: { target_ids: [analysisTarget.id] },
-    }),
-  );
+  await expect
+    .poll(() => writes)
+    .toContainEqual(
+      expect.objectContaining({
+        path: `/keyword-rules/${ruleId}/targets`,
+        body: { target_ids: [analysisTarget.id] },
+      }),
+    );
 });
 
 test("기존 분석 대상 연결을 불러오지 못하면 빈 값으로 덮어쓰지 않는다", async ({
@@ -357,9 +360,7 @@ test("네이버를 선택하면 기간 입력 대신 증분 수집을 안내한�
 }) => {
   await mockApi(page);
   await page.goto(`/runs/new?rule=${ruleId}`);
-  await page
-    .getByLabel("수집 채널", { exact: true })
-    .selectOption("naver_blog");
+  await chooseOption(page, "수집 채널", "naver_blog");
   await expect(page.getByLabel("시작일", { exact: true })).toHaveCount(0);
   await expect(
     page.getByText(/기간을 지정한 과거 수집은 지원하지/),
@@ -391,6 +392,19 @@ test("모바일 메뉴와 작업 화면이 화면 너비를 넘지 않는다", a
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+  await page.goto("/results?kind=news");
+  await expect(
+    page.getByRole("combobox", { name: "분석 포함 상태" }),
+  ).toBeInViewport({ ratio: 1 });
+  await expect(
+    page.getByRole("combobox", { name: "분석 대상", exact: true }),
+  ).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("textbox", { name: "자료 검색" })).toBeInViewport(
+    { ratio: 1 },
+  );
+  await expect(
+    page.getByRole("button", { name: "검색", exact: true }),
+  ).toBeInViewport({ ratio: 1 });
 });
 
 test("일부 수집에서 미완료 날짜와 채널을 유지해 보충 요청을 준비한다", async ({
@@ -405,8 +419,8 @@ test("일부 수집에서 미완료 날짜와 채널을 유지해 보충 요청�
   await expect(page.getByLabel("종료일", { exact: true })).toHaveValue(
     "2026-06-02",
   );
-  await expect(page.getByLabel("수집 채널", { exact: true })).toHaveValue(
-    "bigkinds",
+  await expect(page.getByLabel("수집 채널", { exact: true })).toContainText(
+    "빅카인즈",
   );
   expect(writes).toHaveLength(0);
 });
@@ -418,21 +432,41 @@ test("수집 이력 필터와 페이지를 URL에서 복원하고 채널 변경 
   await page.goto(
     "/runs?status=attention&source=bigkinds&mode=backfill&offset=20",
   );
-  await expect(page.getByLabel("진행 상태")).toHaveValue("attention");
+  await expect(page.getByLabel("진행 상태")).toContainText("확인 필요");
   const request = page.waitForRequest(
     (request) =>
       request.url().includes("/api/collection-runs?") &&
       request.url().includes("source=naver_blog"),
   );
-  await page
-    .getByLabel("수집 채널", { exact: true })
-    .selectOption("naver_blog");
+  await chooseOption(page, "수집 채널", "naver_blog");
   expect(new URL((await request).url()).searchParams.get("offset")).toBe("0");
   await expect(page).toHaveURL(/source=naver_blog/);
   await page.goBack();
-  await expect(page.getByLabel("수집 채널", { exact: true })).toHaveValue(
-    "bigkinds",
+  await expect(page.getByLabel("수집 채널", { exact: true })).toContainText(
+    "빅카인즈",
   );
+});
+
+test("공통 선택창을 키보드로 열고 선택하거나 취소한다", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/runs");
+  const trigger = page.getByRole("combobox", {
+    name: "수집 채널",
+    exact: true,
+  });
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("listbox")).toBeVisible();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/source=naver_blog/);
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+  await expect(trigger).toContainText("네이버 블로그");
+  await expect(trigger).toBeFocused();
 });
 
 test("미리보기 뒤 키워드를 바꾸면 이전 조건의 결과임을 알린다", async ({
@@ -450,7 +484,7 @@ test("미리보기 뒤 키워드를 바꾸면 이전 조건의 결과임을 알�
 test("기사 수집 자료의 검색 조건을 복원한다", async ({ page }) => {
   await mockApi(page);
   await page.goto("/results?kind=news&q=교육&inclusion=excluded&offset=20");
-  await expect(page.getByLabel("분석 포함 상태")).toHaveValue("excluded");
+  await expect(page.getByLabel("분석 포함 상태")).toContainText("분석 제외");
   await expect(page.getByLabel("자료 검색")).toHaveValue("교육");
   await page.getByRole("link", { name: "조건 초기화" }).click();
   await expect(page.getByRole("tab", { name: "전체" })).toHaveAttribute(
@@ -468,7 +502,7 @@ test("수집 현황에서 확인이 필요한 요청으로 이동한다", async 
     page.getByRole("heading", { name: "오류 또는 일부만 수집된 요청 1건" }),
   ).toBeVisible();
   await page.getByRole("link", { name: "확인하고 대응" }).click();
-  await expect(page.getByLabel("진행 상태")).toHaveValue("attention");
+  await expect(page.getByLabel("진행 상태")).toContainText("확인 필요");
 });
 
 test("검토한 일부 수집을 확인 완료로 표시하고 되돌린다", async ({ page }) => {
@@ -720,17 +754,17 @@ test("기사의 분석 대상 판단을 저장한 뒤 바로 표시한다", asyn
   });
   await page.goto(`/results/read?material_id=${articleId}`);
   await expect(page.getByText("2026-10-26", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("최종 논조")).toHaveValue("긍정");
+  await expect(page.getByLabel("최종 논조")).toContainText("긍정");
   await expect(page.getByLabel("논조 판단 근거")).toHaveValue(
     "지원 정책의 효과를 중심으로 다룬 기사",
   );
   await expect(page.getByText("같은 내용의 다른 기사")).toBeVisible();
   await expect(page.getByRole("heading", { name: "발견 경로" })).toBeVisible();
   await expect(page.getByText("황현필 현안")).toBeVisible();
-  await page.getByLabel("최종 논조").selectOption("부정");
+  await chooseOption(page, "최종 논조", "부정");
   await page.getByLabel("논조 판단 근거").fill("비판적 보도가 중심");
   await page.getByRole("button", { name: "논조 저장" }).click();
-  await expect(page.getByLabel("최종 논조")).toHaveValue("부정");
+  await expect(page.getByLabel("최종 논조")).toContainText("부정");
   const targetState = page.locator(".target-list > div > .button-row > span");
   await expect(targetState).toHaveText("수동 제외");
   await page.getByRole("button", { name: "포함", exact: true }).last().click();
@@ -1015,7 +1049,7 @@ test("사이드바를 접어도 메뉴 이동과 선택 상태를 유지한다",
           Math.round(element.getBoundingClientRect().width),
         ),
     )
-    .toBe(224);
+    .toBe(208);
 });
 
 test("저장 전 다른 메뉴로 이동하면 변경 내용 유실을 확인한다", async ({

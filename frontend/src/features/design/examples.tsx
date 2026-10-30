@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Empty, ErrorNotice, Loading } from "@/shared/ui/feedback";
 import { ReadingRow, ReadingView } from "@/shared/ui/reading";
+import { ChoiceGroup } from "@/shared/ui/select";
 
 const articles = [
   {
@@ -92,15 +93,17 @@ export function ReadingExample() {
         </div>
         <div className="field catalog-channel">
           <label htmlFor="catalog-channel">찾을 곳</label>
-          <select
+          <ChoiceGroup
             id="catalog-channel"
+            label="찾을 곳"
             value={channel}
-            onChange={(event) => setChannel(event.target.value)}
-          >
-            <option value="">전체</option>
-            <option value="news">뉴스</option>
-            <option value="blog">블로그</option>
-          </select>
+            onValueChange={setChannel}
+            options={[
+              { value: "", label: "전체" },
+              { value: "news", label: "뉴스" },
+              { value: "blog", label: "블로그" },
+            ]}
+          />
         </div>
       </form>
       {!items.length ? (
@@ -237,16 +240,18 @@ export function FeedbackExample() {
     <section className="catalog-feedback">
       <div className="field">
         <label htmlFor="catalog-state">확인할 상태</label>
-        <select
+        <ChoiceGroup
           id="catalog-state"
+          label="확인할 상태"
           value={state}
-          onChange={(event) => setState(event.target.value)}
-        >
-          <option value="empty">아직 자료가 없을 때</option>
-          <option value="error">자료를 불러오지 못했을 때</option>
-          <option value="loading">불러오는 중</option>
-          <option value="done">저장이 끝났을 때</option>
-        </select>
+          onValueChange={setState}
+          options={[
+            { value: "empty", label: "자료 없음" },
+            { value: "error", label: "불러오기 오류" },
+            { value: "loading", label: "불러오는 중" },
+            { value: "done", label: "저장 완료" },
+          ]}
+        />
       </div>
       <div className="catalog-state-example">
         {state === "empty" ? (

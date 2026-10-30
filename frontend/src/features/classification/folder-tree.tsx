@@ -1,10 +1,10 @@
 "use client";
 
 import {
-  CaretDownIcon,
-  CaretRightIcon,
   DotsThreeIcon,
   FolderIcon,
+  MinusIcon,
+  PlusIcon,
   TagIcon,
 } from "@phosphor-icons/react";
 import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -232,7 +232,7 @@ export function FolderTree({
             aria-label={`${folder.name} ${open ? "접기" : "펼치기"}`}
             aria-expanded={open}
           >
-            {open ? <CaretDownIcon size={15} /> : <CaretRightIcon size={15} />}
+            {open ? <MinusIcon size={14} /> : <PlusIcon size={14} />}
           </button>
           {onSelectFolder && !isUnfiled && (
             <input

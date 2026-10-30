@@ -4,6 +4,7 @@ import { useState } from "react";
 import { type Schema, useIdempotentPost } from "@/shared/api/client";
 import { sourceNames, today } from "@/shared/lib/format";
 import { ErrorNotice } from "@/shared/ui/feedback";
+import { SelectField } from "@/shared/ui/select";
 import { PreviewResult } from "./preview";
 
 export function KeywordPreview({
@@ -72,20 +73,18 @@ export function KeywordPreview({
         </p>
         <div className="form-stack">
           <div className="field">
-            <label htmlFor="preview-source">미리보기 채널</label>
-            <select
+            <SelectField
               id="preview-source"
+              label="미리보기 채널"
               value={actualSource ?? ""}
-              onChange={(e) =>
-                setPreviewSource(e.target.value as Schema["SourceCode"])
+              onValueChange={(value) =>
+                setPreviewSource(value as Schema["SourceCode"])
               }
-            >
-              {sources.map((source) => (
-                <option key={source} value={source}>
-                  {sourceNames[source]}
-                </option>
-              ))}
-            </select>
+              options={sources.map((source) => ({
+                value: source,
+                label: sourceNames[source],
+              }))}
+            />
           </div>
           {actualSource === "bigkinds" ? (
             <div className="field-grid">

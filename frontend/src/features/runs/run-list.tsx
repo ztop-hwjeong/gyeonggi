@@ -12,6 +12,7 @@ import {
   PageHeading,
   Pager,
 } from "@/shared/ui/feedback";
+import { SelectField } from "@/shared/ui/select";
 import { RunTable } from "./run-table";
 
 export function RunList() {
@@ -45,53 +46,47 @@ export function RunList() {
       <section className="panel">
         <div className="toolbar">
           <div className="filters">
-            <label className="sr-only" htmlFor="run-status">
-              진행 상태
-            </label>
-            <select
+            <SelectField
               id="run-status"
+              label="진행 상태"
               value={params.get("status") ?? ""}
-              onChange={(e) => update({ status: e.target.value })}
-            >
-              <option value="">전체 상태</option>
-              <option value="attention">확인 필요 · 오류 / 일부 수집</option>
-              <option value="active">대기 / 진행 중</option>
-              {Object.entries(stateNames).map(([value, label]) => (
-                <option value={value} key={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            <label className="sr-only" htmlFor="run-source">
-              수집 채널
-            </label>
-            <select
+              onValueChange={(value) => update({ status: value })}
+              options={[
+                { value: "", label: "전체 상태" },
+                { value: "attention", label: "확인 필요 · 오류 / 일부 수집" },
+                { value: "active", label: "대기 / 진행 중" },
+                ...Object.entries(stateNames).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+              ]}
+            />
+            <SelectField
               id="run-source"
+              label="수집 채널"
               value={params.get("source") ?? ""}
-              onChange={(e) => update({ source: e.target.value })}
-            >
-              <option value="">전체 채널</option>
-              {Object.entries(sourceNames).map(([value, label]) => (
-                <option value={value} key={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            <label className="sr-only" htmlFor="run-mode">
-              수집 종류
-            </label>
-            <select
+              onValueChange={(value) => update({ source: value })}
+              options={[
+                { value: "", label: "전체 채널" },
+                ...Object.entries(sourceNames).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+              ]}
+            />
+            <SelectField
               id="run-mode"
+              label="수집 종류"
               value={params.get("mode") ?? ""}
-              onChange={(e) => update({ mode: e.target.value })}
-            >
-              <option value="">전체 종류</option>
-              {Object.entries(modeNames).map(([value, label]) => (
-                <option value={value} key={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => update({ mode: value })}
+              options={[
+                { value: "", label: "전체 종류" },
+                ...Object.entries(modeNames).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+              ]}
+            />
             {filters.size > 2 && (
               <Link className="button quiet" href="/runs">
                 조건 초기화

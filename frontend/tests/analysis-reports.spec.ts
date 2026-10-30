@@ -307,8 +307,14 @@ test("보고서 필터와 로컬 포함 판단 요청을 일치시킨다", async
       requests.push(request.url());
   });
   await page.goto(`/analysis-reports?kind=current_issue&report_id=${reportId}`);
-  await page.getByRole("button", { name: "제외", exact: true }).click();
-  await page.getByRole("button", { name: "해제", exact: true }).click();
+  await page
+    .getByRole("table")
+    .getByRole("button", { name: "제외", exact: true })
+    .click();
+  await page
+    .getByRole("table")
+    .getByRole("button", { name: "해제", exact: true })
+    .click();
   expect(writes.filter((item) => item.path.endsWith("/decision"))).toEqual([
     {
       path: `/analysis-reports/${reportId}/articles/${articleId}/decision`,
@@ -321,7 +327,10 @@ test("보고서 필터와 로컬 포함 판단 요청을 일치시킨다", async
   ]);
   await page.getByRole("tab", { name: "키워드 불일치" }).click();
   await expect(page.getByText("전체 0건")).toBeVisible();
-  await page.getByLabel("보고서 포함 상태").selectOption("excluded");
+  await page
+    .getByRole("group", { name: "검토 결정" })
+    .getByRole("button", { name: "제외" })
+    .click();
   await expect.poll(() => requests.at(-1)).toContain("keyword_match=unmatched");
   await expect.poll(() => requests.at(-1)).toContain("inclusion=excluded");
 });
@@ -331,17 +340,23 @@ test("키워드 편집만 자동 연결을 수동값으로 바꾸고 복원한�
 }) => {
   const writes = await mockWorkspace(page);
   await page.goto(`/analysis-reports?kind=current_issue&report_id=${reportId}`);
-  await page.getByText("보고서 설정", { exact: true }).click();
+  await page.getByRole("button", { name: "설정", exact: true }).click();
+  const settings = page.getByRole("dialog", { name: "보고서 설정" });
+  await expect
+    .poll(() => settings.evaluate((node) => node.matches(":modal")))
+    .toBe(true);
   await page.getByLabel("보고서 제목").fill("기간만 수정");
   await page.getByLabel("발행시각 시작").fill("2026-10-28T15:00");
   await page.getByRole("button", { name: "저장", exact: true }).click();
   expect(writes[0].body).not.toHaveProperty("keywords_automatic");
+  await page.getByRole("button", { name: "설정", exact: true }).click();
   await page.getByLabel("검토 키워드").fill("새 키워드");
   await page.getByRole("button", { name: "저장", exact: true }).click();
   expect(writes[1].body).toMatchObject({
     keywords_automatic: false,
     keyword_terms: ["새 키워드"],
   });
+  await page.getByRole("button", { name: "설정", exact: true }).click();
   await page.getByRole("button", { name: "자동 채움 복원" }).click();
   expect(writes[2].body).toMatchObject({ keywords_automatic: true });
   await expect(page.getByLabel("검토 키워드")).toHaveValue("황현필");
@@ -352,8 +367,16 @@ test("새 보고서는 대상 선택을 유지해 생성 뒤 목록에서 연다
 }) => {
   const writes = await mockWorkspace(page);
   await page.goto(`/analysis-reports?kind=current_issue&target_id=${targetId}`);
-  await page.getByLabel("새 보고서 대상").selectOption(targetId);
-  await page.getByRole("button", { name: "보고서 만들기" }).click();
+  await expect(
+    page.getByRole("tab", { name: "현안 분석 보고서" }),
+  ).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("button", { name: "새 보고서" }).click();
+  const dialog = page.getByRole("dialog", { name: "새 보고서" });
+  await expect
+    .poll(() => dialog.evaluate((node) => node.matches(":modal")))
+    .toBe(true);
+  await dialog.getByRole("button", { name: /현안 분석/ }).click();
+  await dialog.getByRole("button", { name: "만들기" }).click();
   expect(writes[0]).toEqual({
     path: "/analysis-reports",
     body: { target_id: targetId },
@@ -431,9 +454,16 @@ test("미검토·AI 관련성 조합과 실패 재시도 모드를 요청한다"
       requests.push(request.url());
   });
   await page.goto(`/analysis-reports?kind=current_issue&report_id=${reportId}`);
-  await page.getByLabel("보고서 포함 상태").selectOption("unreviewed");
+  const unreviewed = page
+    .getByRole("group", { name: "검토 결정" })
+    .getByRole("button", { name: "미검토" });
+  await unreviewed.focus();
+  await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/inclusion=unreviewed/);
-  await page.getByLabel("AI 관련성", { exact: true }).selectOption("failed");
+  await page
+    .getByRole("group", { name: "AI 관련성" })
+    .getByRole("button", { name: "실패" })
+    .click();
   await expect.poll(() => requests.at(-1)).toContain("inclusion=unreviewed");
   await expect.poll(() => requests.at(-1)).toContain("ai_relevance=failed");
   await page.getByRole("button", { name: "실패 재시도" }).click();
@@ -462,9 +492,6 @@ test("보고서 삭제는 확인 후 실행하고 취소 시 요청하지 않는
   await page.getByRole("button", { name: "보고서 삭제", exact: true }).click();
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(page).not.toHaveURL(/report_id=/);
-  await expect(
-    page.getByText("왼쪽 목록에서 보고서를 선택하세요"),
-  ).toBeVisible();
   expect(writes).toEqual([
     { path: `/analysis-reports/${reportId}`, body: { version: "1" } },
   ]);

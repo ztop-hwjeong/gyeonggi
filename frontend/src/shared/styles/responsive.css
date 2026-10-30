@@ -20,6 +20,53 @@
   }
 }
 @media (max-width: 800px) {
+  .article-workspace {
+    grid-template-columns: 1fr;
+  }
+  .result-list-content {
+    min-width: 0;
+  }
+  .result-list-content .filters > input {
+    flex: 1 1 200px;
+  }
+  :where(.analysis-reports-page) .page-heading {
+    margin-bottom: 12px;
+  }
+  .analysis-reports-page .page-heading p {
+    display: none;
+  }
+  .analysis-reports-page .report-switcher-actions {
+    padding-block: 10px;
+  }
+  .analysis-reports-page .report-heading {
+    padding-block: 12px 8px;
+  }
+  .analysis-reports-page .report-summary {
+    gap: 6px 16px;
+    padding-block: 8px 12px;
+  }
+  .analysis-reports-page .report-toolbar .filters {
+    gap: 8px;
+  }
+  .analysis-reports-page .report-filter-row legend {
+    float: left;
+    width: 70px;
+    padding-block: 6px;
+  }
+  .analysis-reports-page .report-filter-row button {
+    padding-inline: 8px;
+  }
+  .analysis-reports-page .report-ai-actions {
+    padding-block: 10px;
+  }
+  .tag-folder-panel {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border-default);
+  }
+  .tag-folder-panel .folder-tree {
+    max-height: 180px;
+    padding-bottom: 0;
+  }
   .sidebar {
     width: 224px;
     visibility: hidden;

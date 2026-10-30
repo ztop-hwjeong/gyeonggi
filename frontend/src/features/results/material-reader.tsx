@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { put, useApi } from "@/shared/api/client";
 import { dateTime, safeUrl, sourceNames } from "@/shared/lib/format";
 import { Empty, ErrorNotice, Loading } from "@/shared/ui/feedback";
+import { SelectField } from "@/shared/ui/select";
 import type {
   AnalysisTarget,
   ArticleTargetLink,
@@ -247,17 +248,18 @@ function ArticleSentiment({
         <ErrorNotice error={sentiment.error} retry={sentiment.refetch} />
       )}
       <div className="button-row">
-        <select
-          aria-label="최종 논조"
+        <SelectField
+          label="최종 논조"
           value={value}
-          onChange={(event) =>
-            setValue(event.target.value as SentimentWrite["sentiment"])
+          onValueChange={(next) =>
+            setValue(next as SentimentWrite["sentiment"])
           }
-        >
-          <option value="긍정">긍정</option>
-          <option value="중립">중립</option>
-          <option value="부정">부정</option>
-        </select>
+          options={[
+            { value: "긍정", label: "긍정" },
+            { value: "중립", label: "중립" },
+            { value: "부정", label: "부정" },
+          ]}
+        />
         <label>
           <input
             type="checkbox"

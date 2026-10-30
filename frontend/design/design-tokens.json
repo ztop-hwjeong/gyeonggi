@@ -340,12 +340,12 @@
       "source": "proposed"
     },
     "size.control.m.height": {
-      "value": "2.5rem",
+      "value": "2.25rem",
       "type": "dimension",
       "source": "proposed"
     },
     "size.control.m.padding-x": {
-      "value": "1rem",
+      "value": "0.75rem",
       "type": "dimension",
       "source": "proposed"
     },
@@ -365,7 +365,7 @@
       "source": "proposed"
     },
     "size.control.l.height": {
-      "value": "3rem",
+      "value": "2.75rem",
       "type": "dimension",
       "source": "proposed"
     },
@@ -390,22 +390,22 @@
       "source": "proposed"
     },
     "radius.xs": {
-      "value": "0.375rem",
+      "value": "0.25rem",
       "type": "dimension",
       "source": "proposed"
     },
     "radius.s": {
-      "value": "0.625rem",
+      "value": "0.375rem",
       "type": "dimension",
       "source": "proposed"
     },
     "radius.m": {
-      "value": "1rem",
+      "value": "0.5rem",
       "type": "dimension",
       "source": "proposed"
     },
     "radius.l": {
-      "value": "1.25rem",
+      "value": "0.75rem",
       "type": "dimension",
       "source": "proposed"
     },
@@ -685,7 +685,7 @@
       "source": "proposed"
     },
     "size.table.row": {
-      "value": "3rem",
+      "value": "2.75rem",
       "type": "dimension",
       "source": "proposed"
     },
@@ -700,7 +700,7 @@
       "source": "proposed"
     },
     "size.table.cell-padding-y": {
-      "value": "0.75rem",
+      "value": "0.625rem",
       "type": "dimension",
       "source": "proposed"
     },
@@ -710,7 +710,7 @@
       "source": "proposed"
     },
     "size.page.padding": {
-      "value": "1.5rem",
+      "value": "1.75rem",
       "type": "dimension",
       "source": "proposed"
     },

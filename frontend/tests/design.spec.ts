@@ -56,7 +56,10 @@ test("모바일에서 채널로 검색하고 오류를 재시도한다", async (
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/design");
   await expect(page.getByLabel("찾을 곳")).toBeVisible();
-  await page.getByLabel("찾을 곳").selectOption("blog");
+  await page
+    .getByRole("group", { name: "찾을 곳" })
+    .getByRole("button", { name: "블로그", exact: true })
+    .click();
   await page.getByRole("button", { name: "검색", exact: true }).click();
   await expect(
     page.getByRole("button", { name: /교육 활동 중 어려움/ }),
@@ -70,7 +73,10 @@ test("모바일에서 채널로 검색하고 오류를 재시도한다", async (
     ),
   ).toBe(true);
   await page.getByRole("tab", { name: "알림", exact: true }).click();
-  await page.getByLabel("확인할 상태").selectOption("error");
+  await page
+    .getByRole("group", { name: "확인할 상태" })
+    .getByRole("button", { name: "불러오기 오류", exact: true })
+    .click();
   await expect(page.getByRole("main").getByRole("alert")).toContainText(
     "자료를 불러오지 못했어요",
   );

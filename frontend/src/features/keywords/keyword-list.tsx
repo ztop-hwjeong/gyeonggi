@@ -13,6 +13,7 @@ import {
   PageHeading,
   Pager,
 } from "@/shared/ui/feedback";
+import { SelectField } from "@/shared/ui/select";
 
 export function KeywordList() {
   const { params, offset, update } = useListLocation();
@@ -61,18 +62,17 @@ export function KeywordList() {
               onChange={(event) => setText(event.target.value)}
               maxLength={100}
             />
-            <label className="sr-only" htmlFor="keyword-enabled">
-              자동 수집 상태
-            </label>
-            <select
+            <SelectField
               id="keyword-enabled"
+              label="자동 수집 상태"
               value={enabled}
-              onChange={(event) => update({ enabled: event.target.value })}
-            >
-              <option value="">자동 수집 전체</option>
-              <option value="true">자동 수집 켜짐</option>
-              <option value="false">자동 수집 꺼짐</option>
-            </select>
+              onValueChange={(value) => update({ enabled: value })}
+              options={[
+                { value: "", label: "자동 수집 전체" },
+                { value: "true", label: "자동 수집 켜짐" },
+                { value: "false", label: "자동 수집 꺼짐" },
+              ]}
+            />
             <button className="button secondary" type="submit">
               검색
             </button>

@@ -6,6 +6,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useApi } from "@/shared/api/client";
 import { useListLocation } from "@/shared/lib/list-location";
 import { Empty, ErrorNotice, Loading, Pager } from "@/shared/ui/feedback";
+import { SelectField } from "@/shared/ui/select";
 import type {
   AnalysisTarget,
   ArticlePage,
@@ -138,27 +139,28 @@ export function ResultList() {
               <form className="filters" onSubmit={submit}>
                 {news && (
                   <>
-                    <select
-                      aria-label="분석 포함 상태"
+                    <SelectField
+                      label="분석 포함 상태"
                       value={inclusion}
-                      onChange={(e) => update({ inclusion: e.target.value })}
-                    >
-                      <option value="all">전체 자료</option>
-                      <option value="included">분석 포함</option>
-                      <option value="excluded">분석 제외</option>
-                    </select>
-                    <select
-                      aria-label="분석 대상"
+                      onValueChange={(value) => update({ inclusion: value })}
+                      options={[
+                        { value: "all", label: "전체 자료" },
+                        { value: "included", label: "분석 포함" },
+                        { value: "excluded", label: "분석 제외" },
+                      ]}
+                    />
+                    <SelectField
+                      label="분석 대상"
                       value={targetId}
-                      onChange={(e) => update({ target_id: e.target.value })}
-                    >
-                      <option value="">분석 대상 전체</option>
-                      {targets.data?.map((target) => (
-                        <option key={target.id} value={target.id}>
-                          {target.name}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={(value) => update({ target_id: value })}
+                      options={[
+                        { value: "", label: "분석 대상 전체" },
+                        ...(targets.data ?? []).map((target) => ({
+                          value: target.id,
+                          label: target.name,
+                        })),
+                      ]}
+                    />
                   </>
                 )}
                 <input

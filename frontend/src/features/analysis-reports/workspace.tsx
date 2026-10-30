@@ -147,6 +147,9 @@ export function AnalysisReportsWorkspace() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<Error | null>(null);
   const [newTargetId, setNewTargetId] = useState("");
+  const [newReportOpen, setNewReportOpen] = useState(false);
+  const [targetSearch, setTargetSearch] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [decisionReason, setDecisionReason] = useState("");
   const [preview, setPreview] = useState<RelevancePreview | null>(null);
@@ -288,6 +291,7 @@ export function AnalysisReportsWorkspace() {
         reports.refetch(),
         articles.refetch(),
       ]);
+      setSettingsOpen(false);
     } catch (error) {
       setSaveError(
         error instanceof Error ? error : new Error("저장하지 못했어요."),
@@ -307,6 +311,8 @@ export function AnalysisReportsWorkspace() {
       });
       await reports.refetch();
       setNewTargetId("");
+      setTargetSearch("");
+      setNewReportOpen(false);
       update({ report_id: created.id, offset: 0 });
     } catch (error) {
       setCreateError(
@@ -453,12 +459,8 @@ export function AnalysisReportsWorkspace() {
             </button>
           ))}
         </div>
-        <div className="report-workspace">
-          <aside className="report-list" aria-label="보고서 목록">
-            <div className="report-list-heading">
-              <strong>보고서</strong>
-              <span>{reports.data?.length ?? 0}</span>
-            </div>
+        <div className="report-switcher">
+          <div className="report-switcher-actions">
             {reports.isLoading ? (
               <Loading />
             ) : reports.error ? (
@@ -467,52 +469,88 @@ export function AnalysisReportsWorkspace() {
                 retry={() => reports.refetch()}
               />
             ) : reports.data?.length ? (
-              <ul>
+              <div
+                className="report-title-tabs"
+                role="tablist"
+                aria-label="보고서 목록"
+              >
                 {reports.data.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      className={item.id === selectedReportId ? "active" : ""}
-                      onClick={() => selectReport(item.id)}
-                    >
-                      <strong>{item.title}</strong>
-                      <span>
-                        {targets.data?.find(
-                          (target) => target.id === item.target_id,
-                        )?.name ?? "분석 대상"}
-                      </span>
-                    </button>
-                  </li>
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    className={item.id === selectedReportId ? "active" : ""}
+                    aria-selected={item.id === selectedReportId}
+                    onClick={() => selectReport(item.id)}
+                  >
+                    <strong>{item.title}</strong>
+                  </button>
                 ))}
-              </ul>
+              </div>
             ) : (
               <Empty title="생성된 보고서가 없어요" />
             )}
-            <div className="report-create">
-              <label htmlFor="report-target">새 보고서 대상</label>
-              <select
-                id="report-target"
-                value={newTargetId}
-                onChange={(event) => setNewTargetId(event.target.value)}
-              >
-                <option value="">선택</option>
-                {visibleTargets.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="button secondary"
-                type="button"
-                disabled={!newTargetId || creating}
-                onClick={createReport}
-              >
-                {creating ? "만드는 중" : "보고서 만들기"}
-              </button>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => setNewReportOpen(true)}
+            >
+              새 보고서
+            </button>
+          </div>
+          {newReportOpen && (
+            <dialog
+              className="report-dialog"
+              ref={(node) => {
+                if (node && !node.open) node.showModal();
+              }}
+              onCancel={() => setNewReportOpen(false)}
+              aria-labelledby="new-report-title"
+            >
+              <h3 id="new-report-title">새 보고서</h3>
+              <input
+                aria-label="등록 대상 검색"
+                value={targetSearch}
+                onChange={(event) => setTargetSearch(event.target.value)}
+                placeholder="대상 검색"
+              />
+              <div className="report-target-list">
+                {visibleTargets
+                  .filter((item) =>
+                    `${item.name} ${item.description}`.includes(targetSearch),
+                  )
+                  .map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-pressed={newTargetId === item.id}
+                      onClick={() => setNewTargetId(item.id)}
+                    >
+                      <strong>{item.name}</strong>
+                      <span>{item.description}</span>
+                    </button>
+                  ))}
+              </div>
               {createError && <p role="alert">{createError.message}</p>}
-            </div>
-          </aside>
+              <div className="button-row">
+                <button
+                  className="button"
+                  type="button"
+                  disabled={!newTargetId || creating}
+                  onClick={createReport}
+                >
+                  {creating ? "만드는 중" : "만들기"}
+                </button>
+                <button
+                  className="button quiet"
+                  type="button"
+                  onClick={() => setNewReportOpen(false)}
+                >
+                  취소
+                </button>
+              </div>
+            </dialog>
+          )}
           <div className="report-content">
             {report.error ? (
               <ErrorNotice
@@ -522,12 +560,19 @@ export function AnalysisReportsWorkspace() {
             ) : report.isLoading ? (
               <Loading />
             ) : !report.data ? (
-              <Empty title="왼쪽 목록에서 보고서를 선택하세요" />
+              <Empty title="검토할 보고서를 선택하세요" />
             ) : (
               <>
                 <header className="report-heading">
                   <div className="report-heading-title">
                     <h2>{report.data.title}</h2>
+                    <button
+                      className="button quiet"
+                      type="button"
+                      onClick={() => setSettingsOpen(true)}
+                    >
+                      설정
+                    </button>
                     <button
                       className="button quiet"
                       type="button"
@@ -539,134 +584,157 @@ export function AnalysisReportsWorkspace() {
                       보고서 삭제
                     </button>
                   </div>
-                  <p>{reportTarget?.name ?? "분석 대상"}</p>
                   <p className="report-keyword-summary">
                     검토 키워드 ·{" "}
                     {report.data.keyword_terms.join(" · ") || "미설정"}
                   </p>
                 </header>
-                <details className="report-settings-panel" key={report.data.id}>
-                  <summary>보고서 설정</summary>
-                  <form className="report-settings" onSubmit={saveReport}>
-                    <div className="field">
-                      <label htmlFor="report-title">보고서 제목</label>
-                      <input
-                        id="report-title"
-                        value={title}
-                        onChange={(event) => setTitle(event.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="field report-description">
-                      <span>분석 대상</span>
-                      <strong>{reportTarget?.name ?? "분석 대상"}</strong>
-                      {reportTarget?.description && (
-                        <small>{reportTarget.description}</small>
+                {settingsOpen && (
+                  <dialog
+                    className="report-dialog report-settings-dialog"
+                    ref={(node) => {
+                      if (node && !node.open) node.showModal();
+                    }}
+                    onCancel={() => setSettingsOpen(false)}
+                    aria-labelledby="report-settings-title"
+                  >
+                    <h3 id="report-settings-title">보고서 설정</h3>
+                    <form className="report-settings" onSubmit={saveReport}>
+                      <div className="field">
+                        <label htmlFor="report-title">보고서 제목</label>
+                        <input
+                          id="report-title"
+                          value={title}
+                          onChange={(event) => setTitle(event.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="field report-description">
+                        <span>분석 대상</span>
+                        <strong>{reportTarget?.name ?? "분석 대상"}</strong>
+                        {reportTarget?.description && (
+                          <small>{reportTarget.description}</small>
+                        )}
+                      </div>
+                      <div className="field">
+                        <label htmlFor="report-description">보고서 설명</label>
+                        <input
+                          id="report-description"
+                          value={description}
+                          onChange={(event) =>
+                            setDescription(event.target.value)
+                          }
+                          maxLength={2000}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="report-keywords">검토 키워드</label>
+                        <textarea
+                          id="report-keywords"
+                          value={keywordText}
+                          onChange={(event) =>
+                            setKeywordText(event.target.value)
+                          }
+                          placeholder="한 줄에 하나씩 입력"
+                        />
+                        <p className="hint">
+                          제목·최신 본문에 키워드 하나 이상이 있으면 일치로
+                          표시합니다. 키워드 필터는 자동 제외가 아닌
+                          검토용입니다.
+                        </p>
+                        <p className="hint">
+                          포함·제외와 해제는 이 보고서에만 적용되며, 원문과 다른
+                          보고서의 사용에는 영향을 주지 않습니다.
+                        </p>
+                      </div>
+                      <div className="field">
+                        <label htmlFor="relevance-criteria">
+                          AI 관련성 판단 기준
+                        </label>
+                        <textarea
+                          id="relevance-criteria"
+                          value={relevanceCriteria}
+                          onChange={(event) =>
+                            setRelevanceCriteria(event.target.value)
+                          }
+                          placeholder="이 보고서에서 관련 기사로 볼 기준"
+                        />
+                      </div>
+                      <div className="report-period-fields">
+                        <div className="field">
+                          <label htmlFor="report-start-at">발행시각 시작</label>
+                          <input
+                            id="report-start-at"
+                            type="datetime-local"
+                            value={startAt}
+                            onChange={(event) => setStartAt(event.target.value)}
+                          />
+                        </div>
+                        <div className="field">
+                          <label htmlFor="report-end-at">발행시각 종료</label>
+                          <input
+                            id="report-end-at"
+                            type="datetime-local"
+                            value={endAt}
+                            onChange={(event) => setEndAt(event.target.value)}
+                          />
+                        </div>
+                        <p className="hint">
+                          한국시간 기준이며, 종료 시각은 미만으로 적용합니다.
+                        </p>
+                      </div>
+                      <button
+                        className="button"
+                        type="submit"
+                        disabled={saving || !title.trim()}
+                      >
+                        {saving ? "저장 중" : "저장"}
+                      </button>
+                      <button
+                        className="button quiet"
+                        type="button"
+                        disabled={saving || report.data.keywords_automatic}
+                        onClick={async () => {
+                          setSaving(true);
+                          setSaveError(null);
+                          try {
+                            const restored = await put<AnalysisReport>(
+                              `/analysis-reports/${report.data.id}`,
+                              {
+                                version: report.data.version,
+                                keywords_automatic: true,
+                              },
+                            );
+                            setKeywordText(restored.keyword_terms.join("\n"));
+                            setEditingLoaded(restored.id);
+                            await report.refetch();
+                          } catch (error) {
+                            setSaveError(
+                              error instanceof Error
+                                ? error
+                                : new Error("자동 키워드를 복원하지 못했어요."),
+                            );
+                          } finally {
+                            setSaving(false);
+                          }
+                        }}
+                      >
+                        자동 채움 복원
+                      </button>
+                      <button
+                        className="button quiet"
+                        type="button"
+                        disabled={saving}
+                        onClick={() => setSettingsOpen(false)}
+                      >
+                        취소
+                      </button>
+                      {saveError && (
+                        <span role="alert">{saveError.message}</span>
                       )}
-                    </div>
-                    <div className="field">
-                      <label htmlFor="report-description">보고서 설명</label>
-                      <input
-                        id="report-description"
-                        value={description}
-                        onChange={(event) => setDescription(event.target.value)}
-                        maxLength={2000}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="report-keywords">검토 키워드</label>
-                      <textarea
-                        id="report-keywords"
-                        value={keywordText}
-                        onChange={(event) => setKeywordText(event.target.value)}
-                        placeholder="한 줄에 하나씩 입력"
-                      />
-                      <p className="hint">
-                        제목·최신 본문에 키워드 하나 이상이 있으면 일치로
-                        표시합니다. 키워드 필터는 자동 제외가 아닌 검토용입니다.
-                      </p>
-                      <p className="hint">
-                        포함·제외와 해제는 이 보고서에만 적용되며, 원문과 다른
-                        보고서의 사용에는 영향을 주지 않습니다.
-                      </p>
-                    </div>
-                    <div className="field">
-                      <label htmlFor="relevance-criteria">
-                        AI 관련성 판단 기준
-                      </label>
-                      <textarea
-                        id="relevance-criteria"
-                        value={relevanceCriteria}
-                        onChange={(event) =>
-                          setRelevanceCriteria(event.target.value)
-                        }
-                        placeholder="이 보고서에서 관련 기사로 볼 기준"
-                      />
-                    </div>
-                    <div className="report-period-fields">
-                      <div className="field">
-                        <label htmlFor="report-start-at">발행시각 시작</label>
-                        <input
-                          id="report-start-at"
-                          type="datetime-local"
-                          value={startAt}
-                          onChange={(event) => setStartAt(event.target.value)}
-                        />
-                      </div>
-                      <div className="field">
-                        <label htmlFor="report-end-at">발행시각 종료</label>
-                        <input
-                          id="report-end-at"
-                          type="datetime-local"
-                          value={endAt}
-                          onChange={(event) => setEndAt(event.target.value)}
-                        />
-                      </div>
-                      <p className="hint">
-                        한국시간 기준이며, 종료 시각은 미만으로 적용합니다.
-                      </p>
-                    </div>
-                    <button
-                      className="button"
-                      type="submit"
-                      disabled={saving || !title.trim()}
-                    >
-                      {saving ? "저장 중" : "저장"}
-                    </button>
-                    <button
-                      className="button quiet"
-                      type="button"
-                      disabled={saving || report.data.keywords_automatic}
-                      onClick={async () => {
-                        setSaving(true);
-                        setSaveError(null);
-                        try {
-                          const restored = await put<AnalysisReport>(
-                            `/analysis-reports/${report.data.id}`,
-                            {
-                              version: report.data.version,
-                              keywords_automatic: true,
-                            },
-                          );
-                          setKeywordText(restored.keyword_terms.join("\n"));
-                          setEditingLoaded(restored.id);
-                          await report.refetch();
-                        } catch (error) {
-                          setSaveError(
-                            error instanceof Error
-                              ? error
-                              : new Error("자동 키워드를 복원하지 못했어요."),
-                          );
-                        } finally {
-                          setSaving(false);
-                        }
-                      }}
-                    >
-                      자동 채움 복원
-                    </button>
-                    {saveError && <span role="alert">{saveError.message}</span>}
-                  </form>
-                </details>
+                    </form>
+                  </dialog>
+                )}
                 <section className="report-summary" aria-label="기사 수">
                   <span>
                     전체 <strong>{articles.data?.total ?? 0}</strong>
@@ -726,46 +794,66 @@ export function AnalysisReportsWorkspace() {
                       update({ q: text, offset: 0 });
                     }}
                   >
-                    <select
-                      aria-label="보고서 포함 상태"
-                      value={inclusion}
-                      onChange={(event) =>
-                        update({
-                          inclusion:
-                            event.target.value === "all"
-                              ? null
-                              : event.target.value,
-                          offset: 0,
-                        })
-                      }
+                    <fieldset
+                      className="report-filter-row"
+                      aria-label="검토 결정"
                     >
-                      <option value="all">검토 결정 전체</option>
-                      <option value="unreviewed">미검토</option>
-                      <option value="included">보고서 포함</option>
-                      <option value="excluded">보고서 제외</option>
-                    </select>
-                    <select
+                      <legend>검토 결정</legend>
+                      {(
+                        [
+                          ["all", "전체"],
+                          ["unreviewed", "미검토"],
+                          ["included", "포함"],
+                          ["excluded", "제외"],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={inclusion === value}
+                          onClick={() =>
+                            update({
+                              inclusion: value === "all" ? null : value,
+                              offset: 0,
+                            })
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </fieldset>
+                    <fieldset
+                      className="report-filter-row"
                       aria-label="AI 관련성"
-                      value={aiRelevance}
-                      onChange={(event) =>
-                        update({
-                          ai_relevance:
-                            event.target.value === "all"
-                              ? null
-                              : event.target.value,
-                          offset: 0,
-                        })
-                      }
                     >
-                      <option value="all">AI 관련성 전체</option>
-                      <option value="unjudged">미판정</option>
-                      <option value="related">관련</option>
-                      <option value="unrelated">무관</option>
-                      <option value="uncertain">보류</option>
-                      <option value="failed">실패</option>
-                      <option value="pending">처리 중</option>
-                      <option value="outdated">이전 기준</option>
-                    </select>
+                      <legend>AI 관련성</legend>
+                      {(
+                        [
+                          ["all", "전체"],
+                          ["unjudged", "미판정"],
+                          ["related", "관련"],
+                          ["unrelated", "무관"],
+                          ["uncertain", "보류"],
+                          ["failed", "실패"],
+                          ["pending", "처리 중"],
+                          ["outdated", "이전 기준"],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={aiRelevance === value}
+                          onClick={() =>
+                            update({
+                              ai_relevance: value === "all" ? null : value,
+                              offset: 0,
+                            })
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </fieldset>
                     <input
                       aria-label="보고서 기사 검색"
                       value={text}

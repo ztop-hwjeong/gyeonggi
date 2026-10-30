@@ -5,6 +5,7 @@ import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { post, put, remove, useApi } from "@/shared/api/client";
 import { Empty, ErrorNotice, Loading, PageHeading } from "@/shared/ui/feedback";
+import { SelectField } from "@/shared/ui/select";
 import type { AnalysisTarget, FilterRule } from "./types";
 
 const kinds = {
@@ -88,20 +89,18 @@ export function TargetManager() {
       <section className="panel panel-body">
         <form className="form-stack" onSubmit={submit}>
           <div className="field">
-            <label htmlFor="target-kind">분석 목적</label>
-            <select
+            <SelectField
               id="target-kind"
+              label="분석 목적"
               value={kind}
-              onChange={(event) =>
-                setKind(event.target.value as AnalysisTarget["kind"])
+              onValueChange={(value) =>
+                setKind(value as AnalysisTarget["kind"])
               }
-            >
-              {Object.entries(kinds).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              options={Object.entries(kinds).map(([value, label]) => ({
+                value,
+                label,
+              }))}
+            />
           </div>
           <div className="field">
             <label className="check-label" htmlFor="target-collection-enabled">
@@ -308,32 +307,33 @@ export function FilterRuleManager() {
             />
           </div>
           <div className="field">
-            <label htmlFor="rule-target">적용할 분석 대상</label>
-            <select
+            <SelectField
               id="rule-target"
+              label="적용할 분석 대상"
               value={targetId}
-              onChange={(event) => setTargetId(event.target.value)}
-            >
-              <option value="">전체 기사</option>
-              {targets.data?.map((target) => (
-                <option key={target.id} value={target.id}>
-                  {target.name}
-                </option>
-              ))}
-            </select>
+              onValueChange={setTargetId}
+              options={[
+                { value: "", label: "전체 기사" },
+                ...(targets.data ?? []).map((target) => ({
+                  value: target.id,
+                  label: target.name,
+                })),
+              ]}
+            />
           </div>
           <div className="field">
-            <label htmlFor="rule-decision">판단</label>
-            <select
+            <SelectField
               id="rule-decision"
+              label="판단"
               value={decision}
-              onChange={(event) =>
-                setDecision(event.target.value as "include" | "exclude")
+              onValueChange={(value) =>
+                setDecision(value as "include" | "exclude")
               }
-            >
-              <option value="include">분석에 포함</option>
-              <option value="exclude">분석에서 제외</option>
-            </select>
+              options={[
+                { value: "include", label: "분석에 포함" },
+                { value: "exclude", label: "분석에서 제외" },
+              ]}
+            />
           </div>
           <div className="field">
             <label htmlFor="rule-priority">우선순위</label>

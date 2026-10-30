@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { post, put, remove, useApi } from "@/shared/api/client";
 import { ErrorNotice, Loading } from "@/shared/ui/feedback";
+import { SelectField } from "@/shared/ui/select";
 import type {
   MaterialKind,
   Tag,
@@ -328,24 +329,17 @@ export function TagFolderPanel({
                 </label>
               )}
               {editor.action === "tagMove" && (
-                <label>
-                  이동할 폴더
-                  <select
-                    value={destination ?? ""}
-                    onChange={(event) =>
-                      setDestination(event.target.value || null)
-                    }
-                  >
-                    <option value="">미분류</option>
-                    {(folders.data ?? [])
+                <SelectField
+                  label="이동할 폴더"
+                  value={destination ?? ""}
+                  onValueChange={(value) => setDestination(value || null)}
+                  options={[
+                    { value: "", label: "미분류" },
+                    ...(folders.data ?? [])
                       .filter((item) => item.id !== editor.sourceFolderId)
-                      .map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
+                      .map((item) => ({ value: item.id, label: item.name })),
+                  ]}
+                />
               )}
               <div className="folder-editor-actions">
                 <button

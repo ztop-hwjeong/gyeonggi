@@ -3,10 +3,10 @@
   justify-content: space-between;
   align-items: center;
   gap: 20px;
-  margin-bottom: 30px;
+  margin-bottom: 24px;
 }
 .page-heading p {
-  margin-top: 8px;
+  margin-top: 6px;
   color: var(--color-text-secondary);
 }
 .button {
@@ -15,7 +15,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--size-control-m-gap);
-  border: 0;
+  border: 1px solid transparent;
   border-radius: var(--radius-s);
   padding: var(--space-8) var(--size-control-m-padding-x);
   font-size: var(--size-control-m-font-size);
@@ -25,17 +25,18 @@
   white-space: nowrap;
   transition:
     background var(--motion-duration-fast),
-    transform var(--motion-duration-fast);
+    border-color var(--motion-duration-fast);
 }
 .button:hover {
   text-decoration: none;
   background: var(--color-action-hover);
 }
 .button:active:not(:disabled) {
-  transform: scale(var(--motion-scale-pressed));
+  background: var(--color-action-pressed);
 }
 .button.secondary {
-  background: var(--color-neutral-100);
+  background: var(--color-surface-default);
+  border-color: var(--color-border-default);
   color: var(--color-text-primary);
 }
 .button.secondary:hover {
@@ -43,7 +44,7 @@
 }
 .button.quiet {
   background: transparent;
-  color: var(--color-text-link);
+  color: var(--color-text-secondary);
 }
 .button.quiet:hover {
   background: var(--color-selection-background);
@@ -69,7 +70,7 @@
   display: none;
 }
 .toolbar {
-  padding: 20px 24px;
+  padding: 16px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -111,7 +112,7 @@ input[type="checkbox"] {
 }
 .field {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 .field > label,
 .field legend {
@@ -169,4 +170,107 @@ input[type="checkbox"] {
   display: flex;
   justify-content: end;
   gap: 10px;
+}
+
+.choice-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  min-height: var(--size-control-m-height);
+  min-width: 140px;
+  max-width: 100%;
+  padding: var(--space-8) var(--size-control-m-padding-x);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-s);
+  background: var(--color-field-background);
+  color: var(--color-field-foreground);
+  font: inherit;
+  font-size: var(--type-label-size);
+  text-align: left;
+}
+.choice-trigger > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.choice-trigger:hover:not(:disabled) {
+  border-color: var(--color-field-border-hover);
+}
+.choice-trigger[data-placeholder],
+.choice-icon {
+  color: var(--color-text-secondary);
+}
+.choice-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.choice-content {
+  z-index: 80;
+  min-width: var(--radix-select-trigger-width);
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: min(320px, var(--radix-select-content-available-height));
+  overflow: hidden;
+  padding: var(--space-4);
+  background: var(--color-surface-default);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text-primary);
+}
+.choice-viewport {
+  max-height: inherit;
+}
+.choice-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  min-height: 36px;
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-xs);
+  font-size: var(--type-label-size);
+  line-height: 1.4;
+  cursor: pointer;
+  user-select: none;
+  outline: 0;
+}
+.choice-option[data-highlighted] {
+  background: var(--color-selection-background);
+  color: var(--color-text-brand);
+}
+.choice-option[data-disabled] {
+  color: var(--color-text-placeholder);
+  cursor: not-allowed;
+}
+.choice-check {
+  display: flex;
+  margin-left: auto;
+  color: var(--color-action-primary);
+}
+.choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.choice-group button {
+  min-height: 32px;
+  padding: 5px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.choice-group button:hover {
+  background: var(--color-surface-subtle);
+}
+.choice-group button[aria-pressed="true"] {
+  background: var(--color-selection-background);
+  color: var(--color-text-brand);
 }

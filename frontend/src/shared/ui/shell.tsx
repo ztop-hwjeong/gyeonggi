@@ -4,6 +4,7 @@ import {
   ChartLineUpIcon,
   ClockCounterClockwiseIcon,
   DatabaseIcon,
+  FileTextIcon,
   GearSixIcon,
   ListIcon,
   MagnifyingGlassIcon,
@@ -17,12 +18,12 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 const navigation = [
   { href: "/", label: "수집 현황", icon: ChartLineUpIcon },
+  { href: "/results", label: "수집 자료", icon: DatabaseIcon },
+  { href: "/analysis-reports", label: "분석 보고서", icon: FileTextIcon },
   { href: "/keywords", label: "키워드 관리", icon: MagnifyingGlassIcon },
   { href: "/runs", label: "수집 이력", icon: ClockCounterClockwiseIcon },
-  { href: "/results", label: "수집 자료", icon: DatabaseIcon },
   { href: "/events", label: "이벤트", icon: ClockCounterClockwiseIcon },
   { href: "/analysis-targets", label: "기사 분석 대상", icon: ChartLineUpIcon },
-  { href: "/analysis-reports", label: "분석 보고서", icon: ChartLineUpIcon },
   { href: "/filter-rules", label: "기사 분석 규칙", icon: GearSixIcon },
   { href: "/workers", label: "수집 환경", icon: GearSixIcon },
 ];
@@ -116,7 +117,6 @@ export function Shell({ children }: { children: ReactNode }) {
             />
           </button>
         </div>
-        <div className="workspace-name">수집 관리</div>
         <nav aria-label="주 메뉴">
           {navigation.map(({ href, label, icon: Icon }) => {
             const active =
@@ -136,13 +136,6 @@ export function Shell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="sidebar-footer">
-          <span className="workspace-avatar">경</span>
-          <div>
-            <strong>경기교육 정책 분석</strong>
-            <span>내부 운영 공간</span>
-          </div>
-        </div>
       </aside>
       {open && (
         <button
@@ -165,14 +158,10 @@ export function Shell({ children }: { children: ReactNode }) {
             {open ? <XIcon size={22} /> : <ListIcon size={22} />}
           </button>
           <span className="topbar-title">{title}</span>
-          <span className="topbar-note">수집 운영</span>
         </header>
         <main id="main" className="main-content">
           {children}
         </main>
-        <footer className="workspace-footer">
-          경기도교육청 정책 홍보 현황 및 성과 분석
-        </footer>
       </div>
     </QueryClientProvider>
   );

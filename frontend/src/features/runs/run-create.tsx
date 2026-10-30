@@ -7,6 +7,7 @@ import { type FormEvent, useDeferredValue, useState } from "react";
 import { type Schema, useApi, useIdempotentPost } from "@/shared/api/client";
 import { sourceNames, today } from "@/shared/lib/format";
 import { Empty, ErrorNotice, Loading, PageHeading } from "@/shared/ui/feedback";
+import { SelectField } from "@/shared/ui/select";
 
 export function RunCreate({
   initialRule = "",
@@ -144,66 +145,66 @@ export function RunCreate({
               />
             )}
             <div className="field">
-              <label htmlFor="collect-rule">검색 조건</label>
-              <select
+              <SelectField
                 id="collect-rule"
+                label="검색 조건"
                 value={ruleId}
                 required
-                onChange={(e) => setRuleId(e.target.value)}
-              >
-                <option value="">검색 조건을 선택해 주세요</option>
-                {selected &&
-                  !rules.data?.items.some(
-                    (rule) => rule.id === selected.id,
-                  ) && (
-                    <option value={selected.id}>
-                      {selected.definition.name}
-                    </option>
-                  )}
-                {rules.data?.items.map((rule) => (
-                  <option key={rule.id} value={rule.id}>
-                    {rule.definition.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setRuleId}
+                options={[
+                  { value: "", label: "검색 조건을 선택해 주세요" },
+                  ...(selected &&
+                  !rules.data?.items.some((rule) => rule.id === selected.id)
+                    ? [
+                        {
+                          value: selected.id,
+                          label: selected.definition.name,
+                        },
+                      ]
+                    : []),
+                  ...(rules.data?.items.map((rule) => ({
+                    value: rule.id,
+                    label: rule.definition.name,
+                  })) ?? []),
+                ]}
+              />
             </div>
             {selected && (
               <p className="hint">{selected.definition.terms.join(" · ")}</p>
             )}
             <div className="field">
-              <label htmlFor="collect-source">수집 채널</label>
-              <select
+              <SelectField
                 id="collect-source"
+                label="수집 채널"
                 required
                 value={actualSource ?? ""}
-                onChange={(e) =>
-                  setSource(e.target.value as Schema["SourceCode"])
+                onValueChange={(value) =>
+                  setSource(value as Schema["SourceCode"])
                 }
-              >
-                <option value="" disabled>
-                  채널을 선택해 주세요
-                </option>
-                {selected?.definition.sources.map((code) => (
-                  <option key={code} value={code}>
-                    {sourceNames[code]}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: "채널을 선택해 주세요", disabled: true },
+                  ...(selected?.definition.sources.map((code) => ({
+                    value: code,
+                    label: sourceNames[code],
+                  })) ?? []),
+                ]}
+              />
             </div>
             {actualSource === "bigkinds" ? (
               <>
                 <div className="field">
-                  <label htmlFor="collect-mode">수집 방식</label>
-                  <select
+                  <SelectField
                     id="collect-mode"
+                    label="수집 방식"
                     value={mode}
-                    onChange={(e) =>
-                      setMode(e.target.value as "backfill" | "incremental")
+                    onValueChange={(value) =>
+                      setMode(value as "backfill" | "incremental")
                     }
-                  >
-                    <option value="backfill">기간을 지정해 수집</option>
-                    <option value="incremental">오늘 자료 수집</option>
-                  </select>
+                    options={[
+                      { value: "backfill", label: "기간을 지정해 수집" },
+                      { value: "incremental", label: "오늘 자료 수집" },
+                    ]}
+                  />
                 </div>
                 {actualMode === "backfill" && (
                   <div className="field-grid">
