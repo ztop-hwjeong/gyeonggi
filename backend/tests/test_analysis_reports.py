@@ -238,6 +238,36 @@ def test_report_filters_latest_original_body_and_literal_keywords():
                                 report.id, "matched", "all", None, 1, 1
                             )
                             assert empty_page.filtered_total == 1 and empty_page.items == []
+                    await session.execute(
+                        update(articles)
+                        .where(articles.c.id == article_id)
+                        .values(original_published_at=now)
+                    )
+                    period_report = await reports.create(
+                        ReportCreate(
+                            target_id=target.id,
+                            start_at=now - timedelta(seconds=1),
+                            end_at=now,
+                            keywords_automatic=False,
+                            keyword_terms=["100%"],
+                        )
+                    )
+                    outside = await reports.articles(period_report.id, "all", "all", None, 0, 20)
+                    assert outside.total == 0 and outside.items == []
+                    await reports.update(
+                        period_report.id,
+                        ReportUpdate(
+                            version=period_report.version,
+                            start_at=now,
+                            end_at=now + timedelta(seconds=1),
+                        ),
+                    )
+                    inside = await reports.articles(
+                        period_report.id, "matched", "all", "100%", 0, 20
+                    )
+                    assert inside.total == inside.matched == inside.filtered_total == 1
+                    assert inside.items[0].id == article_id
+                    assert inside.items[0].content_preview == "100% 지원과 A_B 운영"
                     await session.commit()
                     other = await reports.create(
                         ReportCreate(target_id=target.id, title="다른 보고서")

@@ -40,6 +40,7 @@ services:
       DATABASE_NAME: gyeonggi
       DATABASE_USER: gyeonggi
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 설정 필요}
+      DATABASE_RANDOM_PAGE_COST: "1.1"
       PREFECT_API_URL: http://prefect-server:4200/api
       API_ROOT_PATH: /api
     networks: [default, collector]

@@ -64,7 +64,7 @@ class CollectionReporting:
                 article_contents.c.original_modified_on,
                 article_contents.c.original_modified_at,
             )
-            .where(article_contents.c.article_id == materials.c.id)
+            .where(materials.c.kind == "news", article_contents.c.article_id == materials.c.id)
             .order_by(article_contents.c.created_at.desc(), article_contents.c.id.desc())
             .limit(1)
             .lateral("latest_content")
@@ -79,7 +79,7 @@ class CollectionReporting:
                 blog_contents.c.original_modified_on,
                 blog_contents.c.original_modified_at,
             )
-            .where(blog_contents.c.blog_post_id == materials.c.id)
+            .where(materials.c.kind == "blog", blog_contents.c.blog_post_id == materials.c.id)
             .order_by(blog_contents.c.created_at.desc(), blog_contents.c.id.desc())
             .limit(1)
             .lateral("latest_blog_content")
@@ -103,6 +103,8 @@ class CollectionReporting:
                 )
             )
             .where(
+                materials.c.kind == "news",
+                latest.c.body.is_(None),
                 material_sources.c.material_id == materials.c.id,
                 material_sources.c.source.in_(("bigkinds", "naver_news")),
             )
@@ -111,7 +113,7 @@ class CollectionReporting:
                 article_detail_runs.c.id.desc(),
             )
             .limit(1)
-            .correlate(materials)
+            .correlate(materials, latest)
             .lateral("latest_detail")
         )
         blog_detail = (
@@ -128,10 +130,14 @@ class CollectionReporting:
                     ),
                 )
             )
-            .where(material_sources.c.material_id == materials.c.id)
+            .where(
+                materials.c.kind == "blog",
+                latest_blog.c.body.is_(None),
+                material_sources.c.material_id == materials.c.id,
+            )
             .order_by(blog_detail_results.c.created_at.desc(), blog_detail_results.c.run_id.desc())
             .limit(1)
-            .correlate(materials)
+            .correlate(materials, latest_blog)
             .lateral("latest_blog_detail")
         )
         source = (
@@ -388,7 +394,16 @@ class CollectionReporting:
             .where(materials.c.kind.in_(("news", "blog")))
             .group_by(materials.c.kind)
         )
-        body_status = self.material_query().subquery()
+        # 본문이 없는 기사로 수집 이력 집계 범위 제한
+        body_status = (
+            self.material_query()
+            .where(
+                ~select(article_contents.c.id)
+                .where(article_contents.c.article_id == materials.c.id)
+                .exists()
+            )
+            .subquery()
+        )
         skipped = (
             await self.rows(
                 select(func.count().label("count"))

@@ -36,6 +36,9 @@ class DatabaseProvider(Provider):
 
     @provide(scope=Scope.APP)
     async def engine(self, settings: Settings) -> AsyncIterator[AsyncEngine]:
+        server_settings = {}
+        if settings.database_random_page_cost is not None:
+            server_settings["random_page_cost"] = str(settings.database_random_page_cost)
         engine = create_async_engine(
             settings.database_url,
             pool_pre_ping=True,
@@ -43,6 +46,7 @@ class DatabaseProvider(Provider):
             connect_args={
                 "timeout": 3,
                 "command_timeout": settings.database_command_timeout_seconds,
+                "server_settings": server_settings,
             },
             hide_parameters=True,
         )

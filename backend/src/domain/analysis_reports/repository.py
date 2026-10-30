@@ -212,19 +212,50 @@ class AnalysisReportRepository:
     def _escaped(term: str) -> str:
         return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
+    def _matches_terms(self, content_id, terms: Sequence[str]):
+        if not terms:
+            return literal(False)
+        patterns = ["%" + self._escaped(term) + "%" for term in terms]
+        title_matches = (
+            select(articles.c.id)
+            .where(or_(*(articles.c.title.ilike(pattern, escape="\\") for pattern in patterns)))
+            .correlate(None)
+        )
+        body_matches = (
+            select(article_contents.c.id)
+            .where(
+                or_(*(article_contents.c.body.ilike(pattern, escape="\\") for pattern in patterns))
+            )
+            .correlate(None)
+        )
+        # 과거 본문만 일치하는 기사를 포함하지 않도록 최신 본문 ID로 비교
+        return func.coalesce(
+            or_(articles.c.id.in_(title_matches), content_id.in_(body_matches)), False
+        )
+
     def _classified_candidates(
         self, report: ReportInfo, q: str | None = None, article_ids: Sequence[UUID] | None = None
     ):
         report_id = report.id
         terms = report.keyword_terms
+        eligible = select(articles.c.id).where(is_target_member(articles.c.id, report.target_id))
+        if article_ids is not None:
+            eligible = eligible.where(articles.c.id.in_(article_ids))
+        if report.start_at is not None:
+            eligible = eligible.where(articles.c.original_published_at >= report.start_at)
+        if report.end_at is not None:
+            eligible = eligible.where(articles.c.original_published_at < report.end_at)
+        eligible_ids = eligible.cte("report_eligible_articles").prefix_with(
+            "MATERIALIZED", dialect="postgresql"
+        )
         # 키워드와 집계마다 본문 이력을 다시 탐색하지 않도록 최신 버전 고정
         latest = (
             select(
                 article_contents.c.article_id,
                 article_contents.c.id.label("content_id"),
                 article_contents.c.content_hash,
-                article_contents.c.body,
             )
+            .where(article_contents.c.article_id.in_(select(eligible_ids.c.id)))
             .ext(distinct_on(article_contents.c.article_id))
             .order_by(
                 article_contents.c.article_id,
@@ -247,26 +278,33 @@ class AnalysisReportRepository:
             .cte("report_latest_relevance")
             .prefix_with("MATERIALIZED", dialect="postgresql")
         )
+        keyword_match = self._matches_terms(latest.c.content_id, terms)
+        ai_status = case(
+            (runs.c.status.is_(None), "unjudged"),
+            (
+                or_(
+                    runs.c.content_hash.is_distinct_from(latest.c.content_hash),
+                    runs.c.criteria_hash.is_distinct_from(criteria_hash),
+                    runs.c.title.is_distinct_from(articles.c.title),
+                ),
+                "outdated",
+            ),
+            else_=runs.c.status,
+        ).label("ai_status")
         base = (
             select(
                 articles.c.id,
                 articles.c.title,
-                func.coalesce(articles.c.summary, "").label("summary"),
-                articles.c.publisher,
                 articles.c.original_published_at,
-                func.coalesce(latest.c.body, "").label("body"),
+                keyword_match.label("is_keyword_match"),
                 analysis_report_decisions.c.decision.label("report_decision"),
                 analysis_report_decisions.c.reason.label("report_decision_reason"),
                 latest.c.content_id,
                 latest.c.content_hash,
+                runs.c.id.label("relevance_run_id"),
                 runs.c.status.label("run_status"),
-                runs.c.content_hash.label("run_content_hash"),
-                runs.c.criteria_hash.label("run_criteria_hash"),
                 runs.c.relevance.label("ai_relevance"),
-                runs.c.reason.label("ai_reason"),
-                runs.c.evidence.label("ai_evidence"),
-                runs.c.error.label("ai_error"),
-                runs.c.title.label("run_title"),
+                ai_status,
             )
             .select_from(
                 articles.outerjoin(latest, latest.c.article_id == articles.c.id)
@@ -279,54 +317,14 @@ class AnalysisReportRepository:
                 )
                 .outerjoin(runs, runs.c.article_id == articles.c.id)
             )
-            .where(is_target_member(articles.c.id, report.target_id))
+            .where(articles.c.id.in_(select(eligible_ids.c.id)))
         )
-        if article_ids is not None:
-            base = base.where(articles.c.id.in_(article_ids))
-        if report.start_at is not None:
-            base = base.where(articles.c.original_published_at >= report.start_at)
-        if report.end_at is not None:
-            base = base.where(articles.c.original_published_at < report.end_at)
         if q:
-            base = base.where(
-                or_(
-                    articles.c.title.ilike("%" + self._escaped(q) + "%", escape="\\"),
-                    latest.c.body.ilike("%" + self._escaped(q) + "%", escape="\\"),
-                )
-            )
-        candidate = base.cte("report_candidates").prefix_with("MATERIALIZED", dialect="postgresql")
-        # 하위 질의 열로 재구성해 최신 본문 결합 반복 방지
-        matched2 = (
-            or_(
-                *[
-                    or_(
-                        candidate.c.title.ilike("%" + self._escaped(t) + "%", escape="\\"),
-                        candidate.c.body.ilike("%" + self._escaped(t) + "%", escape="\\"),
-                    )
-                    for t in terms
-                ]
-            )
-            if terms
-            else literal(False)
+            base = base.where(self._matches_terms(latest.c.content_id, [q]))
+        # 집계 중간 결과에는 본문·요약·AI 근거를 담지 않고 선택 페이지에서만 조회
+        return base.cte("classified_report_candidates").prefix_with(
+            "MATERIALIZED", dialect="postgresql"
         )
-        ai_status = case(
-            (candidate.c.run_status.is_(None), "unjudged"),
-            (
-                or_(
-                    candidate.c.run_content_hash.is_distinct_from(candidate.c.content_hash),
-                    candidate.c.run_criteria_hash.is_distinct_from(criteria_hash),
-                    candidate.c.run_title.is_distinct_from(candidate.c.title),
-                ),
-                "outdated",
-            ),
-            else_=candidate.c.run_status,
-        ).label("ai_status")
-        classified = (
-            select(candidate, matched2.label("is_keyword_match"), ai_status)
-            .cte("classified_report_candidates")
-            .prefix_with("MATERIALIZED", dialect="postgresql")
-        )
-        return classified
 
     @staticmethod
     def _candidate_filters(classified, keyword_match, inclusion, ai_relevance, has_terms):
@@ -427,8 +425,23 @@ class AnalysisReportRepository:
             .subquery("report_page")
         )
         rows = await self._rows(
-            select(statistics, page)
-            .select_from(statistics.outerjoin(page, literal(True)))
+            select(
+                statistics,
+                page,
+                func.coalesce(articles.c.summary, "").label("summary"),
+                articles.c.publisher,
+                func.coalesce(article_contents.c.body, "").label("body"),
+                report_relevance_runs.c.reason.label("ai_reason"),
+                report_relevance_runs.c.evidence.label("ai_evidence"),
+            )
+            .select_from(
+                statistics.outerjoin(page, literal(True))
+                .outerjoin(articles, articles.c.id == page.c.id)
+                .outerjoin(article_contents, article_contents.c.id == page.c.content_id)
+                .outerjoin(
+                    report_relevance_runs, report_relevance_runs.c.id == page.c.relevance_run_id
+                )
+            )
             .order_by(page.c.original_published_at.desc().nullslast(), page.c.id)
         )
         countrow = {
@@ -569,12 +582,27 @@ class AnalysisReportRepository:
         rows = await self._rows(
             select(
                 classified,
+                func.coalesce(articles.c.summary, "").label("summary"),
+                articles.c.publisher,
+                func.coalesce(article_contents.c.body, "").label("body"),
+                report_relevance_runs.c.reason.label("ai_reason"),
+                report_relevance_runs.c.evidence.label("ai_evidence"),
+                report_relevance_runs.c.error.label("ai_error"),
                 classified.c.id.label("article_id"),
                 classified.c.report_decision.label("decision"),
                 classified.c.report_decision_reason.label("decision_reason"),
                 classified.c.run_status.label("status"),
                 classified.c.ai_relevance.label("relevance"),
-            ).where(*filters)
+            )
+            .select_from(
+                classified.join(articles, articles.c.id == classified.c.id)
+                .outerjoin(article_contents, article_contents.c.id == classified.c.content_id)
+                .outerjoin(
+                    report_relevance_runs,
+                    report_relevance_runs.c.id == classified.c.relevance_run_id,
+                )
+            )
+            .where(*filters)
         )
         return report, rows
 
@@ -594,11 +622,7 @@ class AnalysisReportRepository:
             if not (row["body"] or "").strip() or not row["content_hash"]:
                 no_body += 1
                 continue
-            valid = (
-                row["run_content_hash"] == row["content_hash"]
-                and row["run_criteria_hash"] == criteria_hash
-                and row["run_title"] == row["title"]
-            )
+            valid = row["ai_status"] not in ("unjudged", "outdated")
             active = valid and row["status"] in ("queued", "submitted", "running")
             if active:
                 current += 1
