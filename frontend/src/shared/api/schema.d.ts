@@ -2198,7 +2198,7 @@ export interface components {
             /** Estimated Output Tokens */
             estimated_output_tokens: number;
             /** Estimated Cost Usd */
-            estimated_cost_usd?: null;
+            estimated_cost_usd: number;
             /**
              * Model
              * @default gpt-6-luna

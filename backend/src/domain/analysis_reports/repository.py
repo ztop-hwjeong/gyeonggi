@@ -33,6 +33,7 @@ from domain.analysis_reports.models import (
     ReportInfo,
     ReportUpdate,
 )
+from domain.analysis_reports.pricing import ESTIMATED_OUTPUT_TOKENS, estimate_request_cost
 from domain.analysis_reports.tables import (
     analysis_report_decision_history,
     analysis_report_decisions,
@@ -638,23 +639,24 @@ class AnalysisReportRepository:
             f"{row['article_id']}:{row['content_hash']}:{row['title']}:{criteria_hash}"
             for row in sorted(eligible, key=lambda value: str(value["article_id"]))
         )
+        input_estimates = [
+            len(row["title"].encode())
+            + len(row["body"].encode())
+            + 2 * len(report.relevance_criteria.encode())
+            + 800
+            for row in eligible
+        ]
         preview = RelevancePreview(
             eligible=len(eligible),
             skipped_no_body=no_body,
             skipped_excluded=excluded,
             skipped_current=current,
             pending=pending,
-            estimated_input_tokens=sum(
-                (
-                    len(row["title"].encode())
-                    + len(row["body"].encode())
-                    + len(report.relevance_criteria.encode())
-                    + 3
-                    + 800
-                )
-                for row in eligible
+            estimated_input_tokens=sum(input_estimates),
+            estimated_output_tokens=ESTIMATED_OUTPUT_TOKENS * len(eligible),
+            estimated_cost_usd=float(
+                sum(estimate_request_cost(value) for value in input_estimates)
             ),
-            estimated_output_tokens=1024 * len(eligible),
             fingerprint=sha256(fingerprint_source.encode()).hexdigest(),
         )
         return preview, eligible

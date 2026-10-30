@@ -154,7 +154,7 @@ class RelevancePreview(BaseModel):
     pending: int
     estimated_input_tokens: int
     estimated_output_tokens: int
-    estimated_cost_usd: None = None
+    estimated_cost_usd: float = Field(ge=0)
     model: str = "gpt-6-luna"
     fingerprint: str
 

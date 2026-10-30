@@ -1168,12 +1168,19 @@ export function AnalysisReportsWorkspace() {
                       <div>
                         <dt>예상 비용</dt>
                         <dd>
-                          {preview.estimated_cost_usd == null
-                            ? "예상 비용 확인 불가"
-                            : `$${preview.estimated_cost_usd}`}
+                          {new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: "USD",
+                            minimumFractionDigits: 4,
+                            maximumFractionDigits: 4,
+                          }).format(preview.estimated_cost_usd)}
                         </dd>
                       </div>
                     </dl>
+                    <p className="hint">
+                      Standard 요금·출력 기사당 1,024토큰 가정의 추정액이에요.
+                      실제 비용은 사용량과 캐시에 따라 달라져요.
+                    </p>
                     {previewError && <p role="alert">{previewError.message}</p>}
                     <div className="button-row">
                       <button

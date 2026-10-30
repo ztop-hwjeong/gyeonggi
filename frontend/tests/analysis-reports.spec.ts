@@ -164,7 +164,7 @@ async function mockWorkspace(page: Page) {
           pending: 1,
           estimated_input_tokens: 1200,
           estimated_output_tokens: 240,
-          estimated_cost_usd: null,
+          estimated_cost_usd: 0.00024,
           model: "gpt-6-luna",
           fingerprint: "a".repeat(64),
         },
@@ -397,6 +397,10 @@ test("선택 및 현재 검색 결과 범위를 미리보기 후 fingerprint로 
   await expect(page.getByRole("dialog")).toContainText("판정 대상1건");
   await expect(page.getByRole("dialog")).toContainText("본문 없음2건");
   await expect(page.getByRole("dialog")).toContainText("제외됨1건");
+  await expect(page.getByRole("dialog")).toContainText("예상 비용$0.0002");
+  await expect(page.getByRole("dialog")).toContainText(
+    "실제 비용은 사용량과 캐시에 따라",
+  );
   expect(writes.filter((item) => item.path.endsWith("/runs"))).toHaveLength(0);
   expect(
     writes.find((item) => item.path.endsWith("/preview"))?.body,
