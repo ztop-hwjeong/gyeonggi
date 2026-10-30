@@ -5,11 +5,40 @@ from collector_http.client import ChromiumHttpClient
 from collector_http.config import HttpSettings
 from scrapling import Selector
 
+from articles.domains import has_notice_only_text, has_verified_short_official_body
 from articles.matching import normalized_text, verify_article
 from articles.models import ArticleSeed, ExtractedArticle, FetchSnapshot
 from articles.requests import PublisherRateLimiter, RequestStoppedError, validate_public_url
 from articles.storage import ArticleStore
 from config import DetailSettings, ExtractionSettings
+
+_BIGKINDS_SUMMARY_DEPENDENT_REASONS = frozenset(
+    {
+        "검증할 요약 문장 부족",
+        "요약 문장 일치 부족",
+        "목록 요약보다 충분한 본문 필요",
+    }
+)
+
+
+def has_official_bigkinds_body(
+    seed: ArticleSeed, title: str, text: str, settings: ExtractionSettings, reason: str
+) -> bool:
+    """공식 상세 API의 독립 본문 검증."""
+    normalized_title = normalized_text(title)
+    normalized_body = normalized_text(text)
+    body_without_title = normalized_body.removeprefix(normalized_title)
+    is_title_repetition = bool(normalized_title) and not body_without_title.replace(
+        normalized_title, ""
+    )
+    reasons = frozenset(part.strip() for part in reason.split(";") if part.strip())
+    return (
+        normalized_title == normalized_text(seed.title)
+        and len(body_without_title) >= settings.min_body_chars
+        and not is_title_repetition
+        and not has_notice_only_text(body_without_title)
+        and reasons.issubset(_BIGKINDS_SUMMARY_DEPENDENT_REASONS)
+    )
 
 
 def is_exact_short_bigkinds_detail(
@@ -26,6 +55,39 @@ def is_exact_short_bigkinds_detail(
         and normalized_body != normalized_title
         and normalized_body.startswith(normalized_summary)
     )
+
+
+def extract_bigkinds_detail(
+    seed: ArticleSeed, detail: dict[str, object], settings: ExtractionSettings
+) -> ExtractedArticle:
+    """저장 원본 재생에도 사용하는 빅카인즈 상세 추출."""
+    if detail["NEWS_ID"] != seed.source_id:
+        raise RequestStoppedError("빅카인즈 상세 기사 ID 불일치")
+    title = str(Selector(content=f"<div>{detail['TITLE']}</div>").get_all_text(strip=True))
+    text = str(
+        Selector(content=f"<div>{detail['CONTENT']}</div>").get_all_text(separator="\n", strip=True)
+    )
+    evidence = verify_article(seed, title, text, settings)
+    if has_official_bigkinds_body(seed, title, text, settings, evidence.reason):
+        # 목록 요약 갱신과 무관한 공식 ID·제목·실본문 검증
+        evidence = evidence.model_copy(
+            update={"verified": True, "reason": "빅카인즈 공식 기사 ID·제목 일치 및 본문 확인"}
+        )
+    elif evidence.reason == "검증할 요약 문장 부족" and normalized_text(
+        seed.summary
+    ) == normalized_text(seed.title) == normalized_text(title):
+        # 목록에 제목만 제공된 기사의 상세 API 고유 ID와 동일 제목을 이용한 검증
+        evidence = evidence.model_copy(
+            update={"verified": True, "reason": "빅카인즈 기사 ID·제목 일치(목록 본문 요약 없음)"}
+        )
+    elif evidence.reason == "본문 길이 부족; 목록 요약보다 충분한 본문 필요" and (
+        is_exact_short_bigkinds_detail(seed, title, text, settings)
+        or has_verified_short_official_body(seed, title, text, settings)
+    ):
+        evidence = evidence.model_copy(
+            update={"verified": True, "reason": "빅카인즈 단문 원문·목록 요약 일치"}
+        )
+    return ExtractedArticle(title=title, text=text, method="bigkinds_api", evidence=evidence)
 
 
 def fetch_original(
@@ -125,24 +187,6 @@ def fetch_bigkinds(
         raise RequestStoppedError("빅카인즈 상세 응답 크기 제한 초과")
     data = json.loads(response.content)
     detail = data["detail"]
-    if detail["NEWS_ID"] != seed.source_id:
-        raise RequestStoppedError("빅카인즈 상세 기사 ID 불일치")
-    title = str(Selector(content=f"<div>{detail['TITLE']}</div>").get_all_text(strip=True))
-    text = str(
-        Selector(content=f"<div>{detail['CONTENT']}</div>").get_all_text(separator="\n", strip=True)
-    )
-    evidence = verify_article(seed, title, text, extraction_settings)
-    if evidence.reason == "검증할 요약 문장 부족" and normalized_text(
-        seed.summary
-    ) == normalized_text(seed.title) == normalized_text(title):
-        # 목록에 제목만 제공된 기사의 상세 API 고유 ID와 동일 제목을 이용한 검증
-        evidence = evidence.model_copy(
-            update={"verified": True, "reason": "빅카인즈 기사 ID·제목 일치(목록 본문 요약 없음)"}
-        )
-    elif evidence.reason == "본문 길이 부족; 목록 요약보다 충분한 본문 필요" and (
-        is_exact_short_bigkinds_detail(seed, title, text, extraction_settings)
-    ):
-        evidence = evidence.model_copy(
-            update={"verified": True, "reason": "빅카인즈 단문 원문·목록 요약 일치"}
-        )
-    return ExtractedArticle(title=title, text=text, method="bigkinds_api", evidence=evidence)
+    if not isinstance(detail, dict):
+        raise ValueError("빅카인즈 상세 형식 오류")
+    return extract_bigkinds_detail(seed, detail, extraction_settings)

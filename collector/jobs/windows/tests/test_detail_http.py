@@ -8,10 +8,34 @@ from uuid import uuid4
 import pytest
 from collector_http.config import HttpSettings
 
-from articles.http import fetch_bigkinds
+from articles.http import extract_bigkinds_detail, fetch_bigkinds
 from articles.models import ArticleSeed, FetchSnapshot
 from articles.requests import RequestStoppedError
 from config import DetailSettings, ExtractionSettings
+
+
+@pytest.mark.parametrize("host, verified", [("www.ajunews.com", True), ("other.example", False)])
+def test_official_photo_caption_uses_registered_domain_validation(seed, host, verified):
+    title = "[포토] 산업 데이터 분과 출범식 참석"
+    body = (
+        "김정관 산업통상부 장관이 서울 행사장에서 데이터 분과 출범식에 참석해 인사말을 하고 있다. "
+        "이번 행사에는 기업 관계자들도 참석했다."
+    )
+    seeded = seed.model_copy(
+        update={
+            "title": title,
+            "summary": "[사진=한준구 기자 example@ajunews.com] " + body,
+            "original_url": f"https://{host}/view/20261029140709543",
+        }
+    )
+    result = extract_bigkinds_detail(
+        seeded,
+        {"NEWS_ID": seeded.source_id, "TITLE": title, "CONTENT": body},
+        ExtractionSettings(),
+    )
+
+    assert result.evidence.verified is verified
+    assert result.text == body
 
 
 @pytest.fixture
@@ -220,3 +244,74 @@ def test_bigkinds_exact_short_body_requires_full_listing_summary(
     assert result.evidence.verified is verified
     if verified:
         assert result.evidence.reason == "빅카인즈 단문 원문·목록 요약 일치"
+
+
+@pytest.mark.parametrize(
+    ("title", "body", "verified"),
+    [
+        (
+            "공식 상세 기사 제목",
+            "공식 상세 기사 제목\n" + "실제 기사 본문입니다. " * 40,
+            True,
+        ),
+        (
+            "공식 상세 기사 제목",
+            "공식 상세 기사 제목\n" * 40,
+            False,
+        ),
+        (
+            "공식 상세 기사 제목",
+            "공식 상세 기사 제목\n여러분의 제보가 CBS노컷뉴스의 시작입니다. " * 20,
+            False,
+        ),
+        (
+            "공식 상세 기사 제목",
+            "공식 상세 기사 제목\n진실은 노컷, 거짓은 칼컷. " * 30,
+            False,
+        ),
+        (
+            "다른 공식 기사 제목",
+            "공식 상세 기사 제목\n" + "실제 기사 본문입니다. " * 40,
+            False,
+        ),
+    ],
+)
+def test_bigkinds_official_detail_accepts_long_body_despite_listing_summary_mismatch(
+    transport, seed, title, body, verified
+):
+    http, store = transport
+    seed = seed.model_copy(
+        update={
+            "title": "공식 상세 기사 제목",
+            "summary": "목록에서 갱신된 전혀 다른 요약 문장입니다. " * 8,
+        }
+    )
+    http.request_raw.side_effect = [
+        response(200, b"search"),
+        response(
+            200,
+            json.dumps(
+                {
+                    "detail": {
+                        "NEWS_ID": seed.source_id,
+                        "TITLE": title,
+                        "CONTENT": body,
+                    }
+                }
+            ).encode(),
+        ),
+    ]
+
+    result = fetch_bigkinds(
+        seed,
+        store,
+        DetailSettings(bigkinds_rate_limit_name="test"),
+        HttpSettings(),
+        Mock(),
+        ExtractionSettings(),
+        [],
+    )
+
+    assert result.evidence.verified is verified
+    if verified:
+        assert result.evidence.reason == "빅카인즈 공식 기사 ID·제목 일치 및 본문 확인"

@@ -9,7 +9,10 @@ from scrapling import Selector
 
 from articles import pipeline
 from articles.domains import get_body_policy
+from articles.domains.asiae import AsiaeBodyPolicy
+from articles.domains.hankyung import HankyungBodyPolicy
 from articles.domains.kbs import KbsBodyPolicy
+from articles.domains.kmib import KmibBodyPolicy
 from articles.domains.news1 import News1BodyPolicy
 from articles.extraction import NoTextBodyError
 from articles.models import FetchSnapshot
@@ -56,9 +59,17 @@ def test_domain_policy_requires_video_identity_and_explicitly_empty_body(seed, c
 
 
 def news1_markup(article_id, title, blocks):
-    payload = {"props": {"pageProps": {"articleView": {
-        "id": article_id, "title": title, "contentArrange": blocks,
-    }}}}
+    payload = {
+        "props": {
+            "pageProps": {
+                "articleView": {
+                    "id": article_id,
+                    "title": title,
+                    "contentArrange": blocks,
+                }
+            }
+        }
+    }
     return f'<script id="__NEXT_DATA__" type="application/json">{json.dumps(payload)}</script>'
 
 
@@ -145,6 +156,77 @@ def test_kbs_legacy_video_marker_remains_supported(seed):
     policy = get_body_policy(url)
     assert isinstance(policy, KbsBodyPolicy)
     assert policy.has_no_text_body(seeded, Selector(content=markup), seeded.title, url, markup)
+
+
+@pytest.mark.parametrize(
+    ("policy_type", "url", "body"),
+    [
+        (
+            AsiaeBodyPolicy,
+            "https://view.asiae.co.kr/article/1",
+            '<div class="article-body__contents">'
+            '<div class="cont_article article_view">{content}</div></div>',
+        ),
+        (
+            HankyungBodyPolicy,
+            "https://www.hankyung.com/article/1",
+            '<div id="articletxt">{content}</div>',
+        ),
+        (
+            KmibBodyPolicy,
+            "https://www.kmib.co.kr/article/view.asp?arcid=1",
+            '<div id="articleBody">{content}</div>',
+        ),
+    ],
+)
+def test_domain_policies_keep_article_and_caption_without_script_or_recommendations(
+    seed, article_text, policy_type, url, body
+):
+    caption = "사진 설명"
+    markup = (
+        body.format(
+            content=(
+                f"<figure><figcaption>{caption}</figcaption></figure>"
+                f"<p>{article_text}</p><script>자바스크립트본문오염</script>"
+                "<style>.noise{content:'스타일본문오염'}</style><template>템플릿본문오염</template>"
+            )
+        )
+        + "<aside>추천 기사 본문오염</aside><section>댓글 본문오염</section>"
+    )
+    seeded = seed.model_copy(update={"original_url": url})
+
+    result = policy_type().extract_body(
+        seeded, Selector(content=markup), seeded.title, url, markup, ExtractionSettings()
+    )
+
+    assert result is not None and result.evidence.verified
+    assert caption in result.text
+    assert article_text in result.text
+    assert "본문오염" not in result.text
+
+
+@pytest.mark.parametrize(
+    ("policy_type", "url", "body"),
+    [
+        (
+            AsiaeBodyPolicy,
+            "https://view.asiae.co.kr/article/1",
+            '<div class="article-body__contents"></div>',
+        ),
+        (HankyungBodyPolicy, "https://www.hankyung.com/article/1", '<div id="articletxt"></div>'),
+        (
+            KmibBodyPolicy,
+            "https://www.kmib.co.kr/article/view.asp?arcid=1",
+            '<div id="articleBody"></div>',
+        ),
+    ],
+)
+def test_domain_policies_return_unverified_exact_body(seed, policy_type, url, body):
+    seeded = seed.model_copy(update={"original_url": url})
+    result = policy_type().extract_body(
+        seeded, Selector(content=body), seeded.title, url, body, ExtractionSettings()
+    )
+    assert result is not None and not result.evidence.verified
 
 
 @pytest.mark.parametrize("stage", ["curl_cffi", "browser_fetch", "browser_rendered"])
