@@ -7,10 +7,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.analysis.membership import tagged_materials
+from domain.article_workflow.membership import is_target_member
 from domain.article_workflow.tables import (
     article_inclusions,
     article_sentiments,
-    article_target_links,
 )
 from domain.collection.errors import (
     CollectionInvalidMaterialError,
@@ -450,15 +450,7 @@ class CollectionReporting:
         elif query.inclusion == "excluded":
             criteria.append(inclusion == "exclude")
         if query.target_id is not None:
-            criteria.append(
-                select(article_target_links.c.article_id)
-                .where(
-                    article_target_links.c.article_id == materials.c.id,
-                    article_target_links.c.target_id == query.target_id,
-                    article_target_links.c.decision == "include",
-                )
-                .exists()
-            )
+            criteria.append(is_target_member(materials.c.id, query.target_id))
         if query.tag_id is not None:
             criteria.append(tagged_materials({query.tag_id}, kind="news"))
         if query.folder_id is not None:
@@ -475,12 +467,21 @@ class CollectionReporting:
         total = (
             await self.rows(select(func.count().label("count")).select_from(base).where(*criteria))
         )[0]["count"]
-        rows = await self.rows(
-            self.material_query(include_review=True)
+        # 표시할 기사만 고른 뒤 본문·수집 이력 결합
+        page = (
+            select(materials.c.id)
+            .select_from(base)
             .where(*criteria)
             .order_by(materials.c.updated_at.desc(), materials.c.id)
             .limit(query.limit)
             .offset(query.offset)
+            .cte("article_page")
+            .prefix_with("MATERIALIZED", dialect="postgresql")
+        )
+        rows = await self.rows(
+            self.material_query(include_review=True)
+            .where(materials.c.kind == "news", materials.c.id.in_(select(page.c.id)))
+            .order_by(materials.c.updated_at.desc(), materials.c.id)
         )
         source_map = await self.sources([row["id"] for row in rows])
         return StoredArticlePage(

@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from sqlalchemy import and_, delete, exists, func, literal, select, update
+from sqlalchemy import and_, delete, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +31,8 @@ from domain.analysis.tables import (
     topic_labels,
 )
 from domain.analysis.tables import topics as analysis_topics_table
-from domain.article_workflow.tables import article_inclusions, article_target_links
+from domain.article_workflow.membership import is_target_member
+from domain.article_workflow.tables import article_inclusions
 from domain.collection.tables import article_contents, materials
 from domain.tag_folders.repository import TagFolderRepository
 from domain.tag_folders.tables import folder_tags
@@ -221,13 +222,8 @@ class TopicRegistry:
             elif article_ids is not None:
                 selection = materials.c.id.in_(article_ids)
             else:
-                selection = exists(
-                    select(article_target_links.c.article_id).where(
-                        article_target_links.c.article_id == materials.c.id,
-                        article_target_links.c.target_id == target_id,
-                        article_target_links.c.decision == "include",
-                    )
-                )
+                assert target_id is not None
+                selection = is_target_member(materials.c.id, target_id)
             inclusion_scope = (
                 []
                 if folder_id is not None

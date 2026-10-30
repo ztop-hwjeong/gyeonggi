@@ -11,10 +11,14 @@ from control.repository import ControlRepository
 
 def enqueue_enabled(repository: ControlRepository) -> int:
     created = 0
+    enabled_rule_ids = repository.enabled_rules()
+    if not enabled_rule_ids:
+        return created
     with repository.connect() as conn, conn.transaction():
         rules = conn.execute(
-            "SELECT * FROM ops.collection_rules WHERE definition->>'enabled'='true' "
+            "SELECT * FROM ops.collection_rules WHERE id = ANY(%s) "
             "ORDER BY updated_at, id FOR UPDATE SKIP LOCKED",
+            (enabled_rule_ids,),
         ).fetchall()
         for rule in rules:
             for source in rule["definition"]["sources"]:

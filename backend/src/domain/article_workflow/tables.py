@@ -58,6 +58,7 @@ analysis_targets = Table(
     Column("kind", String),
     Column("name", String),
     Column("description", String),
+    Column("collection_enabled", Boolean),
     Column("version", Integer),
     Column("archived_at", DateTime(timezone=True)),
     Column("created_at", DateTime(timezone=True)),

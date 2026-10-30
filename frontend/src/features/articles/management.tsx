@@ -47,6 +47,7 @@ export function TargetManager() {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<AnalysisTarget["kind"]>("policy");
   const [description, setDescription] = useState("");
+  const [collectionEnabled, setCollectionEnabled] = useState(true);
   const [editing, setEditing] = useState<AnalysisTarget | null>(null);
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -56,13 +57,20 @@ export function TargetManager() {
         kind,
         name,
         description,
+        collection_enabled: collectionEnabled,
         version: editing.version,
       });
     } else {
-      await post("/analysis-targets", { name, kind, description });
+      await post("/analysis-targets", {
+        name,
+        kind,
+        description,
+        collection_enabled: collectionEnabled,
+      });
     }
     setName("");
     setDescription("");
+    setCollectionEnabled(true);
     setEditing(null);
     await query.refetch();
   }
@@ -86,6 +94,21 @@ export function TargetManager() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="field">
+            <label className="check-label" htmlFor="target-collection-enabled">
+              <input
+                id="target-collection-enabled"
+                type="checkbox"
+                checked={collectionEnabled}
+                onChange={(event) => setCollectionEnabled(event.target.checked)}
+              />
+              수집 활성
+            </label>
+            <p className="hint">
+              중단해도 기존 자료와 분석 연결은 유지돼요. 같은 검색 조건에 다른
+              활성 분석 대상이 연결돼 있으면 수집은 계속돼요.
+            </p>
           </div>
           <div className="field">
             <label htmlFor="target-name">이름</label>
@@ -118,6 +141,7 @@ export function TargetManager() {
                   setEditing(null);
                   setName("");
                   setDescription("");
+                  setCollectionEnabled(true);
                 }}
               >
                 취소
@@ -140,6 +164,11 @@ export function TargetManager() {
                 <div>
                   <strong>{target.name}</strong>
                   <span>{kinds[target.kind]}</span>
+                  <span>
+                    {target.collection_enabled === false
+                      ? "수집 중단"
+                      : "수집 활성"}
+                  </span>
                   {target.description && <span>{target.description}</span>}
                 </div>
                 <div className="button-row">
@@ -158,6 +187,7 @@ export function TargetManager() {
                       setName(target.name);
                       setKind(target.kind);
                       setDescription(target.description);
+                      setCollectionEnabled(target.collection_enabled);
                     }}
                   >
                     수정

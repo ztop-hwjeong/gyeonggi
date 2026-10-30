@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Column, Date, DateTime, MetaData, String, Table, Text
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, MetaData, String, Table, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 metadata = MetaData()
@@ -130,6 +130,37 @@ article_contents = Table(
     Column("original_modified_at", DateTime(timezone=True)),
     Column("collected_at", DateTime(timezone=True)),
     schema="dw",
+)
+collection_request_items = Table(
+    "collection_request_items",
+    metadata,
+    Column("request_id", UUID(as_uuid=True)),
+    Column("source_id", Text),
+    schema="st",
+)
+collection_requests = Table(
+    "collection_requests",
+    metadata,
+    Column("id", UUID(as_uuid=True)),
+    Column("rule_id", UUID(as_uuid=True)),
+    Column("source", Text),
+    Column("mode", Text),
+    schema="ops",
+)
+collection_rule_targets = Table(
+    "collection_rule_targets",
+    metadata,
+    Column("rule_id", UUID(as_uuid=True)),
+    Column("target_id", UUID(as_uuid=True)),
+    schema="ops",
+)
+analysis_targets = Table(
+    "analysis_targets",
+    metadata,
+    Column("id", UUID(as_uuid=True)),
+    Column("archived_at", DateTime(timezone=True)),
+    Column("collection_enabled", Boolean),
+    schema="ops",
 )
 adaptive_profiles = Table(
     "publisher_adaptive_profiles",

@@ -1,7 +1,7 @@
 import os
 from datetime import UTC, date, datetime
 from hashlib import sha256
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -17,6 +17,21 @@ from articles.models import (
     ExtractedArticle,
 )
 from articles.storage import ArticleStore, DetailRepository
+
+
+def test_article_lock_connection_is_invalidated_when_unlock_fails(seed) -> None:
+    connection = Mock()
+    connection.scalar.side_effect = [uuid4(), True, None]
+    connection.execute.side_effect = RuntimeError("잠금 해제 실패")
+    engine = MagicMock()
+    engine.connect.return_value.__enter__.return_value = connection
+    repository = DetailRepository(engine, Mock())
+
+    with pytest.raises(RuntimeError, match="잠금 해제 실패"):
+        with repository.acquire_article(seed) as acquisition:
+            assert acquisition == "collect"
+
+    connection.invalidate.assert_called_once()
 
 
 @pytest.mark.skipif(

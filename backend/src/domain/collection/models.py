@@ -83,6 +83,17 @@ class RuleVersion(BaseModel):
     created_at: datetime
 
 
+class RuleTargets(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_ids: list[UUID] = Field(default_factory=list, max_length=100)
+
+    @field_validator("target_ids")
+    @classmethod
+    def unique_target_ids(cls, values: list[UUID]) -> list[UUID]:
+        return list(dict.fromkeys(values))
+
+
 class DateRange(BaseModel):
     model_config = ConfigDict(extra="forbid")
     start_date: date
@@ -238,6 +249,15 @@ class ArticleSource(BaseModel):
     canonical_url: str | None
     published_at: datetime | None = None
     first_seen_at: datetime
+
+
+class ArticleDiscoveryPath(BaseModel):
+    source: SourceCode
+    source_id: str
+    rule_id: UUID
+    rule_name: str
+    terms: list[str]
+    discovered_at: datetime
 
 
 class StoredMaterial(BaseModel):

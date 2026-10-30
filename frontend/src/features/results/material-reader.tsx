@@ -16,6 +16,15 @@ import type {
   SentimentWrite,
 } from "../articles/types";
 
+type DiscoveryPath = {
+  source: keyof typeof sourceNames;
+  source_id: string;
+  rule_id: string | null;
+  rule_name: string | null;
+  terms: string[];
+  discovered_at: string;
+};
+
 const kindLabels = {
   news: { content: "자료 내용", name: "언론사" },
   blog: { content: "자료 내용", name: "블로그명" },
@@ -49,6 +58,12 @@ export function MaterialReader({
     material?.kind === "news" ? `/articles/${material.id}/reprints` : null,
     false,
   );
+  const discoveryPaths = useApi<DiscoveryPath[]>(
+    material?.kind === "news"
+      ? `/articles/${material.id}/discovery-paths`
+      : null,
+    false,
+  );
   const queryClient = useQueryClient();
   const refresh = async () => {
     await Promise.all([
@@ -56,6 +71,7 @@ export function MaterialReader({
       targetLinks.refetch(),
       sentiment.refetch(),
       reprints.refetch(),
+      discoveryPaths.refetch(),
     ]);
     await queryClient.invalidateQueries({
       predicate: ({ queryKey }) =>
@@ -131,6 +147,7 @@ export function MaterialReader({
           </section>
           {material.kind === "news" && (
             <>
+              <DiscoveryPaths paths={discoveryPaths.data ?? []} />
               <ArticleSentiment
                 articleId={material.id}
                 sentiment={sentiment}
@@ -148,6 +165,35 @@ export function MaterialReader({
         </article>
       )}
     </>
+  );
+}
+
+function DiscoveryPaths({ paths }: { paths: DiscoveryPath[] }) {
+  if (!paths.length) return null;
+  return (
+    <section className="section-gap">
+      <h2>발견 경로</h2>
+      <p className="hint">
+        같은 기사는 본문을 한 번만 보관하고, 이 자료를 발견한 검색 조건과
+        수집처를 함께 표시해요.
+      </p>
+      <ul className="history-list section-gap">
+        {paths.map((path) => (
+          <li
+            key={`${path.source}:${path.source_id}:${path.rule_id}:${path.discovered_at}`}
+          >
+            <strong>{path.rule_name ?? "직접 수집"}</strong>
+            <span>
+              {sourceNames[path.source] ?? path.source}
+              {path.terms.length ? ` · ${path.terms.join(" · ")}` : ""}
+            </span>
+            <span className="hint">
+              수집 요청: {dateTime(path.discovered_at)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -372,9 +418,13 @@ function ArticleControls({
                 </button>
                 <span>
                   {link?.decision === "include"
-                    ? "포함"
+                    ? link.origin === "manual"
+                      ? "수동 포함"
+                      : "조건으로 포함"
                     : link?.decision === "exclude"
-                      ? "제외"
+                      ? link.origin === "manual"
+                        ? "수동 제외"
+                        : "조건으로 제외"
                       : "미지정"}
                 </span>
               </div>

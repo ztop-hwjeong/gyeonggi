@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 from datetime import date
 from unittest.mock import MagicMock, Mock
 from uuid import uuid4
@@ -97,7 +98,11 @@ def test_managed_start_does_not_restart_terminal_request(monkeypatch):
 
     repository = Mock()
     repository.start.return_value = None
-    monkeypatch.setattr(managed, "control_repository", lambda: repository)
+    @contextmanager
+    def control_scope():
+        yield repository
+
+    monkeypatch.setattr(managed, "control_scope", control_scope)
     monkeypatch.setattr(managed.FlowRunContext, "get", lambda: Mock(flow_run=Mock(id=uuid4())))
     managed.managed_collection.fn(uuid4())
     repository.finish.assert_not_called()

@@ -87,6 +87,7 @@ def test_blog_body_detail_and_search_remain_blog_scoped():
                         )
                     )
                     reporting = CollectionReporting(session)
+                    assert post_id is not None
                     detail = await reporting.material(post_id)
                     assert detail.kind == "blog" and detail.has_body
                     assert detail.body == marker

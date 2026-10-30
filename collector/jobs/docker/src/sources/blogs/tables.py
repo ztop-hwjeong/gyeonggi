@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Date, DateTime, FetchedValue, MetaData, Table, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, FetchedValue, MetaData, Table, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 metadata = MetaData()
@@ -83,4 +83,35 @@ search_run_items = Table(
     Column("run_id", UUID(as_uuid=True), primary_key=True),
     Column("source_id", Text, primary_key=True),
     schema="st",
+)
+collection_request_items = Table(
+    "collection_request_items",
+    metadata,
+    Column("request_id", UUID(as_uuid=True)),
+    Column("source_id", Text),
+    schema="st",
+)
+collection_requests = Table(
+    "collection_requests",
+    metadata,
+    Column("id", UUID(as_uuid=True)),
+    Column("rule_id", UUID(as_uuid=True)),
+    Column("source", Text),
+    Column("mode", Text),
+    schema="ops",
+)
+collection_rule_targets = Table(
+    "collection_rule_targets",
+    metadata,
+    Column("rule_id", UUID(as_uuid=True)),
+    Column("target_id", UUID(as_uuid=True)),
+    schema="ops",
+)
+analysis_targets = Table(
+    "analysis_targets",
+    metadata,
+    Column("id", UUID(as_uuid=True)),
+    Column("archived_at", DateTime(timezone=True)),
+    Column("collection_enabled", Boolean),
+    schema="ops",
 )

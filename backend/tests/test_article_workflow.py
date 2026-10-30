@@ -18,8 +18,15 @@ from domain.article_workflow.models import (
     TargetWrite,
 )
 from domain.article_workflow.repository import ArticleWorkflow, WorkflowInvalidMaterial
-from domain.collection.models import ArticleQuery, MaterialQuery
+from domain.collection.models import (
+    ArticleQuery,
+    MaterialQuery,
+    RuleDefinition,
+    RuleTargets,
+    RunCreate,
+)
 from domain.collection.reporting import CollectionReporting
+from domain.collection.repository import CollectionRepository
 
 
 @pytest.mark.skipif(
@@ -152,6 +159,164 @@ def test_canonical_sources_rule_priority_and_manual_override():
                 assert reapplied.processed_count >= 1
                 assert await workflow.target_links(article.id) == []
                 assert (await workflow.inclusion(article.id)).origin == "manual"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(check())
+
+
+@pytest.mark.skipif(
+    not os.environ.get("ANALYSIS_TEST_DATABASE_URL"),
+    reason="독립 PostgreSQL 테스트 데이터베이스 필요",
+)
+def test_collection_rule_target_reuses_article_body_and_keeps_discovery_paths():
+    async def check() -> None:
+        engine = create_async_engine(os.environ["ANALYSIS_TEST_DATABASE_URL"])
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        marker = uuid4().hex
+        source_id = f"bigkinds-{marker}"
+        try:
+            async with factory() as session:
+                async with session.begin():
+                    await session.execute(
+                        text(
+                            "INSERT INTO dw.news_items(source,source_id,data) "
+                            "VALUES ('bigkinds',:source_id,CAST(:data AS jsonb))"
+                        ),
+                        {
+                            "source_id": source_id,
+                            "data": json.dumps(
+                                {
+                                    "title": f"현안 기사 {marker}",
+                                    "summary": "경기도교육청 현안",
+                                    "original_url": f"https://example.test/{marker}",
+                                },
+                                ensure_ascii=False,
+                            ),
+                        },
+                    )
+                reporting = CollectionReporting(session)
+                article = (await reporting.articles(ArticleQuery(q=marker))).items[0]
+                await session.commit()
+                workflow = ArticleWorkflow(session)
+                target = await workflow.save_target(
+                    TargetWrite(kind="current_issue", name=f"현안 {marker}")
+                )
+                repository = CollectionRepository(session)
+                rule = await repository.save_rule(
+                    RuleDefinition(
+                        name=f"현안 수집 {marker}",
+                        terms=(marker,),
+                        sources=("bigkinds",),
+                        enabled=True,
+                    )
+                )
+                await repository.save_rule_targets(rule.id, RuleTargets(target_ids=[target.id]))
+                regular_target = await workflow.save_target(
+                    TargetWrite(kind="regular", name=f"정기 {marker}")
+                )
+                regular_rule = await repository.save_rule(
+                    RuleDefinition(
+                        name=f"정기 수집 {marker}",
+                        terms=(marker,),
+                        sources=("bigkinds",),
+                        enabled=True,
+                    )
+                )
+                await repository.save_rule_targets(
+                    regular_rule.id, RuleTargets(target_ids=[regular_target.id])
+                )
+                request = await repository.enqueue(
+                    uuid4(),
+                    RunCreate(
+                        rule_id=rule.id,
+                        version=rule.version,
+                        source="bigkinds",
+                        mode="incremental",
+                        start_date=date(2026, 10, 30),
+                        end_date=date(2026, 10, 30),
+                    ),
+                )
+                regular_request = await repository.enqueue(
+                    uuid4(),
+                    RunCreate(
+                        rule_id=regular_rule.id,
+                        version=regular_rule.version,
+                        source="bigkinds",
+                        mode="incremental",
+                        start_date=date(2026, 10, 30),
+                        end_date=date(2026, 10, 30),
+                    ),
+                )
+                await session.execute(
+                    text(
+                        "INSERT INTO st.collection_request_items(request_id,source_id,data) "
+                        "VALUES (:request_id,:source_id,'{}'::jsonb)"
+                    ),
+                    [
+                        {"request_id": request.id, "source_id": source_id},
+                        {"request_id": regular_request.id, "source_id": source_id},
+                    ],
+                )
+                await session.commit()
+                assert {link.target_id for link in await workflow.target_links(article.id)} == {
+                    target.id,
+                    regular_target.id,
+                }
+                await session.commit()
+                assert [
+                    item.id
+                    for item in (await reporting.articles(ArticleQuery(target_id=target.id))).items
+                ] == [article.id]
+                assert [
+                    item.id
+                    for item in (
+                        await reporting.articles(ArticleQuery(target_id=regular_target.id))
+                    ).items
+                ] == [article.id]
+                await session.commit()
+                paths = await repository.article_discovery_paths(article.id)
+                assert {(path.rule_id, path.source_id, tuple(path.terms)) for path in paths} == {
+                    (rule.id, source_id, (marker,)),
+                    (regular_rule.id, source_id, (marker,)),
+                }
+                await session.commit()
+                await session.execute(
+                    text("UPDATE ops.collection_requests SET mode='preview' WHERE id=:id"),
+                    {"id": regular_request.id},
+                )
+                await session.commit()
+                assert (
+                    await reporting.articles(ArticleQuery(target_id=regular_target.id))
+                ).items == []
+                await session.execute(
+                    text("UPDATE ops.collection_requests SET mode='incremental' WHERE id=:id"),
+                    {"id": regular_request.id},
+                )
+                await session.commit()
+                await repository.save_rule_targets(rule.id, RuleTargets())
+                assert (await reporting.articles(ArticleQuery(target_id=target.id))).items == []
+                await session.commit()
+                await repository.save_rule_targets(rule.id, RuleTargets(target_ids=[target.id]))
+                await workflow.override(
+                    article.id,
+                    DecisionWrite(decision="exclude", reason="현안 대상 제외"),
+                    target.id,
+                )
+                assert (await workflow.target_links(article.id))[0].decision == "exclude"
+                await session.commit()
+                assert (await reporting.articles(ArticleQuery(target_id=target.id))).items == []
+                assert [
+                    item.id
+                    for item in (
+                        await reporting.articles(ArticleQuery(target_id=regular_target.id))
+                    ).items
+                ] == [article.id]
+                await session.commit()
+                await workflow.archive_target(regular_target.id, regular_target.version)
+                assert (
+                    await reporting.articles(ArticleQuery(target_id=regular_target.id))
+                ).items == []
         finally:
             await engine.dispose()
 

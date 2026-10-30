@@ -2,16 +2,18 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
-from sqlalchemy import text
+from sqlalchemy import delete, insert, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from domain.article_workflow.tables import analysis_targets
 from domain.collection.errors import (
     CollectionConflictError,
     CollectionNotFoundError,
     CollectionUnavailableError,
 )
 from domain.collection.models import (
+    ArticleDiscoveryPath,
     Pagination,
     PreviewCreate,
     RequestInfo,
@@ -24,9 +26,22 @@ from domain.collection.models import (
     RuleInfo,
     RulePage,
     RuleQuery,
+    RuleTargets,
     RuleUpdate,
     RuleVersion,
     RunCreate,
+)
+from domain.collection.request_control import (
+    cancel_uncollectable_requests,
+    has_collectable_target,
+)
+from domain.collection.tables import (
+    articles,
+    collection_request_items,
+    collection_requests,
+    collection_rule_targets,
+    collection_rules,
+    material_sources,
 )
 
 
@@ -44,6 +59,115 @@ class CollectionRepository:
 
     async def rows(self, sql: str, parameters: dict | None = None):
         return (await self._session.execute(text(sql), parameters or {})).mappings().all()
+
+    async def rule_targets(self, rule_id: UUID) -> RuleTargets:
+        async with self.transaction():
+            rule = await self._session.scalar(
+                select(collection_rules.c.id).where(collection_rules.c.id == rule_id)
+            )
+            if rule is None:
+                raise CollectionNotFoundError("검색 규칙 없음")
+            target_ids = list(
+                await self._session.scalars(
+                    select(collection_rule_targets.c.target_id)
+                    .join(
+                        analysis_targets,
+                        analysis_targets.c.id == collection_rule_targets.c.target_id,
+                    )
+                    .where(
+                        collection_rule_targets.c.rule_id == rule_id,
+                        analysis_targets.c.archived_at.is_(None),
+                    )
+                    .order_by(collection_rule_targets.c.target_id)
+                )
+            )
+            return RuleTargets(target_ids=target_ids)
+
+    async def article_discovery_paths(self, article_id: UUID) -> list[ArticleDiscoveryPath]:
+        async with self.transaction():
+            exists = await self._session.scalar(
+                select(articles.c.id).where(articles.c.id == article_id)
+            )
+            if exists is None:
+                raise CollectionNotFoundError("기사 없음")
+            rows = (
+                (
+                    await self._session.execute(
+                        select(
+                            material_sources.c.source,
+                            material_sources.c.source_id,
+                            collection_requests.c.rule_id,
+                            collection_requests.c.definition,
+                            collection_requests.c.created_at.label("discovered_at"),
+                        )
+                        .select_from(
+                            material_sources.join(
+                                collection_request_items,
+                                collection_request_items.c.source_id
+                                == material_sources.c.source_id,
+                            ).join(
+                                collection_requests,
+                                collection_requests.c.id == collection_request_items.c.request_id,
+                            )
+                        )
+                        .where(
+                            material_sources.c.material_id == article_id,
+                            collection_requests.c.source == material_sources.c.source,
+                            collection_requests.c.rule_id.is_not(None),
+                            collection_requests.c.mode != "preview",
+                        )
+                        .order_by(
+                            collection_requests.c.created_at,
+                            material_sources.c.source,
+                            material_sources.c.source_id,
+                        )
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            return [
+                ArticleDiscoveryPath(
+                    source=row["source"],
+                    source_id=row["source_id"],
+                    rule_id=row["rule_id"],
+                    rule_name=row["definition"].get("name", ""),
+                    terms=row["definition"].get("terms", []),
+                    discovered_at=row["discovered_at"],
+                )
+                for row in rows
+            ]
+
+    async def save_rule_targets(self, rule_id: UUID, body: RuleTargets) -> RuleTargets:
+        async with self.transaction():
+            rule = await self._session.scalar(
+                select(collection_rules.c.id)
+                .where(collection_rules.c.id == rule_id)
+                .with_for_update()
+            )
+            if rule is None:
+                raise CollectionNotFoundError("검색 규칙 없음")
+            if body.target_ids:
+                active_ids = set(
+                    await self._session.scalars(
+                        select(analysis_targets.c.id).where(
+                            analysis_targets.c.id.in_(body.target_ids),
+                            analysis_targets.c.archived_at.is_(None),
+                        )
+                    )
+                )
+                if active_ids != set(body.target_ids):
+                    raise CollectionNotFoundError("분석 대상 없음")
+            await self._session.execute(
+                delete(collection_rule_targets).where(collection_rule_targets.c.rule_id == rule_id)
+            )
+            if body.target_ids:
+                await self._session.execute(
+                    insert(collection_rule_targets),
+                    [{"rule_id": rule_id, "target_id": target_id} for target_id in body.target_ids],
+                )
+            await cancel_uncollectable_requests(self._session, (rule_id,))
+            return RuleTargets(target_ids=body.target_ids)
 
     async def rules(self, page: RuleQuery) -> RulePage:
         async with self.transaction():
@@ -165,6 +289,10 @@ class CollectionRepository:
                     raise CollectionConflictError(
                         "검색 규칙이 변경됐어요. 최신 버전으로 다시 요청해 주세요."
                     )
+                if not rule.definition.enabled:
+                    raise CollectionConflictError("활성화된 검색 규칙만 수집할 수 있어요.")
+                if not await has_collectable_target(self._session, rule.id):
+                    raise CollectionConflictError("수집 가능한 분석 대상이 없어요.")
                 definition, rule_id, version = rule.definition, rule.id, rule.version
                 mode = body.mode
             else:

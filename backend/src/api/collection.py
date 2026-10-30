@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, Query
 
 from domain.collection.models import (
     SOURCES,
+    ArticleDiscoveryPath,
     ArticleQuery,
     MaterialQuery,
     Overview,
@@ -20,6 +21,7 @@ from domain.collection.models import (
     RuleInfo,
     RulePage,
     RuleQuery,
+    RuleTargets,
     RuleUpdate,
     RuleVersion,
     RunCreate,
@@ -104,6 +106,25 @@ async def versions(
     rule_id: UUID, repository: FromDishka[CollectionRepository]
 ) -> list[RuleVersion]:
     return await repository.versions(rule_id)
+
+
+@router.get("/keyword-rules/{rule_id}/targets")
+async def rule_targets(rule_id: UUID, repository: FromDishka[CollectionRepository]) -> RuleTargets:
+    return await repository.rule_targets(rule_id)
+
+
+@router.put("/keyword-rules/{rule_id}/targets")
+async def save_rule_targets(
+    rule_id: UUID, body: RuleTargets, repository: FromDishka[CollectionRepository]
+) -> RuleTargets:
+    return await repository.save_rule_targets(rule_id, body)
+
+
+@router.get("/articles/{article_id}/discovery-paths")
+async def article_discovery_paths(
+    article_id: UUID, repository: FromDishka[CollectionRepository]
+) -> list[ArticleDiscoveryPath]:
+    return await repository.article_discovery_paths(article_id)
 
 
 @router.post("/collection-previews", status_code=202)

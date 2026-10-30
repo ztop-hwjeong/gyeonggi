@@ -72,7 +72,7 @@ class DetailAttempt(BaseModel):
 
 class ArticleDetail(BaseModel):
     seed: ArticleSeed
-    status: Literal["collected", "failed", "skipped"]
+    status: Literal["collected", "failed", "skipped", "reused"]
     selected_stage: DetailStage | None
     attempts: list[DetailAttempt]
     skip_reason: Literal["no_text_body"] | None = None
@@ -93,4 +93,6 @@ class DetailRunSummary(BaseModel):
     collected_count: int = 0
     failed_count: int = 0
     skipped_count: int = 0
+    reused_count: int = 0
+    deferred_count: int = 0
     storage: Literal["postgresql"] = "postgresql"

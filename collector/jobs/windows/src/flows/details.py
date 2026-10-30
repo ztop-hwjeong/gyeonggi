@@ -146,40 +146,57 @@ def run_collection(
     browser_used = False
     try:
         for seed in articles:
-            attempts = [collect_stage("curl_cffi", seed, UUID(run_id))]
-            if attempts[-1].status != "accepted" and attempts[-1].skip_reason is None:
-                allowed = browser_allowed(attempts[-1])
-                if repository.allows_rendered_browser(
-                    str(seed.original_url) if seed.original_url else None
-                ) and allowed:
-                    if not browser_used:
-                        cleanup_browser_tabs()
-                        browser_used = True
-                    attempts.append(collect_stage("browser_fetch", seed, UUID(run_id)))
-                else:
-                    skipped = DetailAttempt(
-                        stage="browser_fetch",
-                        status="skipped",
-                        reason=(
-                            "원문 서버 대기·인증·요청 제한 유지"
-                            if not allowed
-                            else "도메인 브라우저 정책 미허용"
-                        ),
+            with repository.acquire_article(seed) as acquisition:
+                if acquisition == "deferred":
+                    get_run_logger().info("기사 %s: 다른 수집 작업 진행 중", seed.source_id)
+                    summary = update_summary(
+                        summary, results, repository, final=False, deferred_count=1
                     )
-                    attempts.append(skipped)
-                    repository.save_attempt(UUID(run_id), seed, skipped)
-            if attempts[-1].status not in ("accepted", "skipped") and browser_allowed(attempts[-1]):
-                attempts.append(collect_stage("browser_rendered", seed, UUID(run_id)))
-            if (
-                attempts[-1].status != "accepted"
-                and attempts[-1].skip_reason is None
-                and allow_bigkinds_fallback
-                and seed.source == "bigkinds"
-            ):
-                attempts.append(collect_stage("bigkinds_api", seed, UUID(run_id)))
-            result = finish_article(seed, attempts, UUID(run_id))
-            results.append(result)
-            summary = update_summary(summary, results, repository, final=False)
+                    continue
+                if acquisition == "reused":
+                    result = ArticleDetail(
+                        seed=seed, status="reused", selected_stage=None, attempts=[]
+                    )
+                    repository.save_detail(UUID(run_id), result)
+                    results.append(result)
+                    summary = update_summary(summary, results, repository, final=False)
+                    continue
+                attempts = [collect_stage("curl_cffi", seed, UUID(run_id))]
+                if attempts[-1].status != "accepted" and attempts[-1].skip_reason is None:
+                    allowed = browser_allowed(attempts[-1])
+                    if repository.allows_rendered_browser(
+                        str(seed.original_url) if seed.original_url else None
+                    ) and allowed:
+                        if not browser_used:
+                            cleanup_browser_tabs()
+                            browser_used = True
+                        attempts.append(collect_stage("browser_fetch", seed, UUID(run_id)))
+                    else:
+                        skipped = DetailAttempt(
+                            stage="browser_fetch",
+                            status="skipped",
+                            reason=(
+                                "원문 서버 대기·인증·요청 제한 유지"
+                                if not allowed
+                                else "도메인 브라우저 정책 미허용"
+                            ),
+                        )
+                        attempts.append(skipped)
+                        repository.save_attempt(UUID(run_id), seed, skipped)
+                if attempts[-1].status not in ("accepted", "skipped") and browser_allowed(
+                    attempts[-1]
+                ):
+                    attempts.append(collect_stage("browser_rendered", seed, UUID(run_id)))
+                if (
+                    attempts[-1].status != "accepted"
+                    and attempts[-1].skip_reason is None
+                    and allow_bigkinds_fallback
+                    and seed.source == "bigkinds"
+                ):
+                    attempts.append(collect_stage("bigkinds_api", seed, UUID(run_id)))
+                result = finish_article(seed, attempts, UUID(run_id))
+                results.append(result)
+                summary = update_summary(summary, results, repository, final=False)
         return update_summary(summary, results, repository, final=True)
     except Exception:
         failed = summary.model_copy(update={"status": "failed", "finished_at": datetime.now(UTC)})
@@ -195,15 +212,19 @@ def update_summary(
     results: list[ArticleDetail],
     repository: DetailRepository,
     final: bool,
+    deferred_count: int = 0,
 ) -> DetailRunSummary:
     collected = sum(result.status == "collected" for result in results)
     skipped = sum(result.status == "skipped" for result in results)
+    reused = sum(result.status == "reused" for result in results)
     failed = sum(result.status == "failed" for result in results)
     result = summary.model_copy(
         update={
             "collected_count": collected,
             "failed_count": failed,
             "skipped_count": skipped,
+            "reused_count": reused,
+            "deferred_count": summary.deferred_count + deferred_count,
             "status": ("completed" if failed == 0 else "partial")
             if final
             else "running",

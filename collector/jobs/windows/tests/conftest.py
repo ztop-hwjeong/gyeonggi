@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import date
 from unittest.mock import Mock
@@ -70,4 +71,10 @@ def repository() -> Mock:
 
     repository.read_profile.side_effect = read
     repository.save_profile.side_effect = save
+
+    @contextmanager
+    def acquire(_seed):
+        yield "collect"
+
+    repository.acquire_article.side_effect = acquire
     return repository

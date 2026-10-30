@@ -4,7 +4,7 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import MetaData, Table, create_engine, insert, select, update
+from sqlalchemy import MetaData, Table, create_engine, delete, insert, select, update
 
 from articles.models import (
     ArticleDetail,
@@ -253,5 +253,191 @@ def test_pending_articles_deduplicates_the_same_article_across_sources():
             if seed.source_id == f"bigkinds-{key}"
         ]
         assert len(only_bigkinds) == 1 and only_bigkinds[0].source == "bigkinds"
+        naver_seed = next(
+            seed for seed in repository.pending_naver_news(500) if seed.source_id == f"naver-{key}"
+        )
+        with repository.acquire_article(naver_seed) as first:
+            assert first == "collect"
+            with repository.acquire_article(only_bigkinds[0]) as second:
+                assert second == "deferred"
+        with repository.acquire_article(only_bigkinds[0]) as released:
+            assert released == "collect"
     finally:
+        engine.dispose()
+
+
+@pytest.mark.skipif("ANALYSIS_TEST_DATABASE_URL" not in os.environ, reason="전용 검증 DB 필요")
+def test_pending_articles_respect_discovery_target_collection_flags():
+    engine = create_engine(os.environ["ANALYSIS_TEST_DATABASE_URL"])
+    metadata = MetaData()
+    search = Table("search_items", metadata, schema="dw", autoload_with=engine)
+    keys = Table("material_keys", metadata, schema="dw", autoload_with=engine)
+    article_table = Table("articles", metadata, schema="dw", autoload_with=engine)
+    rules = Table("collection_rules", metadata, schema="ops", autoload_with=engine)
+    versions = Table("collection_rule_versions", metadata, schema="ops", autoload_with=engine)
+    requests = Table("collection_requests", metadata, schema="ops", autoload_with=engine)
+    targets = Table("analysis_targets", metadata, schema="ops", autoload_with=engine)
+    mappings = Table("collection_rule_targets", metadata, schema="ops", autoload_with=engine)
+    request_items = Table("collection_request_items", metadata, schema="st", autoload_with=engine)
+    key = uuid4().hex
+    source_ids = {
+        name: f"{name}-{key}"
+        for name in ("legacy", "off", "enabled", "shared", "archived", "unmapped")
+    }
+    article_ids = {name: uuid4() for name in source_ids}
+    off_rule, enabled_rule, archived_rule, unmapped_rule = (uuid4() for _ in range(4))
+    off_target, enabled_target, archived_target = (uuid4() for _ in range(3))
+    request_ids = [uuid4() for _ in range(6)]
+    definition = {"name": "검증", "terms": ["교육"], "sources": ["naver_news"], "enabled": True}
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                insert(keys),
+                [{"id": article_id, "kind": "news"} for article_id in article_ids.values()],
+            )
+            connection.execute(
+                insert(article_table),
+                [
+                    {"id": article_ids[name], "title": name, "publisher": "검증언론"}
+                    for name in source_ids
+                ],
+            )
+            connection.execute(
+                insert(search),
+                [
+                    {
+                        "provider": "naver",
+                        "channel": "news",
+                        "source_id": source_id,
+                        "article_id": article_ids[name],
+                        "content_hash": key + name,
+                        "data": {
+                            "title": name,
+                            "summary": "검증",
+                            "url": f"https://example.test/{source_id}",
+                        },
+                    }
+                    for name, source_id in source_ids.items()
+                ],
+            )
+            connection.execute(
+                insert(rules),
+                [
+                    {"id": rule_id, "version": 1, "definition": definition}
+                    for rule_id in (off_rule, enabled_rule, archived_rule, unmapped_rule)
+                ],
+            )
+            connection.execute(
+                insert(versions),
+                [
+                    {"rule_id": rule_id, "version": 1, "definition": definition}
+                    for rule_id in (off_rule, enabled_rule, archived_rule, unmapped_rule)
+                ],
+            )
+            connection.execute(
+                insert(targets),
+                [
+                    {
+                        "id": off_target,
+                        "kind": "current_issue",
+                        "name": f"off-{key}",
+                        "collection_enabled": False,
+                        "archived_at": None,
+                    },
+                    {
+                        "id": enabled_target,
+                        "kind": "regular",
+                        "name": f"enabled-{key}",
+                        "collection_enabled": True,
+                        "archived_at": None,
+                    },
+                    {
+                        "id": archived_target,
+                        "kind": "current_issue",
+                        "name": f"archived-{key}",
+                        "collection_enabled": True,
+                        "archived_at": datetime.now(UTC),
+                    },
+                ],
+            )
+            connection.execute(
+                insert(mappings),
+                [
+                    {"rule_id": off_rule, "target_id": off_target},
+                    {"rule_id": enabled_rule, "target_id": enabled_target},
+                    {"rule_id": archived_rule, "target_id": archived_target},
+                ],
+            )
+            request_rules = [
+                off_rule,
+                enabled_rule,
+                off_rule,
+                enabled_rule,
+                archived_rule,
+                unmapped_rule,
+            ]
+            names = ["off", "enabled", "shared", "shared", "archived", "unmapped"]
+            connection.execute(
+                insert(requests),
+                [
+                    {
+                        "id": request_id,
+                        "rule_id": rule_id,
+                        "rule_version": 1,
+                        "source": "naver_news",
+                        "mode": "incremental",
+                        "definition": definition,
+                        "start_date": datetime(2026, 10, 21).date(),
+                        "end_date": datetime(2026, 10, 30).date(),
+                    }
+                    for request_id, rule_id in zip(request_ids, request_rules, strict=True)
+                ],
+            )
+            connection.execute(
+                insert(request_items),
+                [
+                    {"request_id": request_id, "source_id": source_ids[name], "data": {}}
+                    for request_id, name in zip(request_ids, names, strict=True)
+                ],
+            )
+        pending = {
+            seed.source_id for seed in DetailRepository(engine, Mock()).pending_naver_news(500)
+        }
+        assert source_ids["legacy"] in pending
+        assert {source_ids["enabled"], source_ids["shared"], source_ids["unmapped"]} <= pending
+        assert source_ids["off"] not in pending
+        assert source_ids["archived"] not in pending
+    finally:
+        with engine.begin() as connection:
+            connection.execute(
+                delete(request_items).where(request_items.c.request_id.in_(request_ids))
+            )
+            connection.execute(delete(requests).where(requests.c.id.in_(request_ids)))
+            connection.execute(
+                delete(mappings).where(
+                    mappings.c.rule_id.in_((off_rule, enabled_rule, archived_rule, unmapped_rule))
+                )
+            )
+            connection.execute(
+                delete(versions).where(
+                    versions.c.rule_id.in_((off_rule, enabled_rule, archived_rule, unmapped_rule))
+                )
+            )
+            connection.execute(
+                delete(rules).where(
+                    rules.c.id.in_((off_rule, enabled_rule, archived_rule, unmapped_rule))
+                )
+            )
+            connection.execute(
+                delete(targets).where(
+                    targets.c.id.in_((off_target, enabled_target, archived_target))
+                )
+            )
+            connection.execute(
+                delete(search).where(search.c.source_id.in_(tuple(source_ids.values())))
+            )
+            connection.execute(
+                delete(article_table).where(article_table.c.id.in_(tuple(article_ids.values())))
+            )
+            connection.execute(delete(keys).where(keys.c.id.in_(tuple(article_ids.values()))))
         engine.dispose()

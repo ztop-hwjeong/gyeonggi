@@ -40,6 +40,7 @@ class TargetWrite(BaseModel):
     kind: TargetKind
     name: str = Field(min_length=1, max_length=120)
     description: str = Field(default="", max_length=500)
+    collection_enabled: bool = True
 
 
 class TargetUpdate(TargetWrite):

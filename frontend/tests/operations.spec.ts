@@ -4,6 +4,17 @@ import type { Schema } from "../src/shared/api/client";
 const ruleId = "11111111-1111-4111-8111-111111111111";
 const requestId = "22222222-2222-4222-8222-222222222222";
 const now = "2026-10-23T09:00:00Z";
+const analysisTarget = {
+  id: "33333333-3333-4333-8333-333333333333",
+  kind: "current_issue" as const,
+  name: "현안 분석",
+  description: "현안 기사 분석",
+  version: 1,
+  collection_enabled: true,
+  archived_at: null,
+  created_at: now,
+  updated_at: now,
+};
 const rule: Schema["RuleInfo"] = {
   id: ruleId,
   version: 1,
@@ -40,6 +51,8 @@ async function mockApi(
     failPreview?: boolean;
     unavailable?: boolean;
     partial?: boolean;
+    targetMappingUnavailable?: boolean;
+    failTargetMappingOnce?: boolean;
   } = {},
 ) {
   const writes: {
@@ -48,6 +61,8 @@ async function mockApi(
     key: string | undefined;
   }[] = [];
   let previewFailed = false;
+  let targetMappingFailed = false;
+  let targetIds: string[] = [];
   let currentRule = structuredClone(rule);
   let currentRun = options.partial
     ? {
@@ -84,6 +99,17 @@ async function mockApi(
     if (["POST", "PUT"].includes(request.method())) {
       const body = request.postDataJSON();
       writes.push({ path, body, key: request.headers()["idempotency-key"] });
+      if (path === `/keyword-rules/${ruleId}/targets`) {
+        if (options.failTargetMappingOnce && !targetMappingFailed) {
+          targetMappingFailed = true;
+          return route.fulfill({
+            status: 503,
+            json: { detail: "분석 대상 연결 저장 실패" },
+          });
+        }
+        targetIds = body.target_ids;
+        return route.fulfill({ json: { target_ids: targetIds } });
+      }
       if (path === "/keyword-rules" || path === `/keyword-rules/${ruleId}`) {
         currentRule = {
           ...currentRule,
@@ -174,7 +200,16 @@ async function mockApi(
       });
     if (path === "/articles" || path === "/materials")
       return route.fulfill({ json: { items: [], total: 0 } });
-    if (path === "/analysis-targets") return route.fulfill({ json: [] });
+    if (path === `/keyword-rules/${ruleId}/targets`) {
+      if (options.targetMappingUnavailable)
+        return route.fulfill({
+          status: 503,
+          json: { detail: "분석 대상 연결을 불러오지 못했어요." },
+        });
+      return route.fulfill({ json: { target_ids: targetIds } });
+    }
+    if (path === "/analysis-targets")
+      return route.fulfill({ json: [analysisTarget] });
     if (path.endsWith("/targets")) return route.fulfill({ json: [] });
     if (path === "/monitoring/workers")
       return route.fulfill({ json: { observed_at: now, pools: [] } });
@@ -209,7 +244,79 @@ test("키워드 등록과 수정에 입력 조건과 조회 버전을 전달한�
   await expect(page.getByRole("status")).toContainText(
     "검색 조건을 저장했어요",
   );
-  expect(writes[1].body.version).toBe(1);
+  expect(
+    writes.findLast((write) => write.path === `/keyword-rules/${ruleId}`)?.body
+      .version,
+  ).toBe(1);
+});
+
+test("검색 조건을 정기·현안 분석 대상에 함께 연결한다", async ({ page }) => {
+  const writes = await mockApi(page);
+  await page.goto(`/keywords/${ruleId}`);
+  await page.getByLabel(/현안 분석/).check();
+  await page.getByRole("button", { name: "검색 조건 저장" }).click();
+  expect(writes).toContainEqual(
+    expect.objectContaining({
+      path: `/keyword-rules/${ruleId}/targets`,
+      body: { target_ids: [analysisTarget.id] },
+    }),
+  );
+});
+
+test("기존 분석 대상 연결을 불러오지 못하면 빈 값으로 덮어쓰지 않는다", async ({
+  page,
+}) => {
+  const writes = await mockApi(page, { targetMappingUnavailable: true });
+  await page.goto(`/keywords/${ruleId}`);
+  await expect(
+    page.getByText("분석 대상 연결을 불러오지 못했어요."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "검색 조건 저장" }),
+  ).toBeDisabled();
+  expect(writes).toHaveLength(0);
+});
+
+test("분석 대상 연결 저장만 실패하면 검색 조건을 다시 만들지 않고 재시도한다", async ({
+  page,
+}) => {
+  const writes = await mockApi(page, { failTargetMappingOnce: true });
+  await page.goto(`/keywords/${ruleId}`);
+  await page.getByLabel(/현안 분석/).check();
+  await page.getByRole("button", { name: "검색 조건 저장" }).click();
+  await expect(
+    page.getByText(/검색 조건은 저장됐지만 분석 대상 연결을 저장하지 못했어요/),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "검색 조건 저장" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "검색 조건을 저장했어요",
+  );
+  expect(
+    writes.filter((write) => write.path === `/keyword-rules/${ruleId}`),
+  ).toHaveLength(1);
+  expect(
+    writes.filter((write) => write.path === `/keyword-rules/${ruleId}/targets`),
+  ).toHaveLength(2);
+});
+
+test("현안 분석 대상의 수집을 중단해도 기존 대상은 유지한다", async ({
+  page,
+}) => {
+  const writes = await mockApi(page);
+  await page.goto("/analysis-targets");
+  await expect(page.getByRole("checkbox", { name: "수집 활성" })).toBeVisible();
+  await page.getByRole("button", { name: "수정", exact: true }).click();
+  await page.getByLabel("수집 활성").uncheck();
+  await page.getByRole("button", { name: "수정 저장" }).click();
+  expect(writes).toContainEqual(
+    expect.objectContaining({
+      path: `/analysis-targets/${analysisTarget.id}`,
+      body: expect.objectContaining({
+        collection_enabled: false,
+        version: analysisTarget.version,
+      }),
+    }),
+  );
 });
 
 test("미리보기 통신 실패 재시도에 동일 요청 키를 재사용한다", async ({
@@ -573,6 +680,19 @@ test("기사의 분석 대상 판단을 저장한 뒤 바로 표시한다", asyn
           },
         ],
       });
+    if (path === `/articles/${articleId}/discovery-paths`)
+      return route.fulfill({
+        json: [
+          {
+            source: "naver_news",
+            source_id: "news-1",
+            rule_id: ruleId,
+            rule_name: "황현필 현안",
+            terms: ["황현필", "경기 교육청"],
+            discovered_at: now,
+          },
+        ],
+      });
     if (path === `/articles/${articleId}/targets` && request.method() === "GET")
       return route.fulfill({
         json: [
@@ -605,14 +725,16 @@ test("기사의 분석 대상 판단을 저장한 뒤 바로 표시한다", asyn
     "지원 정책의 효과를 중심으로 다룬 기사",
   );
   await expect(page.getByText("같은 내용의 다른 기사")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "발견 경로" })).toBeVisible();
+  await expect(page.getByText("황현필 현안")).toBeVisible();
   await page.getByLabel("최종 논조").selectOption("부정");
   await page.getByLabel("논조 판단 근거").fill("비판적 보도가 중심");
   await page.getByRole("button", { name: "논조 저장" }).click();
   await expect(page.getByLabel("최종 논조")).toHaveValue("부정");
   const targetState = page.locator(".target-list > div > .button-row > span");
-  await expect(targetState).toHaveText("제외");
+  await expect(targetState).toHaveText("수동 제외");
   await page.getByRole("button", { name: "포함", exact: true }).last().click();
-  await expect(targetState).toHaveText("포함");
+  await expect(targetState).toHaveText("수동 포함");
 });
 
 test("통합 자료에서 유형별 목록을 구분한다", async ({ page }) => {

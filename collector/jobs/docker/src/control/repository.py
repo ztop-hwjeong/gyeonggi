@@ -8,13 +8,53 @@ from collector_storage.objects import RawObjectStore
 from psycopg.rows import DictRow, dict_row
 from psycopg.types.json import Jsonb
 from pydantic import SecretStr
+from sqlalchemy import exists, func, not_, or_, select, update
+from sqlalchemy.engine import Engine
 
 from control.models import CollectionCancelled, ManagedRequest
+from control.tables import (
+    analysis_targets,
+    collection_requests,
+    collection_rule_targets,
+    collection_rules,
+)
 
 
 class ControlRepository:
-    def __init__(self, settings: DatabaseSettings, password: SecretStr) -> None:
+    def __init__(
+        self, settings: DatabaseSettings, password: SecretStr, engine: Engine
+    ) -> None:
         self.settings, self.password = settings, password
+        self._engine = engine
+
+    def engine(self) -> Engine:
+        return self._engine
+
+    @staticmethod
+    def _collectable_rule(rule_id):
+        mapped = exists(
+            select(collection_rule_targets.c.rule_id).where(
+                collection_rule_targets.c.rule_id == rule_id
+            )
+        )
+        active = exists(
+            select(collection_rule_targets.c.rule_id)
+            .join(analysis_targets, analysis_targets.c.id == collection_rule_targets.c.target_id)
+            .where(
+                collection_rule_targets.c.rule_id == rule_id,
+                analysis_targets.c.archived_at.is_(None),
+                analysis_targets.c.collection_enabled.is_(True),
+            )
+        )
+        return or_(not_(mapped), active)
+
+    def enabled_rules(self) -> list[UUID]:
+        statement = select(collection_rules.c.id).where(
+            collection_rules.c.definition["enabled"].astext == "true",
+            self._collectable_rule(collection_rules.c.id),
+        )
+        with self.engine().connect() as connection:
+            return list(connection.scalars(statement))
 
     @contextmanager
     def connect(self) -> Generator[psycopg.Connection[DictRow]]:
@@ -32,22 +72,40 @@ class ControlRepository:
             yield connection
 
     def start(self, request_id: UUID, flow_run_id: UUID) -> ManagedRequest | None:
-        with self.connect() as conn:
-            row = conn.execute(
-                "UPDATE ops.collection_requests "
-                "SET status='running', flow_run_id=%s,updated_at=now() "
-                "WHERE id=%s AND status IN ('queued','submitted') "
-                "AND (flow_run_id IS NULL OR flow_run_id=%s) RETURNING *",
-                (flow_run_id, request_id, flow_run_id),
-            ).fetchone()
-            return ManagedRequest.model_validate(row) if row else None
+        statement = (
+            update(collection_requests)
+            .where(
+                collection_requests.c.id == request_id,
+                collection_requests.c.status.in_(("queued", "submitted")),
+                or_(
+                    collection_requests.c.flow_run_id.is_(None),
+                    collection_requests.c.flow_run_id == flow_run_id,
+                ),
+                or_(
+                    collection_requests.c.mode == "preview",
+                    collection_requests.c.rule_id.is_(None),
+                    self._collectable_rule(collection_requests.c.rule_id),
+                ),
+            )
+            .values(status="running", flow_run_id=flow_run_id, updated_at=func.now())
+            .returning(collection_requests)
+        )
+        with self.engine().begin() as connection:
+            row = connection.execute(statement).mappings().one_or_none()
+        return ManagedRequest.model_validate(row) if row else None
 
     def check_cancelled(self, request_id: UUID) -> None:
-        with self.connect() as conn:
-            row = conn.execute(
-                "SELECT status FROM ops.collection_requests WHERE id=%s", (request_id,)
-            ).fetchone()
-            if row is None or row["status"] in ("cancelling", "cancelled"):
+        statement = select(collection_requests.c.id).where(
+            collection_requests.c.id == request_id,
+            collection_requests.c.status.not_in(("cancelling", "cancelled")),
+            or_(
+                collection_requests.c.mode == "preview",
+                collection_requests.c.rule_id.is_(None),
+                self._collectable_rule(collection_requests.c.rule_id),
+            ),
+        )
+        with self.engine().connect() as connection:
+            if connection.scalar(statement) is None:
                 raise CollectionCancelled
 
     def finish(

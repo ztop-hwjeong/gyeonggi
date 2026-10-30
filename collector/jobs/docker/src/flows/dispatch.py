@@ -3,14 +3,13 @@ from prefect.client.orchestration import get_client
 
 from control.dispatch import enqueue_enabled, reconcile, submit_one
 from control.models import ControlSettings
-from flows.managed import control_repository
+from flows.managed import control_scope
 
 
 @flow(name="dispatch-collections", persist_result=False)
 def dispatch_collections() -> dict:
-    settings, repository = ControlSettings(), control_repository()
-    submitted = 0
-    with get_client(sync_client=True) as client:
+    settings, submitted = ControlSettings(), 0
+    with control_scope() as repository, get_client(sync_client=True) as client:
         reconcile(repository, client, settings.dispatch_batch_size)
         scheduled = enqueue_enabled(repository)
         for _ in range(settings.dispatch_batch_size):

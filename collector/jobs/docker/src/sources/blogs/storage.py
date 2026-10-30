@@ -4,14 +4,18 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from collector_storage.objects import RawObject, RawObjectStore
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import and_, exists, func, not_, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
 from sources.blogs.tables import (
+    analysis_targets,
     blog_contents,
     blog_posts,
     blog_sources,
+    collection_request_items,
+    collection_requests,
+    collection_rule_targets,
     detail_results,
     detail_runs,
     responses,
@@ -31,6 +35,48 @@ class BlogDetailRepository:
     def __init__(self, engine: Engine, objects: RawObjectStore) -> None:
         self._engine = engine
         self._objects = objects
+
+    @staticmethod
+    def _source_collection_enabled(source, source_id):
+        request = collection_requests.alias()
+        discovered = exists(
+            select(collection_request_items.c.request_id)
+            .join(request, request.c.id == collection_request_items.c.request_id)
+            .where(
+                collection_request_items.c.source_id == source_id,
+                request.c.source == source,
+                request.c.mode != "preview",
+            )
+        ).correlate(source.table)
+        enabled_path = exists(
+            select(collection_request_items.c.request_id)
+            .select_from(
+                collection_request_items.join(
+                    request, request.c.id == collection_request_items.c.request_id
+                )
+                .outerjoin(
+                    collection_rule_targets, collection_rule_targets.c.rule_id == request.c.rule_id
+                )
+                .outerjoin(
+                    analysis_targets,
+                    and_(
+                        analysis_targets.c.id == collection_rule_targets.c.target_id,
+                        analysis_targets.c.archived_at.is_(None),
+                        analysis_targets.c.collection_enabled.is_(True),
+                    ),
+                )
+            )
+            .where(
+                collection_request_items.c.source_id == source_id,
+                request.c.source == source,
+                request.c.mode != "preview",
+                or_(
+                    collection_rule_targets.c.target_id.is_(None),
+                    analysis_targets.c.id.is_not(None),
+                ),
+            )
+        ).correlate(source.table)
+        return or_(not_(discovered), enabled_path)
 
     def pending_blog_sources(
         self,
@@ -66,6 +112,7 @@ class BlogDetailRepository:
             ~collected,
             ~completed,
             failed_count < 3,
+            self._source_collection_enabled(blog_sources.c.source, blog_sources.c.source_id),
         ]
         if retry_source_ids is None:
             last_failure = (

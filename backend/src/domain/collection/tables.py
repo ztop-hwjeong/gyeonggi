@@ -128,6 +128,23 @@ collection_rules = Table(
     schema="ops",
 )
 
+collection_request_items = Table(
+    "collection_request_items",
+    metadata,
+    Column("request_id", UUID(as_uuid=True), primary_key=True),
+    Column("source_id", String, primary_key=True),
+    schema="st",
+)
+
+collection_rule_targets = Table(
+    "collection_rule_targets",
+    metadata,
+    Column("rule_id", UUID(as_uuid=True), primary_key=True),
+    Column("target_id", UUID(as_uuid=True), primary_key=True),
+    Column("created_at", DateTime(timezone=True)),
+    schema="ops",
+)
+
 article_detail_results = Table(
     "article_detail_results",
     metadata,
@@ -151,6 +168,7 @@ collection_requests = Table(
     Column("rule_id", UUID(as_uuid=True)),
     Column("source", String),
     Column("mode", String),
+    Column("definition", JSONB),
     Column("status", String),
     Column("start_date", Date),
     Column("end_date", Date),

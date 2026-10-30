@@ -4,14 +4,22 @@ import { ArrowLeftIcon, FloppyDiskIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type FormEvent, useState } from "react";
-import { api, type Schema, useApi } from "@/shared/api/client";
+import { type FormEvent, useEffect, useState } from "react";
+import type { AnalysisTarget } from "@/features/articles/types";
+import { api, put, type Schema, useApi } from "@/shared/api/client";
 import { sourceNames } from "@/shared/lib/format";
 import { useUnsavedChanges } from "@/shared/lib/unsaved-changes";
 import { ErrorNotice, Loading, PageHeading } from "@/shared/ui/feedback";
 import { KeywordPreview } from "./keyword-preview";
 
 type Definition = Schema["RuleDefinition"];
+
+const targetKindNames = {
+  policy: "정책",
+  regular: "정기 분석",
+  current_issue: "현안 분석",
+  leader_message: "기관장 메시지",
+} as const;
 
 export function KeywordEditor({ id }: { id?: string }) {
   const params = useSearchParams();
@@ -36,6 +44,7 @@ function EditorForm({
 }) {
   const router = useRouter(),
     cache = useQueryClient();
+  const [activeRule, setActiveRule] = useState(rule);
   const [name, setName] = useState(rule?.definition.name ?? "");
   const [description, setDescription] = useState(
     rule?.definition.description ?? "",
@@ -45,6 +54,18 @@ function EditorForm({
     rule?.definition.sources ?? ["bigkinds"],
   );
   const [enabled, setEnabled] = useState(rule?.definition.enabled ?? false);
+  const targets = useApi<AnalysisTarget[]>("/analysis-targets", false);
+  const ruleTargets = useApi<{ target_ids: string[] }>(
+    activeRule ? `/keyword-rules/${activeRule.id}/targets` : null,
+    false,
+  );
+  const [targetIds, setTargetIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (ruleTargets.data) setTargetIds(ruleTargets.data.target_ids);
+  }, [ruleTargets.data]);
+  const [mappingNeedsRetry, setMappingNeedsRetry] = useState(false);
+  const targetMappingReady =
+    !activeRule || Boolean(ruleTargets.data) || mappingNeedsRetry;
   const [pending, setPending] = useState<"save" | null>(null);
   const [error, setError] = useState<Error>();
   const [saved, setSaved] = useState(initiallySaved);
@@ -69,15 +90,22 @@ function EditorForm({
     sources,
     enabled,
   };
-  const dirty = JSON.stringify(definition) !== baseline;
+  const dirty =
+    JSON.stringify(definition) !== baseline ||
+    JSON.stringify(targetIds) !==
+      JSON.stringify(ruleTargets.data?.target_ids ?? []);
   useUnsavedChanges(dirty);
   const versions = useApi<Schema["RuleVersion"][]>(
-    rule ? `/keyword-rules/${rule.id}/versions` : null,
+    activeRule ? `/keyword-rules/${activeRule.id}/versions` : null,
     false,
   );
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    if (!targetMappingReady) {
+      setError(new Error("기존 분석 대상 연결을 확인한 뒤 저장해 주세요."));
+      return;
+    }
     setPending("save");
     setError(undefined);
     try {
@@ -85,19 +113,39 @@ function EditorForm({
         throw new Error("키워드와 채널을 하나 이상 선택해 주세요.");
       if (definition.terms.length > 10)
         throw new Error("키워드는 최대 10개까지 입력해 주세요.");
-      const result = await api<Schema["RuleInfo"]>(
-        rule ? `/keyword-rules/${rule.id}` : "/keyword-rules",
-        {
-          method: rule ? "PUT" : "POST",
-          body: JSON.stringify(
-            rule ? { ...definition, version: rule.version } : definition,
-          ),
-        },
-      );
+      const result = mappingNeedsRetry
+        ? activeRule
+        : await api<Schema["RuleInfo"]>(
+            activeRule ? `/keyword-rules/${activeRule.id}` : "/keyword-rules",
+            {
+              method: activeRule ? "PUT" : "POST",
+              body: JSON.stringify(
+                activeRule
+                  ? { ...definition, version: activeRule.version }
+                  : definition,
+              ),
+            },
+          );
+      if (!result) throw new Error("저장한 검색 조건을 찾지 못했어요.");
+      setActiveRule(result);
       setName(result.definition.name);
       setDescription(result.definition.description ?? "");
       setTerms(result.definition.terms.join("\n"));
       setBaseline(JSON.stringify(result.definition));
+      try {
+        await put(`/keyword-rules/${result.id}/targets`, {
+          target_ids: targetIds,
+        });
+      } catch (mappingError) {
+        setMappingNeedsRetry(true);
+        throw new Error(
+          `검색 조건은 저장됐지만 분석 대상 연결을 저장하지 못했어요. ${
+            mappingError instanceof Error ? mappingError.message : ""
+          }`,
+        );
+      }
+      setMappingNeedsRetry(false);
+      await ruleTargets.refetch();
       setSaved(true);
       await cache.invalidateQueries();
       if (!rule) router.push(`/keywords/${result.id}?saved=1`);
@@ -115,7 +163,7 @@ function EditorForm({
         키워드 관리
       </Link>
       <PageHeading
-        title={rule ? rule.definition.name : "새 검색 조건"}
+        title={activeRule ? activeRule.definition.name : "새 검색 조건"}
         description="같은 주제의 키워드를 묶고, 수집 전에 검색 결과를 확인해 보세요."
       />
       {error && <ErrorNotice error={error} />}
@@ -125,12 +173,15 @@ function EditorForm({
           수 있어요.
         </div>
       )}
-      {rule && (
+      {activeRule && (
         <div className="context-actions">
-          <Link href={`/runs?rule_id=${rule.id}`} className="button secondary">
+          <Link
+            href={`/runs?rule_id=${activeRule.id}`}
+            className="button secondary"
+          >
             이 조건의 수집 이력
           </Link>
-          <Link href={`/runs/new?rule=${rule.id}`} className="button">
+          <Link href={`/runs/new?rule=${activeRule.id}`} className="button">
             기간·새 자료 수집
           </Link>
           <span className="hint">
@@ -202,6 +253,60 @@ function EditorForm({
                   ))}
                 </div>
               </fieldset>
+              <fieldset className="field">
+                <legend>연결할 분석 대상</legend>
+                <p className="hint">
+                  같은 자료를 여러 분석에서 함께 사용할 수 있어요. 본문은 한
+                  번만 수집하고, 이 검색 조건의 발견 이력은 각각 보존돼요.
+                </p>
+                {targets.error ? (
+                  <ErrorNotice
+                    error={targets.error}
+                    retry={() => targets.refetch()}
+                  />
+                ) : (
+                  <div className="check-list">
+                    {targets.data?.map((target) => {
+                      const checked = targetIds.includes(target.id);
+                      return (
+                        <label key={target.id}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              setTargetIds((current) =>
+                                event.target.checked
+                                  ? [...new Set([...current, target.id])]
+                                  : current.filter((id) => id !== target.id),
+                              )
+                            }
+                          />
+                          {target.name}{" "}
+                          <span className="muted">
+                            ({targetKindNames[target.kind]})
+                          </span>
+                        </label>
+                      );
+                    })}
+                    {!targets.data?.length && (
+                      <span className="hint">
+                        먼저 기사 분석 대상을 등록해 주세요.
+                      </span>
+                    )}
+                  </div>
+                )}
+                {ruleTargets.error && (
+                  <ErrorNotice
+                    error={ruleTargets.error}
+                    retry={() => ruleTargets.refetch()}
+                  />
+                )}
+                {activeRule && !targetMappingReady && !ruleTargets.error && (
+                  <p className="hint">
+                    기존 분석 대상 연결을 불러오는 중이에요.
+                  </p>
+                )}
+              </fieldset>
             </div>
           </section>
           <section className="form-section">
@@ -228,7 +333,7 @@ function EditorForm({
             <button
               type="submit"
               className="button"
-              disabled={pending !== null}
+              disabled={pending !== null || !targetMappingReady}
             >
               <FloppyDiskIcon size={18} />
               {pending === "save" ? "저장 중…" : "검색 조건 저장"}
@@ -237,7 +342,7 @@ function EditorForm({
         </form>
         <KeywordPreview definition={definition} />
       </div>
-      {rule && (
+      {activeRule && (
         <section className="panel section-gap">
           <div className="panel-body">
             <h2>검색 조건 변경 이력</h2>

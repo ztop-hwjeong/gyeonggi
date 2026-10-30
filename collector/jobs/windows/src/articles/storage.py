@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import Any, Literal
@@ -5,7 +6,7 @@ from uuid import UUID, uuid4
 
 from collector_storage.objects import RawObject, RawObjectStore
 from collector_storage.publishers import publisher_code
-from sqlalchemy import func, literal, or_, select, union_all, update
+from sqlalchemy import and_, exists, func, literal, not_, or_, select, union_all, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
@@ -22,10 +23,14 @@ from articles.models import (
 from articles.tables import (
     adaptive_history,
     adaptive_profiles,
+    analysis_targets,
     article_browser_policies,
     article_contents,
     articles,
     attempts,
+    collection_request_items,
+    collection_requests,
+    collection_rule_targets,
     detail_results,
     detail_runs,
     news_items,
@@ -46,6 +51,92 @@ class DetailRepository:
         self, limit: int, search_run_id: UUID | None = None
     ) -> list[ArticleSeed]:
         return self.pending_articles(limit, "naver_news", search_run_id)
+
+    @staticmethod
+    def _source_collection_enabled(source, source_id):
+        request = collection_requests.alias()
+        discovered = exists(
+            select(collection_request_items.c.request_id)
+            .join(request, request.c.id == collection_request_items.c.request_id)
+            .where(
+                collection_request_items.c.source_id == source_id,
+                request.c.source == source,
+                request.c.mode != "preview",
+            )
+        ).correlate(source.table)
+        enabled_path = exists(
+            select(collection_request_items.c.request_id)
+            .select_from(
+                collection_request_items.join(
+                    request, request.c.id == collection_request_items.c.request_id
+                )
+                .outerjoin(
+                    collection_rule_targets, collection_rule_targets.c.rule_id == request.c.rule_id
+                )
+                .outerjoin(
+                    analysis_targets,
+                    and_(
+                        analysis_targets.c.id == collection_rule_targets.c.target_id,
+                        analysis_targets.c.archived_at.is_(None),
+                        analysis_targets.c.collection_enabled.is_(True),
+                    ),
+                )
+            )
+            .where(
+                collection_request_items.c.source_id == source_id,
+                request.c.source == source,
+                request.c.mode != "preview",
+                or_(
+                    collection_rule_targets.c.target_id.is_(None),
+                    analysis_targets.c.id.is_not(None),
+                ),
+            )
+        ).correlate(source.table)
+        return or_(not_(discovered), enabled_path)
+
+    @contextmanager
+    def acquire_article(self, seed: ArticleSeed):
+        """통합 기사 기준 본문 수집 독점권."""
+        if seed.source == "naver_news":
+            article_id_query = select(search_items.c.article_id).where(
+                search_items.c.provider == "naver",
+                search_items.c.channel == "news",
+                search_items.c.source_id == seed.source_id,
+            )
+        else:
+            article_id_query = select(news_items.c.article_id).where(
+                news_items.c.source == seed.source,
+                news_items.c.source_id == seed.source_id,
+            )
+        with self._engine.connect() as connection:
+            article_id = connection.scalar(article_id_query)
+            identity = (
+                f"article:{article_id}" if article_id else f"source:{seed.source}:{seed.source_id}"
+            )
+            acquired = connection.scalar(
+                select(func.pg_try_advisory_lock(func.hashtextextended(identity, 0)))
+            )
+            if not acquired:
+                yield "deferred"
+                return
+            try:
+                has_body = bool(
+                    article_id
+                    and connection.scalar(
+                        select(article_contents.c.id)
+                        .where(article_contents.c.article_id == article_id)
+                        .limit(1)
+                    )
+                )
+                yield "reused" if has_body else "collect"
+            finally:
+                try:
+                    connection.execute(
+                        select(func.pg_advisory_unlock(func.hashtextextended(identity, 0)))
+                    )
+                except Exception:
+                    connection.invalidate()
+                    raise
 
     def pending_articles(
         self,
@@ -127,6 +218,7 @@ class DetailRepository:
             .where(
                 ~collected,
                 ~skipped,
+                self._source_collection_enabled(listings.c.source, listings.c.source_id),
                 or_(
                     last_failure.is_(None),
                     last_failure <= datetime.now(UTC) - timedelta(hours=1),

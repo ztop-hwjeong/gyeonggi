@@ -30,7 +30,16 @@ from domain.article_workflow.tables import (
     article_inclusions,
     article_target_links,
 )
-from domain.collection.tables import article_contents, articles, materials
+from domain.collection.request_control import cancel_uncollectable_requests
+from domain.collection.tables import (
+    article_contents,
+    articles,
+    collection_request_items,
+    collection_requests,
+    collection_rule_targets,
+    material_sources,
+    materials,
+)
 
 
 class WorkflowError(RuntimeError):
@@ -106,6 +115,7 @@ class ArticleWorkflow:
                         kind=body.kind,
                         name=body.name,
                         description=body.description,
+                        collection_enabled=body.collection_enabled,
                         version=analysis_targets.c.version + 1,
                         updated_at=func.now(),
                     )
@@ -113,6 +123,13 @@ class ArticleWorkflow:
                 )
                 if not rows:
                     raise WorkflowConflict("분석 대상 없음 또는 버전 충돌")
+                if not body.collection_enabled:
+                    rule_ids = await self._session.scalars(
+                        select(collection_rule_targets.c.rule_id).where(
+                            collection_rule_targets.c.target_id == target_id
+                        )
+                    )
+                    await cancel_uncollectable_requests(self._session, rule_ids)
             return TargetInfo.model_validate(rows[0])
 
     async def archive_target(self, target_id: UUID, version: int) -> None:
@@ -129,6 +146,12 @@ class ArticleWorkflow:
             )
             if not rows:
                 raise WorkflowConflict("분석 대상 없음 또는 버전 충돌")
+            rule_ids = await self._session.scalars(
+                select(collection_rule_targets.c.rule_id).where(
+                    collection_rule_targets.c.target_id == target_id
+                )
+            )
+            await cancel_uncollectable_requests(self._session, rule_ids)
 
     async def rules(self) -> list[FilterRuleInfo]:
         async with self.transaction():
@@ -434,12 +457,53 @@ class ArticleWorkflow:
     async def target_links(self, article_id: UUID) -> list[DecisionInfo]:
         async with self.transaction():
             await self._article(article_id)
-            rows = await self.rows(
+            explicit = await self.rows(
                 select(article_target_links)
                 .where(article_target_links.c.article_id == article_id)
                 .order_by(article_target_links.c.target_id)
             )
-            return [DecisionInfo.model_validate(row) for row in rows]
+            overridden_target_ids = {row["target_id"] for row in explicit}
+            discovered = await self.rows(
+                select(collection_rule_targets.c.target_id)
+                .select_from(
+                    material_sources.join(
+                        collection_request_items,
+                        collection_request_items.c.source_id == material_sources.c.source_id,
+                    )
+                    .join(
+                        collection_requests,
+                        collection_requests.c.id == collection_request_items.c.request_id,
+                    )
+                    .join(
+                        collection_rule_targets,
+                        collection_rule_targets.c.rule_id == collection_requests.c.rule_id,
+                    )
+                    .join(
+                        analysis_targets,
+                        analysis_targets.c.id == collection_rule_targets.c.target_id,
+                    )
+                )
+                .where(
+                    material_sources.c.material_id == article_id,
+                    collection_requests.c.source == material_sources.c.source,
+                    collection_requests.c.mode != "preview",
+                    analysis_targets.c.archived_at.is_(None),
+                )
+                .distinct()
+                .order_by(collection_rule_targets.c.target_id)
+            )
+            mapped = [
+                DecisionInfo(
+                    article_id=article_id,
+                    target_id=row["target_id"],
+                    decision="include",
+                    origin="auto",
+                    reason="수집 규칙 분석 대상 연결",
+                )
+                for row in discovered
+                if row["target_id"] not in overridden_target_ids
+            ]
+            return [*map(DecisionInfo.model_validate, explicit), *mapped]
 
     async def history(self, article_id: UUID) -> list[DecisionHistory]:
         async with self.transaction():

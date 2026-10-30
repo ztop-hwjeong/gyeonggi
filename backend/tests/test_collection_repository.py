@@ -8,6 +8,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from domain.article_workflow.models import TargetUpdate, TargetWrite
+from domain.article_workflow.repository import ArticleWorkflow
 from domain.collection.errors import CollectionConflictError, CollectionNotFoundError
 from domain.collection.models import (
     ArticleQuery,
@@ -15,6 +17,7 @@ from domain.collection.models import (
     RequestReview,
     RuleDefinition,
     RuleQuery,
+    RuleTargets,
     RuleUpdate,
     RunCreate,
 )
@@ -36,7 +39,10 @@ def test_rule_versions_request_snapshot_idempotency_and_cancellation():
                 async with session:
                     repository = CollectionRepository(session)
                     definition = RuleDefinition(
-                        name="통합 검증", terms=("학교 정책",), sources=("bigkinds",)
+                        name="통합 검증",
+                        terms=("학교 정책",),
+                        sources=("bigkinds",),
+                        enabled=True,
                     )
                     rule = await repository.save_rule(definition)
                     body = RunCreate(
@@ -118,12 +124,12 @@ def test_rule_versions_request_snapshot_idempotency_and_cancellation():
                             RequestQuery(rule_id=rule.id, status="attention", offset=1)
                         )
                     ).items == []
-                    matches = await repository.rules(RuleQuery(q="새로운 키워드", enabled=False))
+                    matches = await repository.rules(RuleQuery(q="새로운 키워드", enabled=True))
                     assert any(item.id == rule.id for item in matches.items)
                     assert not any(
                         item.id == rule.id
                         for item in (
-                            await repository.rules(RuleQuery(q="새로운 키워드", enabled=True))
+                            await repository.rules(RuleQuery(q="새로운 키워드", enabled=False))
                         ).items
                     )
                     reporting = CollectionReporting(session)
@@ -188,6 +194,104 @@ def test_rule_versions_request_snapshot_idempotency_and_cancellation():
                         )
                     detail = await reporting.article(identity)
                     assert detail.has_body and detail.body == "최신 본문"
+                await connection.rollback()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(check())
+
+
+@pytest.mark.skipif(
+    not os.environ.get("COLLECTION_TEST_DATABASE_URL"), reason="PostgreSQL 통합 검증 주소 필요"
+)
+def test_target_collection_flag_stops_only_uncollectable_requests():
+    async def check():
+        engine = create_async_engine(
+            os.environ["COLLECTION_TEST_DATABASE_URL"], hide_parameters=True
+        )
+        try:
+            async with engine.connect() as connection, connection.begin():
+                session = AsyncSession(bind=connection, join_transaction_mode="create_savepoint")
+                async with session:
+                    workflow = ArticleWorkflow(session)
+                    repository = CollectionRepository(session)
+                    stopped = await workflow.save_target(
+                        TargetWrite(kind="current_issue", name="중단")
+                    )
+                    active = await workflow.save_target(TargetWrite(kind="regular", name="정기"))
+                    archived = await workflow.save_target(TargetWrite(kind="policy", name="보관"))
+
+                    definition = RuleDefinition(
+                        name="현안 수집", terms=("황현필",), sources=("bigkinds",), enabled=True
+                    )
+                    isolated = await repository.save_rule(definition)
+                    shared = await repository.save_rule(
+                        definition.model_copy(update={"name": "공유 수집"})
+                    )
+                    archive_rule = await repository.save_rule(
+                        definition.model_copy(update={"name": "보관 수집"})
+                    )
+                    disabled_rule = await repository.save_rule(
+                        definition.model_copy(
+                            update={"name": "비활성 규칙", "enabled": False}
+                        )
+                    )
+                    await repository.save_rule_targets(
+                        isolated.id, RuleTargets(target_ids=[stopped.id])
+                    )
+                    await repository.save_rule_targets(
+                        shared.id, RuleTargets(target_ids=[stopped.id, active.id])
+                    )
+                    await repository.save_rule_targets(
+                        archive_rule.id, RuleTargets(target_ids=[archived.id])
+                    )
+                    await repository.save_rule_targets(
+                        disabled_rule.id, RuleTargets(target_ids=[active.id])
+                    )
+
+                    def run(rule):
+                        return RunCreate(
+                            rule_id=rule.id,
+                            version=rule.version,
+                            source="bigkinds",
+                            mode="incremental",
+                            start_date=date(2026, 10, 30),
+                            end_date=date(2026, 10, 30),
+                        )
+
+                    isolated_request = await repository.enqueue(uuid4(), run(isolated))
+                    shared_request = await repository.enqueue(uuid4(), run(shared))
+                    archive_request = await repository.enqueue(uuid4(), run(archive_rule))
+                    with pytest.raises(CollectionConflictError):
+                        await repository.enqueue(uuid4(), run(disabled_rule))
+                    await session.execute(
+                        text("UPDATE ops.collection_requests SET status='running' WHERE id=:id"),
+                        {"id": archive_request.id},
+                    )
+                    await session.commit()
+
+                    disabled = await workflow.save_target(
+                        TargetUpdate(
+                            kind=stopped.kind,
+                            name=stopped.name,
+                            description=stopped.description,
+                            collection_enabled=False,
+                            version=stopped.version,
+                        ),
+                        stopped.id,
+                    )
+                    assert not disabled.collection_enabled
+                    assert (await repository.request(isolated_request.id)).status == "cancelled"
+                    assert (await repository.request(shared_request.id)).status == "queued"
+                    with pytest.raises(CollectionConflictError):
+                        await repository.enqueue(uuid4(), run(isolated))
+
+                    await repository.save_rule_targets(
+                        shared.id, RuleTargets(target_ids=[stopped.id])
+                    )
+                    assert (await repository.request(shared_request.id)).status == "cancelled"
+                    await workflow.archive_target(archived.id, archived.version)
+                    assert (await repository.request(archive_request.id)).status == "cancelling"
                 await connection.rollback()
         finally:
             await engine.dispose()

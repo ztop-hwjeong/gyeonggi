@@ -431,6 +431,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/keyword-rules/{rule_id}/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rule Targets */
+        get: operations["rule_targets_keyword_rules__rule_id__targets_get"];
+        /** Save Rule Targets */
+        put: operations["save_rule_targets_keyword_rules__rule_id__targets_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/articles/{article_id}/discovery-paths": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Article Discovery Paths */
+        get: operations["article_discovery_paths_articles__article_id__discovery_paths_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/collection-previews": {
         parameters: {
             query?: never;
@@ -1293,6 +1328,26 @@ export interface components {
              */
             updated_at: string;
         };
+        /** ArticleDiscoveryPath */
+        ArticleDiscoveryPath: {
+            source: components["schemas"]["SourceCode"];
+            /** Source Id */
+            source_id: string;
+            /**
+             * Rule Id
+             * Format: uuid
+             */
+            rule_id: string;
+            /** Rule Name */
+            rule_name: string;
+            /** Terms */
+            terms: string[];
+            /**
+             * Discovered At
+             * Format: date-time
+             */
+            discovered_at: string;
+        };
         /** ArticlePage */
         ArticlePage: {
             /** Items */
@@ -2147,6 +2202,11 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** RuleTargets */
+        RuleTargets: {
+            /** Target Ids */
+            target_ids?: string[];
+        };
         /** RuleUpdate */
         RuleUpdate: {
             /** Name */
@@ -2696,6 +2756,11 @@ export interface components {
              */
             description: string;
             /**
+             * Collection Enabled
+             * @default true
+             */
+            collection_enabled: boolean;
+            /**
              * Id
              * Format: uuid
              */
@@ -2727,6 +2792,11 @@ export interface components {
              * @default
              */
             description: string;
+            /**
+             * Collection Enabled
+             * @default true
+             */
+            collection_enabled: boolean;
             /** Version */
             version: number;
         };
@@ -2740,6 +2810,11 @@ export interface components {
              * @default
              */
             description: string;
+            /**
+             * Collection Enabled
+             * @default true
+             */
+            collection_enabled: boolean;
         };
         /** TemplateArchiveRequest */
         TemplateArchiveRequest: {
@@ -3828,6 +3903,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuleVersion"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rule_targets_keyword_rules__rule_id__targets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleTargets"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_rule_targets_keyword_rules__rule_id__targets_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleTargets"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleTargets"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    article_discovery_paths_articles__article_id__discovery_paths_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArticleDiscoveryPath"][];
                 };
             };
             /** @description Validation Error */

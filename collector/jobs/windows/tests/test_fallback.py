@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
@@ -191,3 +192,49 @@ def test_http_failure_without_browser_policy_preserves_article_failure(
     assert stored.skip_reason is None
     assert result.failed_count == 1
     cleanup.assert_not_called()
+
+
+def test_existing_article_body_is_reused_without_network_fetch(
+    monkeypatch: pytest.MonkeyPatch, seed: ArticleSeed, repository: Mock
+) -> None:
+    @contextmanager
+    def acquire(_seed):
+        yield "reused"
+
+    repository.acquire_article.side_effect = acquire
+    monkeypatch.setattr(
+        details.FlowRunContext, "get", lambda: SimpleNamespace(flow_run=SimpleNamespace(id=uuid4()))
+    )
+    monkeypatch.setattr(details, "get_run_logger", Mock())
+    collect = Mock()
+    monkeypatch.setattr(details, "collect_stage", collect)
+
+    result = details.run_collection([seed], repository)
+
+    collect.assert_not_called()
+    reused = repository.save_detail.call_args.args[1]
+    assert reused.status == "reused"
+    assert result.reused_count == 1
+    assert result.collected_count == 0
+
+
+def test_article_locked_by_another_run_is_deferred_without_persisting_result(
+    monkeypatch: pytest.MonkeyPatch, seed: ArticleSeed, repository: Mock
+) -> None:
+    @contextmanager
+    def acquire(_seed):
+        yield "deferred"
+
+    repository.acquire_article.side_effect = acquire
+    monkeypatch.setattr(
+        details.FlowRunContext, "get", lambda: SimpleNamespace(flow_run=SimpleNamespace(id=uuid4()))
+    )
+    monkeypatch.setattr(details, "get_run_logger", Mock())
+    collect = Mock()
+    monkeypatch.setattr(details, "collect_stage", collect)
+
+    result = details.run_collection([seed], repository)
+
+    collect.assert_not_called()
+    repository.save_detail.assert_not_called()
+    assert result.deferred_count == 1
