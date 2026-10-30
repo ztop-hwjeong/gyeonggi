@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     database_name: str
     database_user: str
     database_password: SecretStr
+    database_command_timeout_seconds: float = Field(default=15, gt=0)
     api_root_path: str = ""
     template_directory: Path = Field(
         default_factory=lambda: Path(__file__).resolve().parents[1] / "templates"

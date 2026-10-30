@@ -9,7 +9,7 @@ import pytest
 from prefect.client.schemas.objects import State, StateType
 from psycopg.rows import DictRow, dict_row
 from psycopg.types.json import Jsonb
-from sqlalchemy import create_engine, delete, insert, select, update
+from sqlalchemy import MetaData, Table, create_engine, delete, insert, select, update
 
 from control.dispatch import enqueue_enabled, reconcile, submit_one
 from control.models import CollectionCancelled, ControlSettings
@@ -254,6 +254,7 @@ def test_target_collection_flag_controls_scheduling_and_running_request(request)
     request_id, flow_run_id = uuid4(), uuid4()
     definition = {"name": "검증", "terms": ["교육"], "sources": ["bigkinds"], "enabled": True}
     repository = ControlRepository(Mock(), Mock(), engine)
+    reports = Table("analysis_reports", MetaData(), schema="ops", autoload_with=engine)
     try:
         with engine.begin() as connection:
             connection.execute(
@@ -347,6 +348,11 @@ def test_target_collection_flag_controls_scheduling_and_running_request(request)
             connection.execute(
                 delete(collection_rules).where(
                     collection_rules.c.id.in_((disabled_rule, shared_rule, unmapped_rule))
+                )
+            )
+            connection.execute(
+                delete(reports).where(
+                    reports.c.target_id.in_((disabled_target, enabled_target))
                 )
             )
             connection.execute(

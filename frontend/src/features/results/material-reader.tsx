@@ -33,9 +33,11 @@ const kindLabels = {
 export function MaterialReader({
   materialId,
   returnQuery,
+  returnReportQuery,
 }: {
   materialId: string;
   returnQuery: string;
+  returnReportQuery: string;
 }) {
   const query = useApi<MaterialDetail>(
     materialId ? `/materials/${materialId}` : null,
@@ -80,12 +82,14 @@ export function MaterialReader({
           queryKey[0].startsWith("/materials")),
     });
   };
-  const back = `/results${returnQuery ? `?${new URLSearchParams(returnQuery)}` : ""}`;
+  const back = returnReportQuery
+    ? `/analysis-reports?${new URLSearchParams(returnReportQuery)}`
+    : `/results${returnQuery ? `?${new URLSearchParams(returnQuery)}` : ""}`;
   return (
     <>
       <Link className="back-link" href={back}>
         <ArrowLeftIcon size={16} />
-        수집 자료로 돌아가기
+        {returnReportQuery ? "분석 보고서로 돌아가기" : "수집 자료로 돌아가기"}
       </Link>
       {query.error ? (
         <ErrorNotice error={query.error} retry={() => query.refetch()} />

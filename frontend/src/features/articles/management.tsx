@@ -1,5 +1,7 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { post, put, remove, useApi } from "@/shared/api/client";
 import { Empty, ErrorNotice, Loading, PageHeading } from "@/shared/ui/feedback";
@@ -44,6 +46,7 @@ async function downloadReport(targetId: string) {
 
 export function TargetManager() {
   const query = useApi<AnalysisTarget[]>("/analysis-targets");
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [kind, setKind] = useState<AnalysisTarget["kind"]>("policy");
   const [description, setDescription] = useState("");
@@ -73,6 +76,11 @@ export function TargetManager() {
     setCollectionEnabled(true);
     setEditing(null);
     await query.refetch();
+    await queryClient.invalidateQueries({
+      predicate: ({ queryKey }) =>
+        typeof queryKey[0] === "string" &&
+        queryKey[0].startsWith("/analysis-reports"),
+    });
   }
   return (
     <>
@@ -172,6 +180,15 @@ export function TargetManager() {
                   {target.description && <span>{target.description}</span>}
                 </div>
                 <div className="button-row">
+                  {(target.kind === "regular" ||
+                    target.kind === "current_issue") && (
+                    <Link
+                      className="button quiet"
+                      href={`/analysis-reports?kind=${target.kind}&target_id=${target.id}`}
+                    >
+                      보고서 열기
+                    </Link>
+                  )}
                   <button
                     className="button quiet"
                     type="button"

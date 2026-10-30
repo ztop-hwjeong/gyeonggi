@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from api.analysis_registry import router as analysis_registry_router
+from api.analysis_reports import router as analysis_reports_router
 from api.article_workflow import router as article_workflow_router
 from api.collection import router as collection_router
 from api.events import router as events_router
@@ -22,6 +23,12 @@ from domain.analysis.registry import (
     TopicRegistryError,
     TopicRegistryInvalidMaterialError,
     TopicRegistryNotFoundError,
+)
+from domain.analysis_reports.repository import (
+    AnalysisReportConflict,
+    AnalysisReportError,
+    AnalysisReportInvalid,
+    AnalysisReportNotFound,
 )
 from domain.collection.errors import (
     CollectionConflictError,
@@ -62,6 +69,7 @@ def create_app(container: AsyncContainer | None = None) -> FastAPI:
     app.include_router(monitoring_router)
     app.include_router(collection_router)
     app.include_router(analysis_registry_router)
+    app.include_router(analysis_reports_router)
     app.include_router(article_workflow_router)
     app.include_router(tag_folders_router)
     app.include_router(events_router)
@@ -105,6 +113,22 @@ def create_app(container: AsyncContainer | None = None) -> FastAPI:
 
     @app.exception_handler(TopicRegistryError)
     async def topic_unavailable(request: Request, error: TopicRegistryError):
+        return JSONResponse(status_code=503, content={"detail": str(error)})
+
+    @app.exception_handler(AnalysisReportNotFound)
+    async def analysis_report_not_found(request: Request, error: AnalysisReportNotFound):
+        return JSONResponse(status_code=404, content={"detail": str(error)})
+
+    @app.exception_handler(AnalysisReportConflict)
+    async def analysis_report_conflict(request: Request, error: AnalysisReportConflict):
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
+    @app.exception_handler(AnalysisReportInvalid)
+    async def analysis_report_invalid(request: Request, error: AnalysisReportInvalid):
+        return JSONResponse(status_code=422, content={"detail": str(error)})
+
+    @app.exception_handler(AnalysisReportError)
+    async def analysis_report_unavailable(request: Request, error: AnalysisReportError):
         return JSONResponse(status_code=503, content={"detail": str(error)})
 
     @app.exception_handler(TagFolderNotFoundError)

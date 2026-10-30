@@ -19,6 +19,8 @@ from analysis.cache import PostgresResponseCache
 from analysis.client import OpenAIArticleAnalyzer
 from analysis.models import AnalysisDispatchSettings, AnalysisSettings
 from analysis.repository import AnalysisRepository
+from relevance.client import RelevanceAnalyzer
+from relevance.repository import RelevanceRepository
 
 
 @dataclass(frozen=True)
@@ -112,6 +114,18 @@ class AnalysisProvider(Provider):
         self, credentials: ModelCredentials, cache: PostgresResponseCache
     ) -> OpenAIArticleAnalyzer:
         return OpenAIArticleAnalyzer(credentials.api_key, cache)
+
+    @provide(scope=Scope.REQUEST)
+    def relevance_repository(
+        self, sessions: async_sessionmaker[AsyncSession]
+    ) -> RelevanceRepository:
+        return RelevanceRepository(sessions)
+
+    @provide(scope=Scope.REQUEST)
+    def relevance_analyzer(
+        self, credentials: ModelCredentials, cache: PostgresResponseCache
+    ) -> RelevanceAnalyzer:
+        return RelevanceAnalyzer(credentials.api_key, cache)
 
 
 def create_analysis_container() -> AsyncContainer:

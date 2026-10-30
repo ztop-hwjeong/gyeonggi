@@ -13,7 +13,7 @@ from analysis.client import MODEL, AnalysisError, OpenAIArticleAnalyzer
 from analysis.container import create_analysis_container
 from analysis.models import Article, ModelDraft
 from analysis.repository import AnalysisRepository
-from flows import analysis
+from flows import article_analysis as analysis
 
 
 def article() -> Article:

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import (
 from config import Settings
 from domain.analysis.application import AnalysisApplication
 from domain.analysis.registry import TopicRegistry
+from domain.analysis_reports.repository import AnalysisReportRepository
 from domain.article_workflow.relations import ArticleRelations
 from domain.article_workflow.repository import ArticleWorkflow
 from domain.collection.reporting import CollectionReporting
@@ -39,7 +40,10 @@ class DatabaseProvider(Provider):
             settings.database_url,
             pool_pre_ping=True,
             pool_timeout=3,
-            connect_args={"timeout": 3, "command_timeout": 3},
+            connect_args={
+                "timeout": 3,
+                "command_timeout": settings.database_command_timeout_seconds,
+            },
             hide_parameters=True,
         )
         try:
@@ -88,6 +92,10 @@ class CollectionProvider(Provider):
 
 
 class AnalysisProvider(Provider):
+    @provide(scope=Scope.REQUEST)
+    def analysis_reports(self, session: AsyncSession) -> AnalysisReportRepository:
+        return AnalysisReportRepository(session)
+
     @provide(scope=Scope.REQUEST)
     def article_relations(self, session: AsyncSession) -> ArticleRelations:
         return ArticleRelations(session)

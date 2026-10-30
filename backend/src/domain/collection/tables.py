@@ -3,6 +3,14 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 metadata = MetaData()
 
+material_keys = Table(
+    "material_keys",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("kind", String),
+    schema="dw",
+)
+
 articles = Table(
     "articles",
     metadata,
@@ -78,6 +86,9 @@ article_contents = Table(
     Column("content_hash", String),
     Column("title", String),
     Column("body", String),
+    Column("stage", String),
+    Column("run_id", UUID(as_uuid=True)),
+    Column("provenance", JSONB),
     Column("original_published_on", Date),
     Column("original_published_at", DateTime(timezone=True)),
     Column("original_modified_on", Date),

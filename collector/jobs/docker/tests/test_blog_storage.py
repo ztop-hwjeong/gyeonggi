@@ -193,6 +193,7 @@ def test_pending_blogs_respect_discovery_target_collection_flags():
     versions = Table("collection_rule_versions", metadata, schema="ops", autoload_with=engine)
     requests = Table("collection_requests", metadata, schema="ops", autoload_with=engine)
     targets = Table("analysis_targets", metadata, schema="ops", autoload_with=engine)
+    reports = Table("analysis_reports", metadata, schema="ops", autoload_with=engine)
     mappings = Table("collection_rule_targets", metadata, schema="ops", autoload_with=engine)
     request_items = Table("collection_request_items", metadata, schema="st", autoload_with=engine)
     key = uuid4().hex
@@ -339,6 +340,11 @@ def test_pending_blogs_respect_discovery_target_collection_flags():
             connection.execute(
                 delete(rules).where(
                     rules.c.id.in_((off_rule, enabled_rule, archived_rule, unmapped_rule))
+                )
+            )
+            connection.execute(
+                delete(reports).where(
+                    reports.c.target_id.in_((off_target, enabled_target, archived_target))
                 )
             )
             connection.execute(

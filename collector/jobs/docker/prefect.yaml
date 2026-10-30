@@ -69,6 +69,7 @@ deployments:
           DATABASE_NAME: gyeonggi
           DATABASE_USER: gyeonggi
           DATABASE_PASSWORD_BLOCK: collector-postgres-password
+          BACKEND_API_URL: http://backend:8000
           OBJECT_STORAGE_ENDPOINT_URL: http://rustfs:9000
           OBJECT_STORAGE_BUCKET: collector-raw
           OBJECT_STORAGE_REGION: us-east-1
@@ -123,7 +124,7 @@ deployments:
     concurrency_limit: 1
     work_pool: *naver-pool
   - name: stored-article-analysis
-    entrypoint: src/flows/analysis.py:analyze_stored_article
+    entrypoint: src/flows/article_analysis.py:analyze_stored_article
     tags: [docker, analysis]
     schedules: null
     work_pool:
@@ -162,3 +163,15 @@ deployments:
           DATABASE_NAME: gyeonggi
           DATABASE_USER: gyeonggi
           DATABASE_PASSWORD_BLOCK: collector-postgres-password
+  - name: report-relevance
+    entrypoint: src/flows/report_relevance.py:analyze_report_relevance
+    tags: [docker, relevance]
+    schedules: null
+    work_pool: *naver-pool
+  - name: report-relevance-dispatch
+    entrypoint: src/flows/relevance_dispatch.py:dispatch_report_relevance
+    tags: [docker, relevance, dispatch]
+    schedules:
+      - interval: 60
+        active: true
+    work_pool: *naver-pool

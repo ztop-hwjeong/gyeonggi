@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from analysis.models import Article
 from analysis.repository import AnalysisRepository
 from analysis.reprints import ReprintCandidate, ReprintMatch, find_reprints
-from flows import analysis
+from flows import article_analysis as analysis
 
 
 def article(body: str) -> Article:

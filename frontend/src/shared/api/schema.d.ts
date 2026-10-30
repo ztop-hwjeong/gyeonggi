@@ -741,6 +741,145 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/analysis-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reports */
+        get: operations["reports_analysis_reports_get"];
+        put?: never;
+        /** Create Report */
+        post: operations["create_report_analysis_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis-reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report */
+        get: operations["report_analysis_reports__report_id__get"];
+        /** Update Report */
+        put: operations["update_report_analysis_reports__report_id__put"];
+        post?: never;
+        /** Delete Report */
+        delete: operations["delete_report_analysis_reports__report_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis-reports/{report_id}/articles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report Articles */
+        get: operations["report_articles_analysis_reports__report_id__articles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis-reports/{report_id}/articles/{article_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Report Decision */
+        put: operations["report_decision_analysis_reports__report_id__articles__article_id__decision_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis-reports/{report_id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Report Bulk Decision */
+        put: operations["report_bulk_decision_analysis_reports__report_id__decisions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis-reports/{report_id}/relevance/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Relevance */
+        post: operations["preview_relevance_analysis_reports__report_id__relevance_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis-reports/{report_id}/articles/{article_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report Article Detail */
+        get: operations["report_article_detail_analysis_reports__report_id__articles__article_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analysis-reports/{report_id}/relevance/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueue Relevance */
+        post: operations["enqueue_relevance_analysis_reports__report_id__relevance_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/articles/{article_id}/sentiment": {
         parameters: {
             query?: never;
@@ -2028,6 +2167,296 @@ export interface components {
             /** Processed Count */
             processed_count: number;
         };
+        /** RelevanceEnqueue */
+        RelevanceEnqueue: {
+            /**
+             * Batch Id
+             * Format: uuid
+             */
+            batch_id: string;
+            /** Queued */
+            queued: number;
+            /** Reused */
+            reused: number;
+            /** Message */
+            message?: string | null;
+        };
+        /** RelevancePreview */
+        RelevancePreview: {
+            /** Eligible */
+            eligible: number;
+            /** Skipped No Body */
+            skipped_no_body: number;
+            /** Skipped Excluded */
+            skipped_excluded: number;
+            /** Skipped Current */
+            skipped_current: number;
+            /** Pending */
+            pending: number;
+            /** Estimated Input Tokens */
+            estimated_input_tokens: number;
+            /** Estimated Output Tokens */
+            estimated_output_tokens: number;
+            /** Estimated Cost Usd */
+            estimated_cost_usd?: null;
+            /**
+             * Model
+             * @default gpt-6-luna
+             */
+            model: string;
+            /** Fingerprint */
+            fingerprint: string;
+        };
+        /** RelevanceRequest */
+        RelevanceRequest: {
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "selected" | "filtered";
+            /** Article Ids */
+            article_ids?: string[];
+            /**
+             * Mode
+             * @default unjudged
+             * @enum {string}
+             */
+            mode: "unjudged" | "failed" | "refresh";
+            /**
+             * Keyword Match
+             * @default all
+             * @enum {string}
+             */
+            keyword_match: "all" | "matched" | "unmatched";
+            /**
+             * Inclusion
+             * @default all
+             * @enum {string}
+             */
+            inclusion: "all" | "unreviewed" | "included" | "excluded";
+            /**
+             * Ai Relevance
+             * @default all
+             * @enum {string}
+             */
+            ai_relevance: "all" | "unjudged" | "related" | "unrelated" | "uncertain" | "failed" | "pending" | "outdated";
+            /** Q */
+            q?: string | null;
+            /** Preview Fingerprint */
+            preview_fingerprint?: string | null;
+        };
+        /** ReportArticle */
+        ReportArticle: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+            /** Publisher */
+            publisher: string | null;
+            /** Original Published At */
+            original_published_at: string | null;
+            /** Content Preview */
+            content_preview: string;
+            /** Is Keyword Match */
+            is_keyword_match: boolean;
+            /** Matched Keywords */
+            matched_keywords: string[];
+            /** Report Decision */
+            report_decision: ("include" | "exclude") | null;
+            /** Report Decision Reason */
+            report_decision_reason?: string | null;
+            /**
+             * Ai Status
+             * @default unjudged
+             * @enum {string}
+             */
+            ai_status: "unjudged" | "queued" | "submitted" | "running" | "completed" | "failed" | "outdated";
+            /** Ai Relevance */
+            ai_relevance?: ("related" | "unrelated" | "uncertain") | null;
+            /** Ai Reason */
+            ai_reason?: string | null;
+            /** Ai Evidence */
+            ai_evidence?: string[];
+        };
+        /** ReportArticleDetail */
+        ReportArticleDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+            /** Publisher */
+            publisher: string | null;
+            /** Original Published At */
+            original_published_at: string | null;
+            /** Content Preview */
+            content_preview: string;
+            /** Is Keyword Match */
+            is_keyword_match: boolean;
+            /** Matched Keywords */
+            matched_keywords: string[];
+            /** Report Decision */
+            report_decision: ("include" | "exclude") | null;
+            /** Report Decision Reason */
+            report_decision_reason?: string | null;
+            /**
+             * Ai Status
+             * @default unjudged
+             * @enum {string}
+             */
+            ai_status: "unjudged" | "queued" | "submitted" | "running" | "completed" | "failed" | "outdated";
+            /** Ai Relevance */
+            ai_relevance?: ("related" | "unrelated" | "uncertain") | null;
+            /** Ai Reason */
+            ai_reason?: string | null;
+            /** Ai Evidence */
+            ai_evidence?: string[];
+            /** Body */
+            body: string | null;
+            /** Content Hash */
+            content_hash: string | null;
+            /** Ai Error */
+            ai_error?: string | null;
+        };
+        /** ReportArticlePage */
+        ReportArticlePage: {
+            /** Items */
+            items: components["schemas"]["ReportArticle"][];
+            /** Total */
+            total: number;
+            /** Filtered Total */
+            filtered_total: number;
+            /** Matched */
+            matched: number;
+            /** Unmatched */
+            unmatched: number;
+            /** Included */
+            included: number;
+            /** Excluded */
+            excluded: number;
+            /** Unreviewed */
+            unreviewed: number;
+            /** Ai Unjudged */
+            ai_unjudged: number;
+            /** Ai Related */
+            ai_related: number;
+            /** Ai Unrelated */
+            ai_unrelated: number;
+            /** Ai Uncertain */
+            ai_uncertain: number;
+            /** Ai Pending */
+            ai_pending: number;
+            /** Ai Failed */
+            ai_failed: number;
+            /** Ai Outdated */
+            ai_outdated: number;
+        };
+        /** ReportBulkDecision */
+        ReportBulkDecision: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "include" | "exclude" | "release";
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Article Ids */
+            article_ids: string[];
+        };
+        /** ReportCreate */
+        ReportCreate: {
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Keyword Terms */
+            keyword_terms?: string[] | null;
+            /**
+             * Keywords Automatic
+             * @default true
+             */
+            keywords_automatic: boolean;
+            /** Start At */
+            start_at?: string | null;
+            /** End At */
+            end_at?: string | null;
+        };
+        /** ReportDecisionWrite */
+        ReportDecisionWrite: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "include" | "exclude" | "release";
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
+        /** ReportInfo */
+        ReportInfo: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /**
+             * Target Kind
+             * @enum {string}
+             */
+            target_kind: "regular" | "current_issue";
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Relevance Criteria */
+            relevance_criteria: string;
+            /** Keyword Terms */
+            keyword_terms: string[];
+            /** Keywords Automatic */
+            keywords_automatic: boolean;
+            /** Is Default */
+            is_default: boolean;
+            /** Start At */
+            start_at: string | null;
+            /** End At */
+            end_at: string | null;
+            /** Version */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** ReportRequest */
         ReportRequest: {
             /**
@@ -2046,6 +2475,25 @@ export interface components {
              * @default true
              */
             include_descendants: boolean;
+        };
+        /** ReportUpdate */
+        ReportUpdate: {
+            /** Version */
+            version: number;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Keyword Terms */
+            keyword_terms?: string[] | null;
+            /** Keywords Automatic */
+            keywords_automatic?: boolean | null;
+            /** Start At */
+            start_at?: string | null;
+            /** End At */
+            end_at?: string | null;
+            /** Relevance Criteria */
+            relevance_criteria?: string | null;
         };
         /** ReprintInfo */
         ReprintInfo: {
@@ -4612,6 +5060,375 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reports_analysis_reports_get: {
+        parameters: {
+            query?: {
+                kind?: ("regular" | "current_issue") | null;
+                target_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_report_analysis_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_analysis_reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_report_analysis_reports__report_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_report_analysis_reports__report_id__delete: {
+        parameters: {
+            query: {
+                version: number;
+            };
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_articles_analysis_reports__report_id__articles_get: {
+        parameters: {
+            query?: {
+                keyword_match?: "all" | "matched" | "unmatched";
+                inclusion?: "all" | "unreviewed" | "included" | "excluded";
+                q?: string | null;
+                offset?: number;
+                limit?: number;
+                ai_relevance?: "all" | "unjudged" | "related" | "unrelated" | "uncertain" | "failed" | "pending" | "outdated";
+            };
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportArticlePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_decision_analysis_reports__report_id__articles__article_id__decision_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportDecisionWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_bulk_decision_analysis_reports__report_id__decisions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportBulkDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_relevance_analysis_reports__report_id__relevance_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RelevanceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelevancePreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_article_detail_analysis_reports__report_id__articles__article_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportArticleDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enqueue_relevance_analysis_reports__report_id__relevance_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RelevanceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelevanceEnqueue"];
+                };
             };
             /** @description Validation Error */
             422: {
