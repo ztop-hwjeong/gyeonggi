@@ -67,8 +67,10 @@ class News1BodyPolicy:
         source_summary = normalized_text(seed.summary)
         source_title = normalized_text(seed.title)
         short_complete_match = bool(
-            evidence.reason == "본문 길이 부족"
+            set(evidence.reason.split("; "))
+            <= {"본문 길이 부족", "목록 요약보다 충분한 본문 필요"}
             and len(source_summary) >= settings.min_summary_chars
+            and source_summary in normalized_text(text)
             and normalized_text(text) != source_title
             and evidence.title_score == 100
             and evidence.summary_score == 100

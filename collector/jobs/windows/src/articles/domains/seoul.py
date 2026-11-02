@@ -25,6 +25,29 @@ class SeoulBodyPolicy:
         settings: ExtractionSettings,
     ) -> DomainBody | None:
         tree = html.fromstring(markup)
+        modern = tree.xpath(
+            "//div[@id='articleContent']/div["
+            "contains(concat(' ', normalize-space(@class), ' '), ' viewContent ')]"
+        )
+        if len(modern) == 1:
+            for node in modern[0].xpath(
+                ".//script | .//style | .//section[contains(@class, 'article-summary-box')] | "
+                ".//div[contains(concat(' ', normalize-space(@class), ' '), ' modal ')] | "
+                ".//*[contains(@class, 'expendImageBtn')] | "
+                ".//*[starts-with(@id, 'div-gpt-ad-')] | "
+                ".//*[contains(@class, 'showGoogleBtn')] | "
+                ".//*[contains(@class, 'articleCopyright')] | "
+                ".//*[contains(concat(' ', normalize-space(@class), ' '), ' byline ')]"
+            ):
+                node.drop_tree()
+            text = str(
+                Selector(content=html.tostring(modern[0], encoding="unicode")).get_all_text(
+                    separator="\n", strip=True
+                )
+            )
+            return DomainBody(text=text, evidence=verify_article(seed, title, text, settings))
+        if modern:
+            return DomainBody(text="", evidence=verify_article(seed, title, "", settings))
         content = tree.xpath(
             "//div[contains(concat(' ', normalize-space(@class), ' '), ' content ')]"
         )

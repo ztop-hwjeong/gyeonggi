@@ -53,3 +53,37 @@ def test_seoul_policy_returns_unverified_result_when_article_container_is_ambigu
 
     assert result is not None
     assert not result.evidence.verified
+
+
+def test_seoul_modern_body_excludes_ai_summary_popups_and_recommendations(seed, article_text):
+    markup = f"""<div id="articleContent"><div class="viewContent body19">
+    <section class="article-summary-box">AI 요약 내용</section>
+    {article_text}<div class="modal">사진 확대 닫기</div>
+    <div id="div-gpt-ad-123">광고</div><script>추천 스크립트</script>
+    </div></div><section>다른 추천 기사</section>"""
+    result = SeoulBodyPolicy().extract_body(
+        seed,
+        Selector(content=markup),
+        seed.title,
+        "https://www.seoul.co.kr/news/20261030500239",
+        markup,
+        ExtractionSettings(),
+    )
+    assert result is not None and result.evidence.verified
+    assert normalized_text(result.text) == normalized_text(article_text)
+
+
+def test_seoul_modern_ambiguous_bodies_are_rejected(seed, article_text):
+    markup = (
+        f'<div id="articleContent"><div class="viewContent">{article_text}</div>'
+        '<div class="viewContent">다른 기사</div></div>'
+    )
+    result = SeoulBodyPolicy().extract_body(
+        seed,
+        Selector(content=markup),
+        seed.title,
+        "https://www.seoul.co.kr/news/20261030500239",
+        markup,
+        ExtractionSettings(),
+    )
+    assert result is not None and not result.evidence.verified

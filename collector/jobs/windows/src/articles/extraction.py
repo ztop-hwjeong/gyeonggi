@@ -75,16 +75,21 @@ class ArticleExtractor:
         )
         title = document.title if document is not None and document.title else ""
         headings = [str(node.get_all_text(strip=True)) for node in page.css("h1")]
+        metadata_titles = page.css('meta[property="og:title"]::attr(content)').getall()
         title = max(
-            [title, *headings],
+            [title, *headings, *metadata_titles],
             key=lambda value: ratio(normalized_text(seed.title), normalized_text(value)),
         )
         policy = get_body_policy(url)
         if policy is not None and policy.has_no_text_body(seed, page, title, url, decoded):
             raise NoTextBodyError("영상 제공·텍스트 본문 없음")
-        if policy is not None and (
-            domain_body := policy.extract_body(seed, page, title, url, decoded, self._settings)
-        ) is not None:
+        if (
+            policy is not None
+            and (
+                domain_body := policy.extract_body(seed, page, title, url, decoded, self._settings)
+            )
+            is not None
+        ):
             if not domain_body.evidence.verified:
                 raise ExtractionRejectedError(domain_body.evidence.reason)
             return ExtractedArticle(

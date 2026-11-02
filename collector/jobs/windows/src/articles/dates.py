@@ -14,7 +14,7 @@ _KOREAN_DATETIME = re.compile(
 )
 _PAGE_DATE = re.compile(r"\d{4}[./-]\d{1,2}[./-]\d{1,2}\.?")
 _LABELED_DATETIME = re.compile(
-    r"(입력|등록|발행|승인|배포일|수정|UPDATED)\s*[.:：]?\s*"
+    r"(입력|등록일?|발행|승인|배포일|수정|UPDATED)\s*[.:：]?\s*"
     r"(\d{4}[./-]\d{1,2}[./-]\d{1,2}\.?)\s+"
     r"(?:(오전|오후)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?",
     re.IGNORECASE,
@@ -31,6 +31,11 @@ def parse_source_date(value: object) -> tuple[date | None, datetime | None]:
     """원문 표기 날짜와 시각을 정밀도 손실 없이 분리."""
     if not isinstance(value, str) or not (raw := " ".join(value.split())):
         return None, None
+    raw = re.sub(
+        r"^(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일\s*(\d{1,2})시\s*(\d{2})분$",
+        r"\1-\2-\3 \4:\5",
+        raw,
+    )
     if matched := _DATE_ONLY.fullmatch(raw):
         try:
             return date(*map(int, matched.groups())), None
@@ -99,7 +104,12 @@ def _compact_published_metadata(tree: html.HtmlElement) -> tuple[date | None, da
 def _visible_labeled_time(
     tree: html.HtmlElement, *, labels: set[str], expected_on: date | None = None
 ) -> tuple[date | None, datetime | None]:
-    for node in tree.xpath('//*[contains(@class,"date") or contains(@class,"time")]'):
+    for node in tree.xpath(
+        '//*[contains(translate(@class,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),'
+        '"date") or contains(translate(@class,'
+        '"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),'
+        '"time") or contains(@class,"byline")]'
+    ):
         text = " ".join(node.text_content().split())
         if len(text) > 200:
             continue
@@ -127,9 +137,7 @@ def _debug_news_published_time(tree: html.HtmlElement) -> tuple[date | None, dat
         if label != "debug-news-date" or not _DEBUG_NEWS_DATE.fullmatch(value):
             continue
         try:
-            published = datetime.strptime(value, "%a %b %d %H:%M:%S KST %Y").replace(
-                tzinfo=KST
-            )
+            published = datetime.strptime(value, "%a %b %d %H:%M:%S KST %Y").replace(tzinfo=KST)
         except ValueError:
             continue
         visible_on, visible_at = _visible_labeled_time(
@@ -159,7 +167,9 @@ def _trafilatura_date(markup: str, value: str | None) -> str | None:
 def _reconcile_visible_clock(
     tree: html.HtmlElement, value: tuple[date | None, datetime | None], *, modified: bool
 ) -> tuple[date | None, datetime | None]:
-    labels = {"수정", "updated"} if modified else {"입력", "등록", "발행", "승인", "배포일"}
+    labels = (
+        {"수정", "updated"} if modified else {"입력", "등록", "등록일", "발행", "승인", "배포일"}
+    )
     visible_on, visible_at = _visible_labeled_time(tree, labels=labels)
     if visible_at is not None:
         metadata_at = value[1]
@@ -219,8 +229,31 @@ def extract_source_dates(
         published_value = compact_published if compact_published[1] is not None else published_value
     if published_value[1] is None:
         published_value = debug_published if debug_published[1] is not None else published_value
-    published_on, published_at = _reconcile_visible_clock(
-        tree, published_value, modified=False
-    )
+    if published_value[1] is None:
+        _, visible_at = _visible_labeled_time(tree, labels={"등록일"})
+        for value in tree.xpath(
+            '//input[contains(concat(" ", normalize-space(@class), " "), '
+            '" siteReleaseDate ")]/@value'
+        ):
+            candidate_on, candidate_at = parse_source_date(value)
+            if (
+                candidate_at is not None
+                and candidate_at.replace(second=0, microsecond=0) == visible_at
+                and published_value[0] in (None, candidate_on)
+            ):
+                published_value = candidate_on, candidate_at
+                break
+    if published_value[1] is None:
+        for node in tree.xpath(
+            '//*[contains(concat(" ", normalize-space(@class), " "), " byline-set01 ") '
+            'or contains(concat(" ", normalize-space(@class), " "), " date_v2 ")]'
+        ):
+            candidate = parse_source_date(node.text_content().strip().lstrip("ㅣ| "))
+            if candidate[1] is not None and (
+                not published or published_value[0] in (None, candidate[0])
+            ):
+                published_value = candidate
+                break
+    published_on, published_at = _reconcile_visible_clock(tree, published_value, modified=False)
     modified_on, modified_at = _reconcile_visible_clock(tree, first(modified), modified=True)
     return published_on, published_at, modified_on, modified_at

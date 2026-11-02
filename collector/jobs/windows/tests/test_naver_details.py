@@ -48,6 +48,33 @@ def test_naver_never_requests_bigkinds_with_its_source_id(monkeypatch, seed, det
     assert result.failed_count == 1
 
 
+def test_empty_video_is_confirmed_in_browser_and_saved_as_terminal_skip(
+    monkeypatch, seed, detail_context
+):
+    detail_context.allows_rendered_browser.return_value = True
+    stage = Mock(
+        side_effect=lambda name, *_: DetailAttempt(
+            stage=name,
+            status="skipped" if name == "browser_rendered" else "rejected",
+            reason="영상 제공·텍스트 본문 없음",
+            skip_reason="no_text_body" if name == "browser_rendered" else None,
+        )
+    )
+    monkeypatch.setattr(details, "collect_stage", stage)
+    result = details.collect_article_details.fn([seed])
+    assert [call.args[0] for call in stage.call_args_list] == [
+        "curl_cffi",
+        "browser_fetch",
+        "browser_rendered",
+    ]
+    assert result.status == "completed"
+    assert result.skipped_count == 1
+    assert result.failed_count == 0
+    saved = detail_context.save_detail.call_args.args[1]
+    assert saved.status == "skipped"
+    assert saved.skip_reason == "no_text_body"
+
+
 def test_final_result_saves_publisher_and_preserves_naver_timestamp(seed, detail_context):
     provided_at = datetime.fromisoformat("2026-10-28T15:30:00+09:00")
     seed = seed.model_copy(

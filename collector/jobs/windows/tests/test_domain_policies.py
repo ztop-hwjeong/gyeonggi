@@ -111,6 +111,25 @@ def test_news1_policy_ignores_non_text_or_malformed_blocks(seed, article_text):
     assert result is None or result.text == body
 
 
+@pytest.mark.parametrize("truncated", [False, True])
+def test_news1_complete_short_schedule_requires_entire_summary(seed, truncated):
+    url = "https://www.news1.kr/local/gyeonggi/1"
+    summary = (
+        "경기도 지사는 도의회 대표의원과 면담한다. "
+        "면담에서는 지역 교육 현안과 예산 지원 방안을 논의한다. "
+        "행정부지사는 주간회의에 참석해 주요 사업 추진 상황을 점검한다. "
+        "경기도교육청 교육감은 통상일정을 진행하고 학교 현장의 건의 사항을 확인한다."
+    )
+    seeded = seed.model_copy(update={"original_url": url, "summary": summary})
+    body = summary.split(".")[0] if truncated else summary
+    markup = news1_markup("1", seeded.title, [{"type": "text", "content": body}])
+    result = News1BodyPolicy().extract_body(
+        seeded, Selector(content=markup), seeded.title, url, markup, ExtractionSettings()
+    )
+    assert result is not None
+    assert result.evidence.verified is not truncated
+
+
 @pytest.mark.parametrize("change", ["url", "id", "title", "summary", "blank", "title_only"])
 def test_news1_policy_rejects_unverified_structured_content(seed, change):
     url = "https://www.news1.kr/local/gyeonggi/1"

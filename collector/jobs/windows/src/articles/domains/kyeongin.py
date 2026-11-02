@@ -27,6 +27,35 @@ class KyeonginBodyPolicy:
         markup: str,
         settings: ExtractionSettings,
     ) -> DomainBody | None:
+        if seed.title.startswith("[인사]"):
+            nodes = page.css("#article-body")
+            if len(nodes) != 1:
+                return None
+            paragraphs = nodes[0].css("p:not(.copyright)")
+            text = "\n".join(
+                value
+                for node in paragraphs
+                if (value := str(node.get_all_text(strip=True)).strip())
+                and not value.startswith("/")
+            )
+            evidence = verify_article(seed, title, text, settings)
+            canonical = page.css('link[rel="canonical"]::attr(href)').getall()
+            if (
+                len(canonical) == 1
+                and _article_key(canonical[0]) == _article_key(url)
+                and _article_key(url) == _article_key(str(seed.original_url or ""))
+                and urlsplit(url).hostname in self.hosts
+                and normalized_text(title) == normalized_text(seed.title)
+                and bool(normalized_text(text))
+                and normalized_text(text) != normalized_text(title)
+                and normalized_text(text) == normalized_text(seed.summary)
+                and "\ufffd" not in text
+                and "\ufffd" not in title
+            ):
+                evidence = evidence.model_copy(
+                    update={"verified": True, "reason": "인사 단문 제목·URL·원문 전체 요약 일치"}
+                )
+            return DomainBody(text=text, evidence=evidence)
         if not seed.title.startswith("[포토]"):
             return None
         tree = html.fromstring(markup)

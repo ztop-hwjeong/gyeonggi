@@ -1,3 +1,4 @@
+import pytest
 from scrapling import Selector
 
 from articles.domains.kyeongin import KyeonginBodyPolicy
@@ -66,3 +67,32 @@ def test_kyeongin_delegates_non_photo_article(seed) -> None:
         )
         is None
     )
+
+
+@pytest.mark.parametrize("change", ["none", "summary", "canonical", "title", "blank"])
+def test_kyeongin_short_appointment_requires_exact_complete_summary(seed, change):
+    text = "■교육부 (11월 2일자)\n◇경기도교육청 제1부교육감 이상돈"
+    url = "https://www.kyeongin.com/article/1773774"
+    seeded = seed.model_copy(
+        update={"title": "[인사] 교육부", "summary": text, "original_url": url}
+    )
+    canonical, title = url, seeded.title
+    if change == "summary":
+        seeded = seeded.model_copy(update={"summary": "다른 기관의 인사 발령 내용"})
+    elif change == "canonical":
+        canonical += "2"
+    elif change == "title":
+        title = "[인사] 다른 기관"
+    elif change == "blank":
+        text = ""
+    markup = (
+        f'<link rel="canonical" href="{canonical}"><div id="article-body"><p>{text}</p>'
+        '<p>/기자 reporter@example.org</p><p class="copyright">저작권</p></div>'
+    )
+    result = KyeonginBodyPolicy().extract_body(
+        seeded, Selector(content=markup), title, url, markup, ExtractionSettings()
+    )
+    assert result is not None
+    assert result.evidence.verified is (change == "none")
+    assert "저작권" not in result.text
+    assert "reporter@" not in result.text

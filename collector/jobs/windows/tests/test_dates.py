@@ -7,6 +7,57 @@ def test_empty_response_has_no_source_dates():
     assert extract_source_dates("", None) == (None, None, None, None)
 
 
+def test_publisher_release_seconds_require_matching_visible_registration():
+    source = '<input class="siteReleaseDate" value="2026-11-01 12:53:44">'
+    assert extract_source_dates(source, None)[1] is None
+    matching = '<div class="news_date"><span>등록일 2026-11-01 12:53</span></div>'
+    assert extract_source_dates(source + matching, None)[1] == datetime(
+        2026, 11, 1, 3, 53, 44, tzinfo=UTC
+    )
+    conflicting = '<div class="news_date">등록일 2026-11-01 13:00</div>'
+    assert extract_source_dates(source + conflicting, None)[1] == datetime(
+        2026, 11, 1, 4, 0, tzinfo=UTC
+    )
+
+
+def test_article_byline_labels_separate_published_and_modified():
+    markup = (
+        '<p class="article_byline">기자명 '
+        '<span>입력 2026-10-30 13:09 수정 2026-10-30 14:00</span></p>'
+    )
+    _, published, _, modified = extract_source_dates(markup, None)
+    assert published == datetime(2026, 10, 30, 4, 9, tzinfo=UTC)
+    assert modified == datetime(2026, 10, 30, 5, 0, tzinfo=UTC)
+
+
+def test_korean_article_clock_excludes_script_templates_and_conflicting_metadata():
+    markup = (
+        '<script>const example = "2026.10.30 17:54:03";</script>'
+        '<div class="date_v2">2026년 10월 30일 17시 54분</div>'
+    )
+    assert extract_source_dates(markup, None)[1] == datetime(2026, 10, 30, 8, 54, tzinfo=UTC)
+    conflicting = '<meta property="article:published_time" content="2026-10-29">'
+    assert extract_source_dates(conflicting + markup, None)[:2] == (date(2026, 10, 29), None)
+
+
+def test_mixed_case_publish_date_and_structured_byline_clock():
+    assert extract_source_dates(
+        '<div class="publishDate"><span>승인 2026-11-01 18:40:28</span></div>', None
+    )[1] == datetime(2026, 11, 1, 9, 40, 28, tzinfo=UTC)
+    assert extract_source_dates('<span class="byline-set01">ㅣ2026-10-30 19:05:20</span>', None)[
+        1
+    ] == datetime(2026, 10, 30, 10, 5, 20, tzinfo=UTC)
+    assert extract_source_dates('<span class="byline-set01">기자명</span>', None)[1] is None
+
+
+def test_byline_clock_does_not_replace_conflicting_article_date():
+    markup = (
+        '<meta property="article:published_time" content="2026-10-29">'
+        '<span class="byline-set01">ㅣ2026-10-30 19:05:20</span>'
+    )
+    assert extract_source_dates(markup, None)[:2] == (date(2026, 10, 29), None)
+
+
 def test_visible_article_clock_corrects_incorrect_utc_metadata():
     markup = (
         '<meta property="article:published_time" content="2026-10-27T15:34:49+0000">'

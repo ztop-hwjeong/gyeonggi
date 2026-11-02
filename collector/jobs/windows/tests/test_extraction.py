@@ -110,6 +110,21 @@ def test_rendered_utf8_header_overrides_legacy_meta_charset(seed, article_html, 
     assert "학교와 지역 도서관" in result.text
 
 
+def test_og_article_title_without_heading_confirms_empty_kbs_video(seed, repository):
+    from articles.extraction import NoTextBodyError
+
+    url = "https://news.kbs.co.kr/news/view.do?ncd=1234"
+    seeded = seed.model_copy(update={"original_url": url})
+    markup = f'''<html><head><title>KBS 뉴스</title>
+    <meta property="og:title" content="{seed.title}"></head><body>
+    <h1 class="header-logo"></h1><div id="cont_newstext"></div>
+    <div id="mailHtmlContents"><div class="view_con_text"></div></div>
+    <div class="player-app"></div><script>const config = {{newsCode: "1234"}}</script>
+    </body></html>'''
+    with pytest.raises(NoTextBodyError, match="텍스트 본문 없음"):
+        ArticleExtractor(repository, ExtractionSettings()).extract(seeded, markup.encode(), url)
+
+
 def test_extracts_json_ld_published_and_modified_datetimes(seed, article_html, repository):
     body = article_html.replace(
         b"</head>",
@@ -292,7 +307,7 @@ def test_registered_domain_policy_is_called_before_training(seed, repository):
     url = "https://news.kbs.co.kr/news/view.do?ncd=1234"
     seeded = seed.model_copy(update={"original_url": url})
     markup = (
-        f'<html><title>{seed.title}</title><h1>{seed.title}</h1>'
+        f"<html><title>{seed.title}</title><h1>{seed.title}</h1>"
         '<div id="cont_newstext"></div>'
         '<div id="mailHtmlContents"><div class="view_con_text"></div></div>'
         '<div class="player-app"></div><script>const newsCode: "1234"</script></html>'
@@ -307,10 +322,19 @@ def test_news1_structured_body_is_verified_without_adaptive_training(
 ):
     import json
 
-    payload = {"props": {"pageProps": {"articleView": {
-        "id": "1", "title": seed.title,
-        "contentArrange": [{"type": "text", "content": line} for line in article_text.splitlines()],
-    }}}}
+    payload = {
+        "props": {
+            "pageProps": {
+                "articleView": {
+                    "id": "1",
+                    "title": seed.title,
+                    "contentArrange": [
+                        {"type": "text", "content": line} for line in article_text.splitlines()
+                    ],
+                }
+            }
+        }
+    }
     markup = (
         f"<html><head><title>{seed.title}</title></head><body>"
         f'<h1>{seed.title}</h1><script id="__NEXT_DATA__" type="application/json">'

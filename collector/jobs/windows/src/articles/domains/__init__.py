@@ -13,6 +13,7 @@ from articles.domains.hankookilbo import HankookIlboBodyPolicy
 from articles.domains.hankyung import HankyungBodyPolicy
 from articles.domains.imaeil import IMAEILBodyPolicy
 from articles.domains.incheonilbo import IncheonIlboBodyPolicy
+from articles.domains.joongang import JoongangBodyPolicy
 from articles.domains.joongboo import JoongbooBodyPolicy
 from articles.domains.kado import KadoBodyPolicy
 from articles.domains.kbs import KbsBodyPolicy
@@ -55,6 +56,7 @@ _POLICIES: tuple[DomainBodyPolicy, ...] = (
     IMAEILBodyPolicy(),
     IncheonIlboBodyPolicy(),
     JoongbooBodyPolicy(),
+    JoongangBodyPolicy(),
     KadoBodyPolicy(),
     KihoIlboBodyPolicy(),
     KmibBodyPolicy(),
