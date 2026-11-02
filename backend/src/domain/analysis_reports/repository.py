@@ -14,6 +14,7 @@ from sqlalchemy import (
     null,
     or_,
     select,
+    union_all,
     update,
 )
 from sqlalchemy.dialects.postgresql import distinct_on
@@ -222,12 +223,14 @@ class AnalysisReportRepository:
             .where(or_(*(articles.c.title.ilike(pattern, escape="\\") for pattern in patterns)))
             .correlate(None)
         )
-        body_matches = (
-            select(article_contents.c.id)
-            .where(
-                or_(*(article_contents.c.body.ilike(pattern, escape="\\") for pattern in patterns))
+        # 다중 OR의 본문 전체 순회 대신 키워드별 역색인 검색 결과 결합
+        body_matches = union_all(
+            *(
+                select(article_contents.c.id)
+                .where(article_contents.c.body.ilike(pattern, escape="\\"))
+                .correlate(None)
+                for pattern in patterns
             )
-            .correlate(None)
         )
         # 과거 본문만 일치하는 기사를 포함하지 않도록 최신 본문 ID로 비교
         return func.coalesce(

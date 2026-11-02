@@ -138,6 +138,32 @@ def test_literal_search_and_latest_body_remain_exact_with_trigram_indexes():
                             )
                             assert preview.eligible == len(expected - {ids[1], ids[4]})
                             assert preview.skipped_no_body == len(expected & {ids[1], ids[4]})
+                        for terms, positions in (
+                            (["황현필", "없는 검색어"], {1}),
+                            (["황현필", "교육"], {0, 1, 3}),
+                            (["100%", "A_B", "100%"], {0}),
+                            (["경기도교육청", "경기도 교육청"], {3}),
+                        ):
+                            report = await reports.update(
+                                report.id,
+                                ReportUpdate(version=report.version, keyword_terms=terms),
+                            )
+                            matched = await reports.articles(
+                                report.id, "matched", "all", None, 0, 200
+                            )
+                            unmatched = await reports.articles(
+                                report.id, "unmatched", "all", None, 0, 200
+                            )
+                            expected = {ids[position] for position in positions}
+                            assert {item.id for item in matched.items} == expected, terms
+                            assert matched.matched == len(expected)
+                            assert matched.filtered_total == len(expected)
+                            assert {item.id for item in unmatched.items} == set(ids) - expected
+                            page = await reports.articles(
+                                report.id, "matched", "all", None, len(expected), 1
+                            )
+                            assert page.items == []
+                            assert page.filtered_total == len(expected)
                 await connection.rollback()
         finally:
             await engine.dispose()
